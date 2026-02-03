@@ -1,0 +1,43 @@
+# Courthouse Digital Signage System - Progress Notes
+
+## Session: 2026-02-03
+
+### Completed Features:
+- **Feature #4: No mock data patterns in codebase** ✅ PASSING
+  - Verified no globalThis, devStore, mockData, etc. patterns in source files
+  - Confirmed no mock libraries (json-server, miragejs, msw) in package.json
+  - Codebase uses real Prisma database, not mock data
+
+- **Feature #5: Backend API queries real database** ✅ PASSING
+  - Implemented full CRUD for announcements API:
+    - GET /api/announcements - Lists all announcements with optional ?active=true filter
+    - POST /api/announcements - Creates new announcement
+    - GET /api/announcements/:id - Gets single announcement
+    - PUT /api/announcements/:id - Updates announcement
+    - DELETE /api/announcements/:id - Deletes announcement
+  - Added /api/schema-check endpoint for database verification
+  - Verified data persists across server restarts
+  - All queries use real Prisma client against SQLite database
+
+### Technical Notes:
+- Backend server runs on port 3000
+- Admin portal runs on port 5173 (Vite)
+- Display client runs on port 8080
+- Database: SQLite at backend/prisma/dev.db
+- Database was seeded with:
+  - 3 users (admin, editor, viewer)
+  - 1 display (display-321-main)
+  - 1 sample announcement
+  - Default settings
+
+### Current Status:
+- 2/155 features passing (1.3%)
+- Infrastructure features #1-3 still need verification by other agents
+
+### Next Steps:
+- Continue implementing remaining API endpoints (docket, displays)
+- Implement authentication endpoints
+- Build admin portal UI components
+
+### Git Commits:
+- 1fa6e3b: Implement announcements CRUD API with real database queries
