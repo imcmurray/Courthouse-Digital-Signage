@@ -1,0 +1,190 @@
+// Prisma schema for Courthouse Digital Signage System
+// https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  name         String
+  role         String   @default("viewer") // admin, editor, viewer
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  docketEntries DocketEntry[]
+  announcements Announcement[]
+  auditLogs     AuditLog[]
+  settings      Setting[]
+
+  @@map("users")
+}
+
+model DocketEntry {
+  id              String   @id @default(uuid())
+  caseNumber      String   @map("case_number")
+  caseTitle       String   @map("case_title")
+  caseChapter     String   @map("case_chapter") // 7, 11, 13
+  adversaryNumber String?  @map("adversary_number")
+  adversaryTitle  String?  @map("adversary_title")
+  hearingDate     DateTime @map("hearing_date")
+  hearingTime     String   @map("hearing_time") // 24hr format HH:MM
+  hearingMatter   String   @map("hearing_matter")
+  hearingJudge    String   @map("hearing_judge")
+  courtroom       String?
+  movingParty     String?  @map("moving_party")
+  opposingParty   String?  @map("opposing_party")
+  trustee         String?
+  isZoom          Boolean  @default(false) @map("is_zoom")
+  zoomMeetingId   String?  @map("zoom_meeting_id")
+  zoomPasscode    String?  @map("zoom_passcode")
+  zoomPhone       String?  @map("zoom_phone")
+  status          String   @default("scheduled") // scheduled, in_progress, completed, cancelled, continued, stricken, reserved
+  statusNote      String?  @map("status_note")
+  comment         String?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  createdById     String?  @map("created_by")
+
+  // Relations
+  createdBy User?                 @relation(fields: [createdById], references: [id])
+  displays  DisplayDocketEntry[]
+
+  @@unique([caseNumber, hearingDate, hearingTime])
+  @@map("docket_entries")
+}
+
+model Display {
+  id               String    @id // e.g., "display-321-main"
+  name             String
+  location         String
+  judgeFilter      String?   @map("judge_filter")
+  courtroomFilter  String?   @map("courtroom_filter")
+  chapterFilter    String?   @map("chapter_filter") // JSON array as string
+  showStricken     Boolean   @default(false) @map("show_stricken")
+  showZoomInfo     Boolean   @default(true) @map("show_zoom_info")
+  highlightCurrent Boolean   @default(true) @map("highlight_current")
+  theme            String    @default("default")
+  columns          String    @default("[\"NAME\",\"CH\",\"TIME\",\"CASE\",\"MATTER\",\"ROOM\"]") // JSON array
+  showWeather      Boolean   @default(true) @map("show_weather")
+  weatherLocation  String?   @map("weather_location")
+  noticeText       String    @default("Please turn your phones OFF in the Courthouse") @map("notice_text")
+  tickerEnabled    Boolean   @default(true) @map("ticker_enabled")
+  tickerSpeed      String    @default("medium") @map("ticker_speed") // slow, medium, fast
+  status           String    @default("unknown") // online, offline, unknown
+  lastHeartbeat    DateTime? @map("last_heartbeat")
+  ipAddress        String?   @map("ip_address")
+  apiKeyHash       String    @map("api_key_hash")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  docketEntries DisplayDocketEntry[]
+  apiKeys       ApiKey[]
+
+  @@map("displays")
+}
+
+model DisplayDocketEntry {
+  displayId     String @map("display_id")
+  docketEntryId String @map("docket_entry_id")
+
+  // Relations
+  display     Display     @relation(fields: [displayId], references: [id], onDelete: Cascade)
+  docketEntry DocketEntry @relation(fields: [docketEntryId], references: [id], onDelete: Cascade)
+
+  @@id([displayId, docketEntryId])
+  @@map("display_docket_entries")
+}
+
+model Announcement {
+  id          String    @id @default(uuid())
+  text        String // max 500 chars
+  priority    Int       @default(100) // lower = higher priority
+  enabled     Boolean   @default(true)
+  expiresAt   DateTime? @map("expires_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  createdById String?   @map("created_by")
+
+  // Relations
+  createdBy User? @relation(fields: [createdById], references: [id])
+
+  @@map("announcements")
+}
+
+model ApiKey {
+  id          String    @id @default(uuid())
+  name        String
+  keyHash     String    @unique @map("key_hash")
+  keyPrefix   String    @map("key_prefix") // First 8 chars for identification
+  permissions String    @default("[\"read\"]") // JSON array
+  displayId   String?   @map("display_id")
+  expiresAt   DateTime? @map("expires_at")
+  lastUsedAt  DateTime? @map("last_used_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  display   Display?   @relation(fields: [displayId], references: [id], onDelete: SetNull)
+  auditLogs AuditLog[]
+
+  @@map("api_keys")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  action     String // e.g., "create", "update", "delete"
+  entityType String   @map("entity_type") // e.g., "docket_entry", "user"
+  entityId   String?  @map("entity_id")
+  userId     String?  @map("user_id")
+  apiKeyId   String?  @map("api_key_id")
+  changes    String?  // JSON of changes
+  ipAddress  String?  @map("ip_address")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user   User?   @relation(fields: [userId], references: [id])
+  apiKey ApiKey? @relation(fields: [apiKeyId], references: [id])
+
+  @@map("audit_logs")
+}
+
+model Setting {
+  key         String   @id
+  value       String // JSON value
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  updatedById String?  @map("updated_by")
+
+  // Relations
+  updatedBy User? @relation(fields: [updatedById], references: [id])
+
+  @@map("settings")
+}
+
+model CalendarMetadata {
+  id             String    @id @default(uuid())
+  judgeName      String    @map("judge_name")
+  judgeCode      String    @map("judge_code")
+  courtroom      String?
+  calendarDate   DateTime  @map("calendar_date")
+  generatedAt    DateTime? @map("generated_at")
+  isZoomCalendar Boolean   @default(false) @map("is_zoom_calendar")
+  zoomMeetingId  String?   @map("zoom_meeting_id")
+  zoomPasscode   String?   @map("zoom_passcode")
+  zoomPhone      String?   @map("zoom_phone")
+  parameters     String? // JSON
+  sourceFilename String?   @map("source_filename")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  @@unique([judgeCode, calendarDate])
+  @@map("calendar_metadata")
+}

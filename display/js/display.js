@@ -1,0 +1,462 @@
+/**
+ * Courthouse Digital Signage - Display Client
+ * Handles data fetching, rendering, and real-time updates
+ */
+
+(function() {
+  'use strict';
+
+  // Configuration
+  const CONFIG = {
+    apiBaseUrl: 'http://localhost:3000',
+    displayId: getDisplayId(),
+    refreshInterval: 30000, // 30 seconds
+    clockInterval: 1000, // 1 second
+    weatherRefreshInterval: 900000, // 15 minutes
+    tickerSpeed: 50, // pixels per second
+  };
+
+  // State
+  let isOnline = true;
+  let lastUpdate = null;
+  let docketData = [];
+  let announcements = [];
+  let displayConfig = {};
+  let socket = null;
+
+  // Get display ID from URL or default
+  function getDisplayId() {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('displayId') || 'display-default';
+  }
+
+  // Get API key from URL or localStorage
+  function getApiKey() {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('apiKey') || localStorage.getItem('displayApiKey') || '';
+  }
+
+  // Initialize display
+  function init() {
+    console.log('Initializing display:', CONFIG.displayId);
+
+    // Start clock
+    updateClock();
+    setInterval(updateClock, CONFIG.clockInterval);
+
+    // Fetch initial data
+    fetchDisplayConfig();
+    fetchDocket();
+    fetchAnnouncements();
+    fetchWeather();
+
+    // Set up refresh intervals
+    setInterval(fetchDocket, CONFIG.refreshInterval);
+    setInterval(fetchAnnouncements, CONFIG.refreshInterval);
+    setInterval(fetchWeather, CONFIG.weatherRefreshInterval);
+
+    // Set up WebSocket connection
+    setupWebSocket();
+
+    // Handle online/offline status
+    window.addEventListener('online', () => handleConnectionChange(true));
+    window.addEventListener('offline', () => handleConnectionChange(false));
+  }
+
+  // Update clock
+  function updateClock() {
+    const now = new Date();
+    const timeEl = document.getElementById('time');
+    const dayEl = document.getElementById('day');
+
+    if (timeEl) {
+      timeEl.textContent = now.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+      });
+    }
+
+    if (dayEl) {
+      dayEl.textContent = now.toLocaleDateString('en-US', {
+        weekday: 'long',
+      });
+    }
+  }
+
+  // Fetch display configuration
+  async function fetchDisplayConfig() {
+    try {
+      const response = await fetch(
+        `${CONFIG.apiBaseUrl}/api/displays/${CONFIG.displayId}/config`,
+        {
+          headers: {
+            'X-API-Key': getApiKey(),
+          },
+        }
+      );
+
+      if (response.ok) {
+        displayConfig = await response.json();
+        applyDisplayConfig();
+        handleConnectionChange(true);
+      }
+    } catch (error) {
+      console.error('Failed to fetch display config:', error);
+      handleConnectionChange(false);
+    }
+  }
+
+  // Apply display configuration
+  function applyDisplayConfig() {
+    if (displayConfig.noticeText) {
+      const noticeEl = document.getElementById('notice-text');
+      if (noticeEl) noticeEl.textContent = displayConfig.noticeText;
+    }
+
+    if (displayConfig.weatherLocation) {
+      const locationEl = document.getElementById('location');
+      if (locationEl) locationEl.textContent = displayConfig.weatherLocation;
+    }
+
+    if (!displayConfig.showWeather) {
+      const weatherEl = document.querySelector('.weather');
+      if (weatherEl) weatherEl.style.display = 'none';
+    }
+
+    if (!displayConfig.tickerEnabled) {
+      const tickerEl = document.getElementById('ticker-container');
+      if (tickerEl) tickerEl.style.display = 'none';
+    }
+
+    // Apply ticker speed
+    if (displayConfig.tickerSpeed) {
+      const duration = displayConfig.tickerSpeed === 'slow' ? 45 :
+                       displayConfig.tickerSpeed === 'fast' ? 20 : 30;
+      const tickerContent = document.getElementById('ticker-content');
+      if (tickerContent) {
+        tickerContent.style.animationDuration = `${duration}s`;
+      }
+    }
+  }
+
+  // Fetch docket entries
+  async function fetchDocket() {
+    try {
+      const response = await fetch(
+        `${CONFIG.apiBaseUrl}/api/displays/${CONFIG.displayId}/docket`,
+        {
+          headers: {
+            'X-API-Key': getApiKey(),
+          },
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        docketData = data.entries || [];
+        renderDocket();
+        handleConnectionChange(true);
+        lastUpdate = new Date();
+      }
+    } catch (error) {
+      console.error('Failed to fetch docket:', error);
+      handleConnectionChange(false);
+    }
+  }
+
+  // Render docket table
+  function renderDocket() {
+    const tbody = document.getElementById('docket-body');
+    if (!tbody) return;
+
+    if (docketData.length === 0) {
+      tbody.innerHTML = `
+        <tr class="placeholder-row">
+          <td colspan="6">No hearings scheduled for today</td>
+        </tr>
+      `;
+      return;
+    }
+
+    tbody.innerHTML = docketData.map(entry => {
+      const classes = [];
+      if (entry.status === 'in_progress') classes.push('current');
+      if (entry.status === 'stricken') classes.push('stricken');
+
+      const adversaryMarker = entry.adversaryNumber
+        ? '<span class="adversary-marker">&#8224;</span>'
+        : '';
+
+      return `
+        <tr class="${classes.join(' ')}">
+          <td>${escapeHtml(entry.caseTitle)}${adversaryMarker}</td>
+          <td>${escapeHtml(entry.caseChapter)}</td>
+          <td>${formatTime(entry.hearingTime)}</td>
+          <td>${escapeHtml(entry.caseNumber)}</td>
+          <td>${escapeHtml(truncateText(entry.hearingMatter, 80))}</td>
+          <td>${escapeHtml(entry.courtroom || '--')}</td>
+        </tr>
+      `;
+    }).join('');
+
+    // Enable auto-scroll if needed
+    const container = document.getElementById('docket-container');
+    if (container && docketData.length > 8) {
+      container.classList.add('scrolling');
+    } else if (container) {
+      container.classList.remove('scrolling');
+    }
+
+    // Show Zoom info if current hearing has Zoom
+    const currentEntry = docketData.find(e => e.status === 'in_progress');
+    if (currentEntry && currentEntry.isZoom) {
+      showZoomInfo(currentEntry);
+    } else {
+      hideZoomInfo();
+    }
+  }
+
+  // Show Zoom information
+  function showZoomInfo(entry) {
+    const zoomEl = document.getElementById('zoom-info');
+    if (!zoomEl) return;
+
+    document.getElementById('zoom-meeting-id').textContent = entry.zoomMeetingId || '---';
+    document.getElementById('zoom-passcode').textContent = entry.zoomPasscode || '---';
+    document.getElementById('zoom-phone').textContent = entry.zoomPhone || '---';
+    zoomEl.style.display = 'flex';
+  }
+
+  // Hide Zoom information
+  function hideZoomInfo() {
+    const zoomEl = document.getElementById('zoom-info');
+    if (zoomEl) zoomEl.style.display = 'none';
+  }
+
+  // Fetch announcements
+  async function fetchAnnouncements() {
+    try {
+      const response = await fetch(
+        `${CONFIG.apiBaseUrl}/api/announcements?active=true`,
+        {
+          headers: {
+            'X-API-Key': getApiKey(),
+          },
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        announcements = data.announcements || [];
+        renderTicker();
+      }
+    } catch (error) {
+      console.error('Failed to fetch announcements:', error);
+    }
+  }
+
+  // Render announcement ticker
+  function renderTicker() {
+    const tickerContent = document.getElementById('ticker-content');
+    if (!tickerContent) return;
+
+    if (announcements.length === 0) {
+      tickerContent.innerHTML = '<span class="ticker-text">Welcome to the U.S. Bankruptcy Court</span>';
+      return;
+    }
+
+    tickerContent.innerHTML = announcements
+      .map(a => `<span class="ticker-text">${escapeHtml(a.text)}</span>`)
+      .join('');
+  }
+
+  // Fetch weather data
+  async function fetchWeather() {
+    try {
+      // Using National Weather Service API (free, no key required)
+      // Salt Lake City coordinates: 40.7608, -111.8910
+      const pointsUrl = 'https://api.weather.gov/points/40.7608,-111.8910';
+
+      const pointsResponse = await fetch(pointsUrl, {
+        headers: {
+          'User-Agent': 'CourthouseSignage/1.0',
+        },
+      });
+
+      if (pointsResponse.ok) {
+        const pointsData = await pointsResponse.json();
+        const forecastUrl = pointsData.properties.forecast;
+
+        const forecastResponse = await fetch(forecastUrl, {
+          headers: {
+            'User-Agent': 'CourthouseSignage/1.0',
+          },
+        });
+
+        if (forecastResponse.ok) {
+          const forecastData = await forecastResponse.json();
+          const current = forecastData.properties.periods[0];
+          renderWeather(current);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch weather:', error);
+      // Keep showing cached/default data
+    }
+  }
+
+  // Render weather widget
+  function renderWeather(data) {
+    const weatherEl = document.getElementById('weather');
+    if (!weatherEl || !data) return;
+
+    const iconEl = weatherEl.querySelector('.weather-icon');
+    const tempEl = weatherEl.querySelector('.temperature');
+
+    if (iconEl) iconEl.textContent = getWeatherEmoji(data.shortForecast);
+    if (tempEl) tempEl.textContent = `${data.temperature}°${data.temperatureUnit}`;
+  }
+
+  // Get weather emoji based on forecast
+  function getWeatherEmoji(forecast) {
+    const lower = (forecast || '').toLowerCase();
+    if (lower.includes('sunny') || lower.includes('clear')) return 'sunny';
+    if (lower.includes('cloud')) return 'cloudy';
+    if (lower.includes('rain') || lower.includes('shower')) return 'rain';
+    if (lower.includes('snow')) return 'snow';
+    if (lower.includes('thunder') || lower.includes('storm')) return 'stormy';
+    return 'weather';
+  }
+
+  // Set up WebSocket connection
+  function setupWebSocket() {
+    try {
+      // Import socket.io client dynamically or use global
+      if (typeof io !== 'undefined') {
+        socket = io(CONFIG.apiBaseUrl);
+
+        socket.on('connect', () => {
+          console.log('WebSocket connected');
+          socket.emit('display:register', { displayId: CONFIG.displayId });
+        });
+
+        socket.on('disconnect', () => {
+          console.log('WebSocket disconnected');
+        });
+
+        socket.on('docket:update', () => {
+          console.log('Docket update received');
+          fetchDocket();
+        });
+
+        socket.on('announcement:new', () => {
+          console.log('New announcement received');
+          fetchAnnouncements();
+        });
+
+        socket.on('announcement:remove', () => {
+          console.log('Announcement removed');
+          fetchAnnouncements();
+        });
+
+        socket.on('display:refresh', () => {
+          console.log('Refresh command received');
+          window.location.reload();
+        });
+
+        socket.on('display:message', (data) => {
+          console.log('Message received:', data);
+          showOverlayMessage(data.message, data.duration || 5000);
+        });
+      }
+    } catch (error) {
+      console.error('WebSocket setup failed:', error);
+    }
+  }
+
+  // Handle connection status changes
+  function handleConnectionChange(online) {
+    isOnline = online;
+    const indicator = document.getElementById('offline-indicator');
+    const lastUpdatedEl = document.getElementById('last-updated');
+
+    if (indicator) {
+      indicator.style.display = online ? 'none' : 'block';
+    }
+
+    if (lastUpdatedEl && lastUpdate) {
+      lastUpdatedEl.textContent = lastUpdate.toLocaleTimeString();
+    }
+  }
+
+  // Show overlay message
+  function showOverlayMessage(message, duration) {
+    const overlay = document.createElement('div');
+    overlay.className = 'message-overlay';
+    overlay.style.cssText = `
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.9);
+      color: white;
+      padding: 40px 60px;
+      border-radius: 10px;
+      font-size: 36px;
+      z-index: 10000;
+      text-align: center;
+    `;
+    overlay.textContent = message;
+    document.body.appendChild(overlay);
+
+    setTimeout(() => {
+      overlay.remove();
+    }, duration);
+  }
+
+  // Utility: Escape HTML
+  function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  // Utility: Truncate text
+  function truncateText(text, maxLength) {
+    if (!text || text.length <= maxLength) return text;
+    return text.substring(0, maxLength) + '...';
+  }
+
+  // Utility: Format time
+  function formatTime(time) {
+    if (!time) return '--:--';
+    // Assuming HH:MM format
+    const [hours, minutes] = time.split(':');
+    const h = parseInt(hours, 10);
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    const h12 = h % 12 || 12;
+    return `${h12}:${minutes} ${ampm}`;
+  }
+
+  // Send heartbeat
+  function sendHeartbeat() {
+    if (socket && socket.connected) {
+      socket.emit('display:heartbeat', {
+        displayId: CONFIG.displayId,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }
+
+  // Start heartbeat
+  setInterval(sendHeartbeat, 60000); // Every minute
+
+  // Initialize when DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();

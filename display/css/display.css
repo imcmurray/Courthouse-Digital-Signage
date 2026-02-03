@@ -1,0 +1,338 @@
+/* Courthouse Digital Signage - Display Client Styles */
+/* Optimized for 1920x1080 Full HD displays */
+
+:root {
+  /* Color Palette */
+  --primary-yellow: #FFD700;
+  --info-blue: #87CEEB;
+  --navy-dark: #1a2744;
+  --navy-mid: #2a4a6a;
+  --navy-light: #3a5a8a;
+  --row-gradient-start: #3a5a8a;
+  --row-gradient-end: #2a4a6a;
+  --white: #FFFFFF;
+  --black: #000000;
+  --gray-light: #F0F0F0;
+  --gray-dark: #666666;
+  --stricken-gray: #999999;
+
+  /* Typography */
+  --font-family: Arial, Helvetica, sans-serif;
+  --header-size: 48px;
+  --table-header-size: 32px;
+  --table-content-size: 28px;
+  --ticker-size: 24px;
+  --info-size: 36px;
+
+  /* Layout */
+  --header-height: 120px;
+  --notice-height: 60px;
+  --ticker-height: 50px;
+  --row-height: 70px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 1920px;
+  height: 1080px;
+  font-family: var(--font-family);
+  overflow: hidden;
+  background-color: var(--navy-dark);
+}
+
+/* Header Section */
+.header {
+  height: var(--header-height);
+  background-color: var(--primary-yellow);
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+}
+
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.court-branding {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.court-seal {
+  width: 90px;
+  height: 90px;
+  object-fit: contain;
+}
+
+.court-name h1 {
+  font-size: var(--header-size);
+  font-weight: bold;
+  color: var(--black);
+}
+
+.court-name h2 {
+  font-size: 32px;
+  font-weight: normal;
+  color: var(--black);
+}
+
+/* Info Widget */
+.info-widget {
+  display: flex;
+  align-items: center;
+  gap: 40px;
+  background-color: var(--info-blue);
+  padding: 15px 30px;
+  border-radius: 10px;
+}
+
+.location {
+  font-size: var(--info-size);
+  font-weight: bold;
+}
+
+.weather {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  font-size: var(--info-size);
+}
+
+.weather-icon {
+  font-size: 40px;
+}
+
+.datetime {
+  text-align: center;
+}
+
+.time {
+  font-size: 44px;
+  font-weight: bold;
+}
+
+.day {
+  font-size: 24px;
+}
+
+/* Zoom Info Box */
+.zoom-info {
+  background-color: #4A90D9;
+  color: var(--white);
+  padding: 15px 30px;
+  display: flex;
+  align-items: center;
+  gap: 30px;
+  font-size: 24px;
+}
+
+.zoom-icon {
+  background-color: #2D8CFF;
+  padding: 10px 20px;
+  border-radius: 5px;
+  font-weight: bold;
+}
+
+.zoom-details {
+  display: flex;
+  gap: 40px;
+}
+
+/* Docket Table Section */
+.docket-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.docket-header {
+  background-color: var(--navy-dark);
+  color: var(--white);
+  padding: 15px 30px;
+  border-bottom: 3px solid var(--primary-yellow);
+}
+
+.docket-header h3 {
+  font-size: var(--table-header-size);
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.docket-table-container {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.docket-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.docket-table thead {
+  background-color: var(--navy-dark);
+}
+
+.docket-table th {
+  color: var(--white);
+  font-size: var(--table-header-size);
+  font-weight: bold;
+  padding: 15px 10px;
+  text-align: left;
+  border-bottom: 2px solid var(--primary-yellow);
+}
+
+/* Column widths */
+.docket-table th:nth-child(1),
+.docket-table td:nth-child(1) { width: 25%; } /* NAME */
+.docket-table th:nth-child(2),
+.docket-table td:nth-child(2) { width: 5%; text-align: center; } /* CH */
+.docket-table th:nth-child(3),
+.docket-table td:nth-child(3) { width: 10%; } /* TIME */
+.docket-table th:nth-child(4),
+.docket-table td:nth-child(4) { width: 12%; } /* CASE # */
+.docket-table th:nth-child(5),
+.docket-table td:nth-child(5) { width: 38%; } /* MATTER */
+.docket-table th:nth-child(6),
+.docket-table td:nth-child(6) { width: 10%; text-align: center; } /* ROOM */
+
+.docket-table tbody tr {
+  height: var(--row-height);
+}
+
+.docket-table tbody tr:nth-child(odd) {
+  background: linear-gradient(90deg, var(--row-gradient-start), var(--row-gradient-end));
+}
+
+.docket-table tbody tr:nth-child(even) {
+  background: linear-gradient(90deg, var(--navy-mid), var(--navy-dark));
+}
+
+.docket-table td {
+  color: var(--white);
+  font-size: var(--table-content-size);
+  padding: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Current/In Progress Highlighting */
+.docket-table tbody tr.current {
+  background: linear-gradient(90deg, #4a7a3a, #3a6a2a) !important;
+  border: 2px solid var(--primary-yellow);
+}
+
+/* Stricken Entry Styling */
+.docket-table tbody tr.stricken td {
+  color: var(--stricken-gray);
+  text-decoration: line-through;
+}
+
+/* Adversary Indicator */
+.adversary-marker {
+  color: var(--primary-yellow);
+  font-weight: bold;
+}
+
+/* Placeholder */
+.placeholder-row td {
+  text-align: center;
+  color: var(--gray-light);
+  font-style: italic;
+}
+
+/* Notice Banner */
+.notice-banner {
+  height: var(--notice-height);
+  background-color: var(--primary-yellow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  font-size: 28px;
+  font-weight: bold;
+}
+
+.notice-icon {
+  font-size: 32px;
+}
+
+.notice-text {
+  text-transform: uppercase;
+}
+
+/* Announcement Ticker */
+.ticker-container {
+  height: var(--ticker-height);
+  background-color: var(--primary-yellow);
+  overflow: hidden;
+  position: relative;
+  border-top: 2px solid var(--navy-dark);
+}
+
+.ticker-content {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  white-space: nowrap;
+  animation: ticker-scroll 30s linear infinite;
+}
+
+.ticker-text {
+  font-size: var(--ticker-size);
+  padding: 0 100px;
+  font-weight: bold;
+}
+
+@keyframes ticker-scroll {
+  0% {
+    transform: translateX(100%);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
+/* Offline Indicator */
+.offline-indicator {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  background-color: #E53E3E;
+  color: var(--white);
+  padding: 10px 20px;
+  border-radius: 5px;
+  font-size: 18px;
+  font-weight: bold;
+  z-index: 1000;
+}
+
+/* Auto-scroll animation for long docket lists */
+.docket-table-container.scrolling tbody {
+  animation: auto-scroll 60s linear infinite;
+}
+
+@keyframes auto-scroll {
+  0%, 10% {
+    transform: translateY(0);
+  }
+  45%, 55% {
+    transform: translateY(calc(-100% + 600px));
+  }
+  90%, 100% {
+    transform: translateY(0);
+  }
+}
