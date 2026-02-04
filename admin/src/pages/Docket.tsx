@@ -667,18 +667,24 @@ export default function Docket() {
                       Ch. {entry.caseChapter} | {entry.courtroom || 'TBD'}
                     </div>
                   </td>
-                  <td className="px-6 py-4">
-                    <div className={`text-sm ${entry.status === 'stricken' ? 'line-through text-gray-400' : 'text-gray-900'}`}>
+                  <td className="px-6 py-4 max-w-[200px]">
+                    <div
+                      className={`text-sm truncate ${entry.status === 'stricken' ? 'line-through text-gray-400' : 'text-gray-900'}`}
+                      title={entry.caseTitle}
+                    >
                       {entry.caseTitle}
                     </div>
                     {entry.adversaryNumber && (
-                      <div className="text-xs text-gray-500">
+                      <div className="text-xs text-gray-500 truncate" title={entry.adversaryNumber}>
                         Adv: {entry.adversaryNumber}
                       </div>
                     )}
                   </td>
-                  <td className="px-6 py-4">
-                    <div className={`text-sm max-w-xs truncate ${entry.status === 'stricken' ? 'line-through text-gray-400' : 'text-gray-700'}`}>
+                  <td className="px-6 py-4 max-w-[300px]">
+                    <div
+                      className={`text-sm truncate ${entry.status === 'stricken' ? 'line-through text-gray-400' : 'text-gray-700'}`}
+                      title={entry.hearingMatter}
+                    >
                       {entry.hearingMatter}
                     </div>
                     <div className="text-xs text-gray-500">
