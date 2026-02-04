@@ -1,6 +1,7 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import crypto from 'crypto';
+import path from 'path';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { PrismaClient } from '@prisma/client';
@@ -56,6 +57,9 @@ app.use(cors({
   credentials: true
 }));
 app.use(express.json());
+
+// Serve display client static files
+app.use('/display', express.static(path.join(__dirname, '../../display')));
 
 // Request logging
 app.use((req, res, next) => {
