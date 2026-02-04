@@ -48,6 +48,20 @@ function App() {
             />
 
             <Route
+              path="/admin/docket/new"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'editor']}>
+                  <AdminLayout>
+                    <div className="bg-white p-6 rounded-lg shadow">
+                      <h2 className="text-xl font-semibold">Add New Docket Entry</h2>
+                      <p className="mt-2 text-gray-600">New docket entry form will be implemented here.</p>
+                    </div>
+                  </AdminLayout>
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
               path="/admin/displays"
               element={
                 <ProtectedRoute allowedRoles={['admin', 'editor']}>

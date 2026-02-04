@@ -21,8 +21,20 @@ export default function Breadcrumb() {
   // Split pathname into segments, filter empty strings
   const pathSegments = location.pathname.split('/').filter(Boolean);
 
-  // Build breadcrumb items
-  const breadcrumbs = pathSegments.map((segment, index) => {
+  // If we're on the dashboard, don't show breadcrumbs
+  if (pathSegments.length <= 2 && pathSegments[1] === 'dashboard') {
+    return null;
+  }
+
+  // Start with Dashboard as the root
+  const displayBreadcrumbs: { path: string; displayName: string; isLast: boolean }[] = [
+    { path: '/admin/dashboard', displayName: 'Dashboard', isLast: false },
+  ];
+
+  // Add remaining segments (skip 'admin')
+  pathSegments.forEach((segment, index) => {
+    if (segment === 'admin') return; // Skip 'admin' segment
+
     // Build the path up to this segment
     const path = '/' + pathSegments.slice(0, index + 1).join('/');
 
@@ -32,21 +44,19 @@ export default function Breadcrumb() {
     // Check if this is the last segment (current page)
     const isLast = index === pathSegments.length - 1;
 
-    return {
+    displayBreadcrumbs.push({
       path,
       displayName,
       isLast,
-    };
+    });
   });
 
-  // Filter out the 'admin' segment from display but keep Dashboard as first item
-  const displayBreadcrumbs = breadcrumbs.filter((b, index) => {
-    // Skip the 'admin' segment
-    if (b.displayName === 'Admin') return false;
-    return true;
-  });
+  // Update the last item to mark it as current
+  if (displayBreadcrumbs.length > 1) {
+    displayBreadcrumbs[displayBreadcrumbs.length - 1].isLast = true;
+  }
 
-  // If we only have one item (Dashboard), don't show breadcrumbs
+  // If we only have Dashboard (shouldn't happen due to early return), don't show
   if (displayBreadcrumbs.length <= 1) {
     return null;
   }
