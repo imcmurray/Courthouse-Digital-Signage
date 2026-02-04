@@ -476,7 +476,7 @@ export default function Docket() {
         <div className="flex items-center space-x-3">
           <button
             onClick={() => setIsImportModalOpen(true)}
-            className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+            className="flex items-center px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 transition-colors"
           >
             <svg className="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
@@ -1020,7 +1020,7 @@ export default function Docket() {
               <button
                 onClick={handleImportConfirm}
                 disabled={importMutation.isPending || importPreview.length === 0}
-                className="px-4 py-2 text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 text-white bg-green-700 rounded-lg hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {importMutation.isPending ? 'Importing...' : `Import ${importPreview.length} Entries`}
               </button>
