@@ -239,3 +239,50 @@
 - a9c55d4: feat: Verify admin-only routes blocked for viewer role (Feature #18)
 - ddc32e6: feat: Verify JWT token expires after 30 minute timeout (Feature #19)
 - a6fe329: feat: Verify password minimum 8 characters enforced (Feature #20)
+
+## Session: 2026-02-04 (Agent Batch #27, #29, #32)
+
+### Completed Features This Session:
+
+- **Feature #27: Admin can reactivate user** ✅ PASSING
+  - Logged in as admin
+  - Found deactivated user "Test User" (test@courthouse.gov) with "Inactive" status
+  - Clicked "Reactivate" button
+  - Verified status changed to "Active" with success toast
+  - Reset user's password via Edit modal
+  - Logged out and logged in as reactivated user
+  - Confirmed login succeeds for reactivated user
+
+- **Feature #29: Admin can edit docket entry** ✅ PASSING
+  - Logged in as admin
+  - Navigated to /admin/docket
+  - Clicked Edit on existing entry (26-CLEAR-001)
+  - Modified hearing time from 09:00 to 10:30
+  - Changed status from "scheduled" to "in_progress"
+  - Submitted form and verified success message
+  - Confirmed changes reflected in docket list
+
+- **Feature #32: Admin can clear docket entries by date** ✅ PASSING
+  - Logged in as admin
+  - Opened Clear Docket modal
+  - Selected date with 5 entries (2026-02-05)
+  - Verified entry count showed "5 entries will be deleted"
+  - Toggled "Archive entries instead of deleting" checkbox
+  - Verified text changed to "5 entries will be archived" and button to "Archive Entries"
+  - Confirmed archive operation
+  - Verified entries now show "Archived" status in list
+
+### Technical Notes:
+- User reactivation uses PUT /api/users/:id with { isActive: true }
+- Docket edit uses PUT /api/docket/:id
+- Clear docket uses DELETE /api/docket/clear with { date, archive } body
+- Archive option sets status to 'archived' instead of deleting records
+
+### Current Status:
+- 36/155 features passing (23.2%)
+- All assigned Workflow Completeness features complete
+
+### Git Commits This Session:
+- db3087c: feat: Verify admin can reactivate user (Feature #27)
+- 241de00: feat: Verify docket entry edit workflow (Feature #29)
+- 03787ed: feat: Verify clear docket entries by date (Feature #32)
