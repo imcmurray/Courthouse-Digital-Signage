@@ -395,3 +395,43 @@
 - 7e5df4b: feat: Verify admin can enable/disable announcement (Feature #36)
 - 1835da9: feat: Implement display management page and verify registration (Feature #37)
 - c0cecd8: feat: Add display update/delete API endpoints and verify configuration (Feature #38)
+
+## Session: 2026-02-04 (Agent Batch #41, #42)
+
+### Completed Features This Session:
+
+- **Feature #41: Admin can create API key** ✅ PASSING
+  - Implemented full API key management system:
+    - Added API key CRUD endpoints to backend (/api/api-keys)
+    - Created ApiKeys.tsx page component with full UI
+    - Created apiKeys.ts API client for frontend
+  - Admin can create API keys with:
+    - Name (required)
+    - Permissions (read, write, admin checkboxes)
+    - Optional link to display
+    - Optional expiration date
+  - API key displayed only once after creation in modal
+  - List shows only key prefix (8 chars) for security
+  - Verified with browser automation and screenshots
+
+- **Feature #42: Admin can revoke API key** ✅ PASSING
+  - Clicked revoke on existing API key
+  - Confirmation dialog appeared with warning message
+  - Confirmed revocation
+  - Key removed from list immediately
+  - Tested revoked key returns 401 "Invalid API key"
+  - Verified with browser automation and screenshots
+
+### Technical Notes:
+- API keys stored in api_keys table with bcrypt-hashed key
+- Only key prefix (8 chars) is stored and displayed after creation
+- Full key is only shown once in modal after creation
+- Revoked keys are deleted from database (not soft-deleted)
+
+### Current Status:
+- 46/155 features passing (29.7%)
+- Both assigned features (#41, #42) complete
+
+### Git Commits This Session:
+- 35e104b: feat: Implement API key management (Feature #41)
+- 2b1ad22: feat: Verify API key revocation workflow (Feature #42)
