@@ -1081,6 +1081,94 @@ app.post('/api/displays', async (req: Request, res: Response) => {
   }
 });
 
+// PUT /api/displays/:id - Update a display
+app.put('/api/displays/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const {
+      name,
+      location,
+      judgeFilter,
+      courtroomFilter,
+      chapterFilter,
+      showStricken,
+      showZoomInfo,
+      highlightCurrent,
+      theme,
+      columns,
+      showWeather,
+      weatherLocation,
+      noticeText,
+      tickerEnabled,
+      tickerSpeed
+    } = req.body;
+
+    // Check if display exists
+    const existingDisplay = await prisma.display.findUnique({
+      where: { id }
+    });
+
+    if (!existingDisplay) {
+      return res.status(404).json({ error: 'Display not found' });
+    }
+
+    const display = await prisma.display.update({
+      where: { id },
+      data: {
+        ...(name !== undefined && { name }),
+        ...(location !== undefined && { location }),
+        ...(judgeFilter !== undefined && { judgeFilter: judgeFilter || null }),
+        ...(courtroomFilter !== undefined && { courtroomFilter: courtroomFilter || null }),
+        ...(chapterFilter !== undefined && { chapterFilter: chapterFilter ? JSON.stringify(chapterFilter) : null }),
+        ...(showStricken !== undefined && { showStricken }),
+        ...(showZoomInfo !== undefined && { showZoomInfo }),
+        ...(highlightCurrent !== undefined && { highlightCurrent }),
+        ...(theme !== undefined && { theme }),
+        ...(columns !== undefined && { columns: Array.isArray(columns) ? JSON.stringify(columns) : columns }),
+        ...(showWeather !== undefined && { showWeather }),
+        ...(weatherLocation !== undefined && { weatherLocation: weatherLocation || null }),
+        ...(noticeText !== undefined && { noticeText }),
+        ...(tickerEnabled !== undefined && { tickerEnabled }),
+        ...(tickerSpeed !== undefined && { tickerSpeed })
+      }
+    });
+
+    console.log(`[DB] UPDATE displays SET ... WHERE id = '${id}'`);
+
+    res.json(display);
+  } catch (error) {
+    console.error('Failed to update display:', error);
+    res.status(500).json({ error: 'Failed to update display' });
+  }
+});
+
+// DELETE /api/displays/:id - Delete a display
+app.delete('/api/displays/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    // Check if display exists
+    const existingDisplay = await prisma.display.findUnique({
+      where: { id }
+    });
+
+    if (!existingDisplay) {
+      return res.status(404).json({ error: 'Display not found' });
+    }
+
+    await prisma.display.delete({
+      where: { id }
+    });
+
+    console.log(`[DB] DELETE FROM displays WHERE id = '${id}'`);
+
+    res.json({ success: true, message: 'Display deleted successfully' });
+  } catch (error) {
+    console.error('Failed to delete display:', error);
+    res.status(500).json({ error: 'Failed to delete display' });
+  }
+});
+
 // =========================================
 // User Management Endpoints (Admin Only)
 // =========================================
