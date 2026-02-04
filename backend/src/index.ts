@@ -1,12 +1,31 @@
-import express from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 
 const app = express();
 const httpServer = createServer(app);
 const prisma = new PrismaClient();
+
+// JWT configuration
+const JWT_SECRET = process.env.JWT_SECRET || 'courthouse-signage-secret-key-change-in-production';
+const JWT_EXPIRES_IN = '30m'; // 30 minutes session timeout
+const JWT_REFRESH_EXPIRES_IN = '7d'; // 7 days for refresh token
+
+// Interface for JWT payload
+interface JwtPayload {
+  userId: string;
+  email: string;
+  role: string;
+}
+
+// Extend Express Request type
+interface AuthenticatedRequest extends Request {
+  user?: JwtPayload;
+}
 
 // Environment variables
 const PORT = process.env.PORT || 3000;
@@ -28,6 +47,178 @@ app.use(express.json());
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} ${req.method} ${req.path}`);
   next();
+});
+
+// =========================================
+// Authentication Middleware
+// =========================================
+const authenticateToken = (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+
+  if (!token) {
+    return res.status(401).json({ error: 'Access token required' });
+  }
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
+    req.user = decoded;
+    next();
+  } catch (err) {
+    return res.status(403).json({ error: 'Invalid or expired token' });
+  }
+};
+
+// =========================================
+// Authentication Endpoints
+// =========================================
+
+// POST /api/auth/login - User login with JWT response
+app.post('/api/auth/login', async (req: Request, res: Response) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    // Find user by email
+    const user = await prisma.user.findUnique({
+      where: { email: email.toLowerCase() },
+    });
+
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+
+    // Check if user is active
+    if (!user.isActive) {
+      return res.status(401).json({ error: 'Account is deactivated' });
+    }
+
+    // Verify password
+    const isValidPassword = await bcrypt.compare(password, user.passwordHash);
+    if (!isValidPassword) {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+
+    // Generate JWT tokens
+    const accessToken = jwt.sign(
+      { userId: user.id, email: user.email, role: user.role },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
+    );
+
+    const refreshToken = jwt.sign(
+      { userId: user.id, type: 'refresh' },
+      JWT_SECRET,
+      { expiresIn: JWT_REFRESH_EXPIRES_IN }
+    );
+
+    console.log(`[AUTH] User logged in: ${user.email} (${user.role})`);
+
+    res.json({
+      accessToken,
+      refreshToken,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+      },
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+// POST /api/auth/logout - Logout (client-side token removal)
+app.post('/api/auth/logout', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  // In a stateless JWT setup, logout is handled client-side
+  // We could add token blacklisting here in the future
+  console.log(`[AUTH] User logged out: ${req.user?.email}`);
+  res.json({ message: 'Logged out successfully' });
+});
+
+// POST /api/auth/refresh - Refresh JWT token
+app.post('/api/auth/refresh', async (req: Request, res: Response) => {
+  try {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+      return res.status(400).json({ error: 'Refresh token required' });
+    }
+
+    // Verify refresh token
+    let decoded: { userId: string; type: string };
+    try {
+      decoded = jwt.verify(refreshToken, JWT_SECRET) as { userId: string; type: string };
+    } catch (err) {
+      return res.status(403).json({ error: 'Invalid or expired refresh token' });
+    }
+
+    if (decoded.type !== 'refresh') {
+      return res.status(403).json({ error: 'Invalid token type' });
+    }
+
+    // Fetch user to ensure they still exist and are active
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+    });
+
+    if (!user || !user.isActive) {
+      return res.status(403).json({ error: 'User not found or deactivated' });
+    }
+
+    // Generate new access token
+    const accessToken = jwt.sign(
+      { userId: user.id, email: user.email, role: user.role },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
+    );
+
+    console.log(`[AUTH] Token refreshed for: ${user.email}`);
+
+    res.json({
+      accessToken,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+      },
+    });
+  } catch (error) {
+    console.error('Token refresh error:', error);
+    res.status(500).json({ error: 'Token refresh failed' });
+  }
+});
+
+// GET /api/auth/me - Get current user info
+app.get('/api/auth/me', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user!.userId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json(user);
+  } catch (error) {
+    console.error('Get user error:', error);
+    res.status(500).json({ error: 'Failed to get user info' });
+  }
 });
 
 // Health check endpoint
