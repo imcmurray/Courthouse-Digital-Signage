@@ -199,3 +199,43 @@
 - b49aba1: feat: Verify user logout functionality (Feature #15)
 - 4015aec: feat: Implement redirect to original page after login (Feature #16)
 - 4a25096: feat: Add JWT authentication to docket API endpoints (Feature #21)
+
+## Session: 2026-02-04 (Agent Batch #18, #19, #20)
+
+### Completed Features This Session:
+
+- **Feature #18: Admin-only routes blocked for viewer role** ✅ PASSING
+  - Viewer user can only access /admin/dashboard
+  - /admin/users shows "Access Denied" for viewer
+  - /admin/docket shows "Access Denied" for viewer
+  - /admin/settings, /admin/api-keys, /admin/audit-logs all blocked
+  - Sidebar only shows "Dashboard" for viewer role
+  - ProtectedRoute component enforces role-based access
+
+- **Feature #19: JWT token expires after timeout** ✅ PASSING
+  - JWT_EXPIRES_IN configured to '30m' (30 minutes)
+  - Token exp claim verified to be exactly 30 minutes from iat
+  - API returns 403 with "Invalid or expired token" for expired tokens
+  - Client auto-refreshes tokens, redirects to /login if refresh fails
+  - Response interceptor handles token refresh flow
+
+- **Feature #20: Password minimum length enforced** ✅ PASSING
+  - Frontend Zod schema validates min 8 characters
+  - Error message "Password must be at least 8 characters" shown for short passwords
+  - Backend API also validates and returns 400 for passwords < 8 chars
+  - User creation succeeds with exactly 8 character password
+  - Password placeholder shows "Minimum 8 characters" hint
+
+### Technical Notes:
+- ProtectedRoute component uses allowedRoles prop for role-based access
+- JWT expiration handled by response interceptor with refresh token flow
+- Both frontend (Zod) and backend validate password length
+
+### Current Status:
+- 28/155 features passing (18.1%)
+- Security & Access Control features progressing well
+
+### Git Commits This Session:
+- a9c55d4: feat: Verify admin-only routes blocked for viewer role (Feature #18)
+- ddc32e6: feat: Verify JWT token expires after 30 minute timeout (Feature #19)
+- a6fe329: feat: Verify password minimum 8 characters enforced (Feature #20)
