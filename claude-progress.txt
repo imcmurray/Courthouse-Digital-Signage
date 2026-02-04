@@ -342,3 +342,56 @@
 - 9bb2105: feat: Verify admin can create announcement (Feature #33)
 - 26caed8: feat: Verify admin can edit announcement (Feature #34)
 - be798a9: feat: Verify admin can delete announcement (Feature #35)
+
+## Session: 2026-02-04 (Agent Batch #36, #37, #38)
+
+### Completed Features This Session:
+
+- **Feature #36: Admin can enable/disable announcement** ✅ PASSING
+  - Logged in as admin
+  - Navigated to /admin/announcements
+  - Found active announcement and toggled to Disabled
+  - Verified announcement marked as disabled in admin UI
+  - Verified disabled announcement does NOT appear on display ticker
+  - Re-enabled announcement
+  - Verified it reappears on ticker with all 3 announcements shown
+
+- **Feature #37: Admin can register new display** ✅ PASSING
+  - Created Displays page (admin/src/pages/Displays.tsx)
+  - Created displays API client (admin/src/api/displays.ts)
+  - Updated App.tsx to use Displays component
+  - Registered new display "feature37-test-display" with:
+    - Name: Feature 37 Test Display
+    - Location: Second Floor, East Wing - Test Location
+    - Courtroom Filter: 201
+  - API returned API key on creation
+  - Display appears in list with correct settings
+  - Display client connects and shows correct configuration
+
+- **Feature #38: Admin can configure display settings** ✅ PASSING
+  - Added PUT /api/displays/:id endpoint to backend
+  - Added DELETE /api/displays/:id endpoint to backend
+  - Tested edit form with multiple configuration changes:
+    - Changed display name to "Feature 38 Updated Display"
+    - Changed location to "First Floor, Lobby - UPDATED"
+    - Cleared courtroom filter
+    - Added judge filter: "Johnson"
+    - Toggled weather OFF
+    - Disabled ticker
+    - Changed ticker speed to Fast
+    - Updated notice text: "FEATURE 38 TEST - No electronic devices allowed"
+  - Verified all changes saved correctly in database
+
+### Technical Notes:
+- Display management page now fully functional with CRUD operations
+- Backend now has full display CRUD: GET all, GET single, POST, PUT, DELETE
+- Playwright MCP server disconnected during testing - some verification done via curl/API
+
+### Current Status:
+- 42/155 features passing (27.1%)
+- All 3 assigned features (#36, #37, #38) complete
+
+### Git Commits This Session:
+- 7e5df4b: feat: Verify admin can enable/disable announcement (Feature #36)
+- 1835da9: feat: Implement display management page and verify registration (Feature #37)
+- c0cecd8: feat: Add display update/delete API endpoints and verify configuration (Feature #38)
