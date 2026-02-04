@@ -306,10 +306,305 @@ app.get('/api/schema-check', async (req, res) => {
   }
 });
 
-// Placeholder routes - will be implemented by coding agents
-app.get('/api/docket', async (req, res) => {
-  // TODO: Implement docket listing with filters
-  res.json({ entries: [], total: 0 });
+// =========================================
+// Docket Endpoints
+// =========================================
+
+// GET /api/docket - List docket entries with optional filters
+app.get('/api/docket', async (req: Request, res: Response) => {
+  try {
+    const { date, courtroom, status, judge, chapter } = req.query;
+
+    // Build filter conditions
+    const where: Record<string, unknown> = {};
+
+    // Filter by date (default to today)
+    if (date) {
+      const filterDate = new Date(date as string);
+      filterDate.setHours(0, 0, 0, 0);
+      const nextDay = new Date(filterDate);
+      nextDay.setDate(nextDay.getDate() + 1);
+      where.hearingDate = {
+        gte: filterDate,
+        lt: nextDay
+      };
+    }
+
+    if (courtroom) where.courtroom = courtroom;
+    if (status) where.status = status;
+    if (judge) where.hearingJudge = judge;
+    if (chapter) where.caseChapter = chapter;
+
+    const entries = await prisma.docketEntry.findMany({
+      where,
+      orderBy: [
+        { hearingTime: 'asc' },
+        { caseTitle: 'asc' }
+      ]
+    });
+
+    console.log(`[DB] SELECT from docket_entries - found ${entries.length} records`);
+    res.json({ entries, total: entries.length });
+  } catch (error) {
+    console.error('Failed to fetch docket entries:', error);
+    res.status(500).json({ error: 'Failed to fetch docket entries' });
+  }
+});
+
+// POST /api/docket - Create a single docket entry
+app.post('/api/docket', async (req: Request, res: Response) => {
+  try {
+    const {
+      caseNumber,
+      caseTitle,
+      caseChapter,
+      adversaryNumber,
+      adversaryTitle,
+      hearingDate,
+      hearingTime,
+      hearingMatter,
+      hearingJudge,
+      courtroom,
+      movingParty,
+      opposingParty,
+      trustee,
+      isZoom,
+      zoomMeetingId,
+      zoomPasscode,
+      zoomPhone,
+      status,
+      statusNote,
+      comment
+    } = req.body;
+
+    // Validate required fields
+    if (!caseNumber || !caseTitle || !caseChapter || !hearingDate || !hearingTime || !hearingMatter || !hearingJudge) {
+      return res.status(400).json({
+        error: 'Missing required fields: caseNumber, caseTitle, caseChapter, hearingDate, hearingTime, hearingMatter, hearingJudge'
+      });
+    }
+
+    const entry = await prisma.docketEntry.create({
+      data: {
+        caseNumber,
+        caseTitle,
+        caseChapter,
+        adversaryNumber,
+        adversaryTitle,
+        hearingDate: new Date(hearingDate),
+        hearingTime,
+        hearingMatter,
+        hearingJudge,
+        courtroom,
+        movingParty,
+        opposingParty,
+        trustee,
+        isZoom: isZoom || false,
+        zoomMeetingId,
+        zoomPasscode,
+        zoomPhone,
+        status: status || 'scheduled',
+        statusNote,
+        comment
+      }
+    });
+
+    console.log(`[DB] INSERT into docket_entries - created id: ${entry.id}`);
+
+    // Emit WebSocket event for real-time updates
+    io.emit('docket:update', {});
+
+    res.status(201).json(entry);
+  } catch (error: unknown) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002') {
+      return res.status(409).json({ error: 'Duplicate entry: case number, date, and time combination already exists' });
+    }
+    console.error('Failed to create docket entry:', error);
+    res.status(500).json({ error: 'Failed to create docket entry' });
+  }
+});
+
+// GET /api/docket/:id - Get a single docket entry
+app.get('/api/docket/:id', async (req: Request, res: Response) => {
+  try {
+    const entry = await prisma.docketEntry.findUnique({
+      where: { id: req.params.id },
+      include: {
+        createdBy: {
+          select: { id: true, name: true, email: true }
+        }
+      }
+    });
+
+    if (!entry) {
+      return res.status(404).json({ error: 'Docket entry not found' });
+    }
+
+    console.log(`[DB] SELECT from docket_entries WHERE id = ${req.params.id}`);
+    res.json(entry);
+  } catch (error) {
+    console.error('Failed to fetch docket entry:', error);
+    res.status(500).json({ error: 'Failed to fetch docket entry' });
+  }
+});
+
+// PUT /api/docket/:id - Update a docket entry
+app.put('/api/docket/:id', async (req: Request, res: Response) => {
+  try {
+    const updateData: Record<string, unknown> = {};
+    const allowedFields = [
+      'caseNumber', 'caseTitle', 'caseChapter', 'adversaryNumber', 'adversaryTitle',
+      'hearingDate', 'hearingTime', 'hearingMatter', 'hearingJudge', 'courtroom',
+      'movingParty', 'opposingParty', 'trustee', 'isZoom', 'zoomMeetingId',
+      'zoomPasscode', 'zoomPhone', 'status', 'statusNote', 'comment'
+    ];
+
+    for (const field of allowedFields) {
+      if (req.body[field] !== undefined) {
+        if (field === 'hearingDate') {
+          updateData[field] = new Date(req.body[field]);
+        } else {
+          updateData[field] = req.body[field];
+        }
+      }
+    }
+
+    const entry = await prisma.docketEntry.update({
+      where: { id: req.params.id },
+      data: updateData
+    });
+
+    console.log(`[DB] UPDATE docket_entries WHERE id = ${req.params.id}`);
+
+    // Emit WebSocket event for real-time updates
+    io.emit('docket:update', {});
+    io.emit('docket:entry:update', { id: entry.id });
+
+    res.json(entry);
+  } catch (error: unknown) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'P2025') {
+      return res.status(404).json({ error: 'Docket entry not found' });
+    }
+    console.error('Failed to update docket entry:', error);
+    res.status(500).json({ error: 'Failed to update docket entry' });
+  }
+});
+
+// DELETE /api/docket/:id - Delete a docket entry
+app.delete('/api/docket/:id', async (req: Request, res: Response) => {
+  try {
+    await prisma.docketEntry.delete({
+      where: { id: req.params.id }
+    });
+
+    console.log(`[DB] DELETE from docket_entries WHERE id = ${req.params.id}`);
+
+    // Emit WebSocket event for real-time updates
+    io.emit('docket:update', {});
+
+    res.status(204).send();
+  } catch (error: unknown) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'P2025') {
+      return res.status(404).json({ error: 'Docket entry not found' });
+    }
+    console.error('Failed to delete docket entry:', error);
+    res.status(500).json({ error: 'Failed to delete docket entry' });
+  }
+});
+
+// =========================================
+// Display-specific Endpoints
+// =========================================
+
+// GET /api/displays/:id/config - Get display configuration
+app.get('/api/displays/:id/config', async (req: Request, res: Response) => {
+  try {
+    const display = await prisma.display.findUnique({
+      where: { id: req.params.id }
+    });
+
+    if (!display) {
+      return res.status(404).json({ error: 'Display not found' });
+    }
+
+    res.json({
+      id: display.id,
+      name: display.name,
+      location: display.location,
+      showWeather: display.showWeather,
+      weatherLocation: display.weatherLocation || display.location,
+      noticeText: display.noticeText,
+      tickerEnabled: display.tickerEnabled,
+      tickerSpeed: display.tickerSpeed,
+      showStricken: display.showStricken,
+      showZoomInfo: display.showZoomInfo,
+      highlightCurrent: display.highlightCurrent,
+      theme: display.theme,
+      columns: JSON.parse(display.columns)
+    });
+  } catch (error) {
+    console.error('Failed to fetch display config:', error);
+    res.status(500).json({ error: 'Failed to fetch display config' });
+  }
+});
+
+// GET /api/displays/:id/docket - Get docket entries for a specific display
+app.get('/api/displays/:id/docket', async (req: Request, res: Response) => {
+  try {
+    const display = await prisma.display.findUnique({
+      where: { id: req.params.id }
+    });
+
+    if (!display) {
+      return res.status(404).json({ error: 'Display not found' });
+    }
+
+    // Build filter based on display configuration
+    const where: Record<string, unknown> = {};
+
+    // Default to today's entries
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    where.hearingDate = {
+      gte: today,
+      lt: tomorrow
+    };
+
+    // Apply display filters
+    if (display.judgeFilter) {
+      where.hearingJudge = display.judgeFilter;
+    }
+    if (display.courtroomFilter) {
+      where.courtroom = display.courtroomFilter;
+    }
+    if (display.chapterFilter) {
+      const chapters = JSON.parse(display.chapterFilter);
+      if (chapters.length > 0) {
+        where.caseChapter = { in: chapters };
+      }
+    }
+
+    // Optionally exclude stricken entries
+    if (!display.showStricken) {
+      where.status = { not: 'stricken' };
+    }
+
+    const entries = await prisma.docketEntry.findMany({
+      where,
+      orderBy: [
+        { hearingTime: 'asc' },
+        { caseTitle: 'asc' }
+      ]
+    });
+
+    console.log(`[DB] SELECT from docket_entries for display ${req.params.id} - found ${entries.length} records`);
+    res.json({ entries, total: entries.length });
+  } catch (error) {
+    console.error('Failed to fetch display docket:', error);
+    res.status(500).json({ error: 'Failed to fetch display docket' });
+  }
 });
 
 app.get('/api/announcements', async (req, res) => {
@@ -460,9 +755,80 @@ app.delete('/api/announcements/:id', async (req, res) => {
   }
 });
 
-app.get('/api/displays', async (req, res) => {
-  // TODO: Implement displays listing
-  res.json({ displays: [], total: 0 });
+// GET /api/displays - List all displays
+app.get('/api/displays', async (req: Request, res: Response) => {
+  try {
+    const displays = await prisma.display.findMany({
+      orderBy: { name: 'asc' }
+    });
+    console.log(`[DB] SELECT from displays - found ${displays.length} records`);
+    res.json({ displays, total: displays.length });
+  } catch (error) {
+    console.error('Failed to fetch displays:', error);
+    res.status(500).json({ error: 'Failed to fetch displays' });
+  }
+});
+
+// POST /api/displays - Create a new display
+app.post('/api/displays', async (req: Request, res: Response) => {
+  try {
+    const {
+      id,
+      name,
+      location,
+      judgeFilter,
+      courtroomFilter,
+      chapterFilter,
+      showStricken,
+      showZoomInfo,
+      highlightCurrent,
+      theme,
+      columns,
+      showWeather,
+      weatherLocation,
+      noticeText,
+      tickerEnabled,
+      tickerSpeed
+    } = req.body;
+
+    if (!id || !name || !location) {
+      return res.status(400).json({ error: 'Missing required fields: id, name, location' });
+    }
+
+    // Generate a simple API key hash (in production, use proper key generation)
+    const apiKeyHash = require('crypto').randomBytes(32).toString('hex');
+
+    const display = await prisma.display.create({
+      data: {
+        id,
+        name,
+        location,
+        judgeFilter,
+        courtroomFilter,
+        chapterFilter: chapterFilter ? JSON.stringify(chapterFilter) : null,
+        showStricken: showStricken ?? false,
+        showZoomInfo: showZoomInfo ?? true,
+        highlightCurrent: highlightCurrent ?? true,
+        theme: theme || 'default',
+        columns: columns ? JSON.stringify(columns) : '["NAME","CH","TIME","CASE","MATTER","ROOM"]',
+        showWeather: showWeather ?? true,
+        weatherLocation,
+        noticeText: noticeText || 'Please turn your phones OFF in the Courthouse',
+        tickerEnabled: tickerEnabled ?? true,
+        tickerSpeed: tickerSpeed || 'medium',
+        apiKeyHash
+      }
+    });
+
+    console.log(`[DB] INSERT into displays - created id: ${display.id}`);
+    res.status(201).json(display);
+  } catch (error: unknown) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002') {
+      return res.status(409).json({ error: 'Display with this ID already exists' });
+    }
+    console.error('Failed to create display:', error);
+    res.status(500).json({ error: 'Failed to create display' });
+  }
 });
 
 // Socket.io connection handling

@@ -1,62 +1,159 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
+import { AuthProvider } from './context/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute';
+import AdminLayout from './components/AdminLayout';
+import Login from './pages/Login';
+import Dashboard from './pages/Dashboard';
 
 const queryClient = new QueryClient();
 
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Navigate to="/login" replace />} />
-          <Route path="/login" element={<LoginPlaceholder />} />
-          <Route path="/admin/*" element={<AdminPlaceholder />} />
-        </Routes>
-      </BrowserRouter>
-      <Toaster position="top-right" />
+      <AuthProvider>
+        <BrowserRouter>
+          <Routes>
+            {/* Public routes */}
+            <Route path="/" element={<Navigate to="/login" replace />} />
+            <Route path="/login" element={<Login />} />
+
+            {/* Protected admin routes */}
+            <Route
+              path="/admin/dashboard"
+              element={
+                <ProtectedRoute>
+                  <AdminLayout>
+                    <Dashboard />
+                  </AdminLayout>
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Editor and Admin routes */}
+            <Route
+              path="/admin/docket"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'editor']}>
+                  <AdminLayout>
+                    <div className="bg-white p-6 rounded-lg shadow">
+                      <h2 className="text-xl font-semibold">Docket Management</h2>
+                      <p className="mt-2 text-gray-600">Docket management will be implemented here.</p>
+                    </div>
+                  </AdminLayout>
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/admin/displays"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'editor']}>
+                  <AdminLayout>
+                    <div className="bg-white p-6 rounded-lg shadow">
+                      <h2 className="text-xl font-semibold">Display Management</h2>
+                      <p className="mt-2 text-gray-600">Display management will be implemented here.</p>
+                    </div>
+                  </AdminLayout>
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/admin/announcements"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'editor']}>
+                  <AdminLayout>
+                    <div className="bg-white p-6 rounded-lg shadow">
+                      <h2 className="text-xl font-semibold">Announcements</h2>
+                      <p className="mt-2 text-gray-600">Announcement management will be implemented here.</p>
+                    </div>
+                  </AdminLayout>
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Admin-only routes */}
+            <Route
+              path="/admin/users"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <AdminLayout>
+                    <div className="bg-white p-6 rounded-lg shadow">
+                      <h2 className="text-xl font-semibold">User Management</h2>
+                      <p className="mt-2 text-gray-600">User management will be implemented here.</p>
+                    </div>
+                  </AdminLayout>
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/admin/api-keys"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <AdminLayout>
+                    <div className="bg-white p-6 rounded-lg shadow">
+                      <h2 className="text-xl font-semibold">API Key Management</h2>
+                      <p className="mt-2 text-gray-600">API key management will be implemented here.</p>
+                    </div>
+                  </AdminLayout>
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/admin/audit-logs"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <AdminLayout>
+                    <div className="bg-white p-6 rounded-lg shadow">
+                      <h2 className="text-xl font-semibold">Audit Logs</h2>
+                      <p className="mt-2 text-gray-600">Audit log viewer will be implemented here.</p>
+                    </div>
+                  </AdminLayout>
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/admin/settings"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <AdminLayout>
+                    <div className="bg-white p-6 rounded-lg shadow">
+                      <h2 className="text-xl font-semibold">System Settings</h2>
+                      <p className="mt-2 text-gray-600">System settings will be implemented here.</p>
+                    </div>
+                  </AdminLayout>
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Redirect /admin to dashboard */}
+            <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
+
+            {/* 404 catch-all */}
+            <Route
+              path="*"
+              element={
+                <div className="min-h-screen flex items-center justify-center bg-gray-50">
+                  <div className="text-center">
+                    <h1 className="text-4xl font-bold text-gray-900">404</h1>
+                    <p className="mt-2 text-gray-600">Page not found</p>
+                    <a href="/admin/dashboard" className="mt-4 inline-block text-primary hover:underline">
+                      Go to Dashboard
+                    </a>
+                  </div>
+                </div>
+              }
+            />
+          </Routes>
+        </BrowserRouter>
+        <Toaster position="top-right" />
+      </AuthProvider>
     </QueryClientProvider>
-  );
-}
-
-// Placeholder components - will be implemented by coding agents
-function LoginPlaceholder() {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="bg-white p-8 rounded-lg shadow-md max-w-md w-full">
-        <h1 className="text-2xl font-bold text-primary mb-6 text-center">
-          Courthouse Digital Signage
-        </h1>
-        <p className="text-gray-600 text-center mb-4">
-          Admin Portal Login
-        </p>
-        <p className="text-sm text-gray-400 text-center">
-          Login form will be implemented here
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function AdminPlaceholder() {
-  return (
-    <div className="min-h-screen flex">
-      <aside className="w-64 bg-primary text-white p-4">
-        <h2 className="text-lg font-bold mb-4">Admin Portal</h2>
-        <nav className="space-y-2">
-          <div className="text-gray-300">Dashboard</div>
-          <div className="text-gray-300">Docket</div>
-          <div className="text-gray-300">Displays</div>
-          <div className="text-gray-300">Announcements</div>
-        </nav>
-      </aside>
-      <main className="flex-1 p-6 bg-gray-50">
-        <h1 className="text-2xl font-bold mb-4">Dashboard</h1>
-        <p className="text-gray-600">
-          Admin dashboard content will be implemented here
-        </p>
-      </main>
-    </div>
   );
 }
 
