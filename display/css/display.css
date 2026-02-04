@@ -111,6 +111,23 @@ html, body {
   font-size: 40px;
 }
 
+.temp-range {
+  display: flex;
+  flex-direction: column;
+  font-size: 18px;
+  line-height: 1.3;
+}
+
+.temp-high {
+  color: #cc3300;
+  font-weight: bold;
+}
+
+.temp-low {
+  color: #0066cc;
+  font-weight: bold;
+}
+
 .datetime {
   text-align: center;
 }

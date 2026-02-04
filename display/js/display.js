@@ -271,6 +271,9 @@
       .join('');
   }
 
+  // Weather cache for offline mode
+  let cachedWeatherData = null;
+
   // Fetch weather data
   async function fetchWeather() {
     try {
@@ -296,13 +299,59 @@
 
         if (forecastResponse.ok) {
           const forecastData = await forecastResponse.json();
-          const current = forecastData.properties.periods[0];
-          renderWeather(current);
+          const periods = forecastData.properties.periods;
+
+          // Get current conditions from first period
+          const current = periods[0];
+
+          // Find today's high and low from the forecast periods
+          // NWS returns periods like "Today", "Tonight", "Tuesday", etc.
+          let high = null;
+          let low = null;
+
+          for (const period of periods.slice(0, 4)) {
+            if (period.isDaytime && high === null) {
+              high = period.temperature;
+            } else if (!period.isDaytime && low === null) {
+              low = period.temperature;
+            }
+            if (high !== null && low !== null) break;
+          }
+
+          // Cache the weather data
+          cachedWeatherData = {
+            current,
+            high,
+            low,
+            temperatureUnit: current.temperatureUnit,
+            timestamp: new Date().toISOString()
+          };
+
+          // Store in localStorage for offline mode
+          try {
+            localStorage.setItem('weatherCache', JSON.stringify(cachedWeatherData));
+          } catch (e) {
+            console.warn('Could not cache weather data:', e);
+          }
+
+          renderWeather(cachedWeatherData);
         }
       }
     } catch (error) {
       console.error('Failed to fetch weather:', error);
-      // Keep showing cached/default data
+      // Try to use cached data for offline mode
+      if (!cachedWeatherData) {
+        try {
+          const cached = localStorage.getItem('weatherCache');
+          if (cached) {
+            cachedWeatherData = JSON.parse(cached);
+            renderWeather(cachedWeatherData);
+            console.log('Using cached weather data from:', cachedWeatherData.timestamp);
+          }
+        } catch (e) {
+          console.warn('Could not load cached weather:', e);
+        }
+      }
     }
   }
 
@@ -313,9 +362,13 @@
 
     const iconEl = weatherEl.querySelector('.weather-icon');
     const tempEl = weatherEl.querySelector('.temperature');
+    const highEl = weatherEl.querySelector('.temp-high');
+    const lowEl = weatherEl.querySelector('.temp-low');
 
-    if (iconEl) iconEl.textContent = getWeatherEmoji(data.shortForecast);
-    if (tempEl) tempEl.textContent = `${data.temperature}°${data.temperatureUnit}`;
+    if (iconEl) iconEl.textContent = getWeatherEmoji(data.current.shortForecast);
+    if (tempEl) tempEl.textContent = `${data.current.temperature}°${data.temperatureUnit}`;
+    if (highEl && data.high !== null) highEl.textContent = `H: ${data.high}°`;
+    if (lowEl && data.low !== null) lowEl.textContent = `L: ${data.low}°`;
   }
 
   // Get weather emoji based on forecast
