@@ -9,6 +9,7 @@ import Dashboard from './pages/Dashboard';
 import Docket from './pages/Docket';
 import Users from './pages/Users';
 import Announcements from './pages/Announcements';
+import Displays from './pages/Displays';
 
 const queryClient = new QueryClient();
 
@@ -62,10 +63,7 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={['admin', 'editor']}>
                   <AdminLayout>
-                    <div className="bg-white p-6 rounded-lg shadow">
-                      <h2 className="text-xl font-semibold">Display Management</h2>
-                      <p className="mt-2 text-gray-600">Display management will be implemented here.</p>
-                    </div>
+                    <Displays />
                   </AdminLayout>
                 </ProtectedRoute>
               }
