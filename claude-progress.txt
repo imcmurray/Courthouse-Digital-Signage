@@ -31,8 +31,25 @@
   - Default settings
 
 ### Current Status:
-- 2/155 features passing (1.3%)
-- Infrastructure features #1-3 still need verification by other agents
+- 5/155 features passing (3.2%)
+- All infrastructure features #1-5 now passing
+
+### Infrastructure Features Verified (Session 2):
+- **Feature #1: Database connection established** ✅ PASSING
+  - Health endpoint returns {"status":"ok","database":"connected"}
+  - Verified via curl and browser screenshot
+
+- **Feature #2: Database schema applied correctly** ✅ PASSING
+  - All 9 required tables exist: users, docket_entries, displays, display_docket_entries, announcements, api_keys, audit_logs, settings, calendar_metadata
+  - Added /api/schema-check endpoint to verify tables and columns
+  - All tables have correct columns per Prisma schema
+
+- **Feature #3: Data persists across server restart** ✅ PASSING
+  - Created test announcement RESTART_TEST_98765_VERIFY
+  - Killed server process completely
+  - Restarted server
+  - Verified test data persisted after restart
+  - No mock data patterns found in codebase (grep for globalThis, devStore, etc.)
 
 ### Next Steps:
 - Continue implementing remaining API endpoints (docket, displays)

@@ -62,3 +62,6 @@ admin/.vite/
 # Autocoder (feature tracking)
 .autocoder/
 features.db
+
+# Playwright MCP screenshots
+.playwright-mcp/
