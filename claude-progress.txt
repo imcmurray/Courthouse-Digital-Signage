@@ -922,3 +922,34 @@
 ### Git Commits This Session:
 - (previous commits for #88, #89)
 - a03b7e0: feat: Verify date field format validation (Feature #90)
+
+## Session: 2026-02-04 (Agent Batch #93, #149)
+
+### Completed Features This Session:
+
+- **Feature #93: Server-side validation prevents bad data** ✅ PASSING
+  - Bypassed frontend validation using browser DevTools/direct API calls
+  - Sent POST request to /api/docket with missing required fields
+  - Server returned HTTP 400 with "Missing required fields: caseNumber, caseTitle, ..."
+  - Verified database does not contain invalid record (37 entries, 0 with missing fields)
+  - Backend enforces validation independently of frontend
+
+- **Feature #149: Case number format validated** ✅ PASSING
+  - Added regex validation for case number format
+  - Invalid format "abc" shows error: "Case number format invalid. Use format: YY-##### (e.g., 25-27186) or YYYY-##### (e.g., 2025-12345)"
+  - Valid format "25-12345" accepted, entry created successfully
+  - Valid format "2025-12345" accepted, entry created successfully
+  - Format guidance provided in validation message
+
+### Technical Notes:
+- Added caseNumberRegex to DocketForm.tsx for frontend validation
+- Backend also validates case numbers server-side
+- Regex pattern: /^(\d{2,4}-\d{1,6}|\d{4,})$/
+
+### Current Status:
+- 99/155 features passing (63.9%)
+- Both assigned Form Validation features (#93, #149) complete
+
+### Git Commits This Session:
+- 6df69ae: feat: Verify server-side validation prevents bad data (Feature #93)
+- b94e565: feat: Implement case number format validation (Feature #149)
