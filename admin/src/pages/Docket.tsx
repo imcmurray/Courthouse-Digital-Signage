@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { docketApi, DocketEntry, CreateDocketEntryInput, UpdateDocketEntryInput, DocketFilters } from '../api/docket';
 import DocketForm from '../components/DocketForm';
+import { getErrorMessage } from '../utils/errorHandling';
 
 export default function Docket() {
   const queryClient = useQueryClient();
@@ -100,8 +101,8 @@ export default function Docket() {
       toast.success('Docket entry created successfully');
       setIsFormOpen(false);
     },
-    onError: (error: { response?: { data?: { error?: string } } }) => {
-      toast.error(error.response?.data?.error || 'Failed to create docket entry');
+    onError: (error: unknown) => {
+      toast.error(getErrorMessage(error, 'Failed to create docket entry'));
     },
   });
 
@@ -113,8 +114,8 @@ export default function Docket() {
       toast.success('Docket entry updated successfully');
       setEditingEntry(null);
     },
-    onError: (error: { response?: { data?: { error?: string } } }) => {
-      toast.error(error.response?.data?.error || 'Failed to update docket entry');
+    onError: (error: unknown) => {
+      toast.error(getErrorMessage(error, 'Failed to update docket entry'));
     },
   });
 
@@ -126,8 +127,8 @@ export default function Docket() {
       toast.success('Docket entry deleted successfully');
       setDeleteConfirmEntry(null);
     },
-    onError: (error: { response?: { data?: { error?: string } } }) => {
-      toast.error(error.response?.data?.error || 'Failed to delete docket entry');
+    onError: (error: unknown) => {
+      toast.error(getErrorMessage(error, 'Failed to delete docket entry'));
     },
   });
 
@@ -143,8 +144,8 @@ export default function Docket() {
       setArchiveOnClear(false);
       setClearCount(null);
     },
-    onError: (error: { response?: { data?: { error?: string } } }) => {
-      toast.error(error.response?.data?.error || 'Failed to clear docket entries');
+    onError: (error: unknown) => {
+      toast.error(getErrorMessage(error, 'Failed to clear docket entries'));
     },
   });
 
@@ -158,9 +159,11 @@ export default function Docket() {
       setImportPreview([]);
       setImportError(null);
     },
-    onError: (error: { response?: { data?: { error?: string; details?: string[] } } }) => {
-      const errorMsg = error.response?.data?.error || 'Failed to import docket entries';
-      const details = error.response?.data?.details;
+    onError: (error: unknown) => {
+      const errorMsg = getErrorMessage(error, 'Failed to import docket entries');
+      // Check if there are details in the response for import-specific errors
+      const axiosError = error as { response?: { data?: { details?: string[] } } };
+      const details = axiosError.response?.data?.details;
       if (details && details.length > 0) {
         setImportError(`${errorMsg}: ${details.join(', ')}`);
       } else {
