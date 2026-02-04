@@ -67,6 +67,8 @@ export interface DocketFilters {
   chapter?: string;
   page?: number;
   limit?: number;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
 }
 
 export const docketApi = {
@@ -79,6 +81,8 @@ export const docketApi = {
     if (filters?.chapter) params.append('chapter', filters.chapter);
     if (filters?.page) params.append('page', filters.page.toString());
     if (filters?.limit) params.append('limit', filters.limit.toString());
+    if (filters?.sortBy) params.append('sortBy', filters.sortBy);
+    if (filters?.sortOrder) params.append('sortOrder', filters.sortOrder);
 
     const queryString = params.toString();
     const url = queryString ? `/api/docket?${queryString}` : '/api/docket';

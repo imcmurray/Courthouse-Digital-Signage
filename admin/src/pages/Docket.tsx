@@ -29,6 +29,8 @@ export default function Docket() {
   const pageParam = searchParams.get('page') || '1';
   const currentPage = Math.max(parseInt(pageParam, 10) || 1, 1);
   const pageSize = 10; // Default 10 entries per page
+  const sortBy = searchParams.get('sortBy') || '';
+  const sortOrder = (searchParams.get('sortOrder') as 'asc' | 'desc') || 'asc';
 
   // Update URL params when filters change
   const updateFilter = useCallback((key: string, value: string) => {
@@ -50,6 +52,28 @@ export default function Docket() {
     updateFilter('page', page > 1 ? page.toString() : '');
   }, [updateFilter]);
 
+  // Handle column header click for sorting
+  const handleSort = useCallback((column: string) => {
+    const newParams = new URLSearchParams(searchParams);
+    if (sortBy === column) {
+      // Toggle sort order
+      newParams.set('sortOrder', sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      // New column, default to ascending
+      newParams.set('sortBy', column);
+      newParams.set('sortOrder', 'asc');
+    }
+    // Reset to page 1 when sorting changes
+    newParams.delete('page');
+    setSearchParams(newParams, { replace: true });
+  }, [searchParams, setSearchParams, sortBy, sortOrder]);
+
+  // Get sort indicator for column
+  const getSortIndicator = (column: string) => {
+    if (sortBy !== column) return null;
+    return sortOrder === 'asc' ? ' ▲' : ' ▼';
+  };
+
   // Build filters object for API
   const filters: DocketFilters = {
     page: currentPage,
@@ -59,6 +83,8 @@ export default function Docket() {
   if (courtroomFilter) filters.courtroom = courtroomFilter;
   if (statusFilter) filters.status = statusFilter;
   if (judgeFilter) filters.judge = judgeFilter;
+  if (sortBy) filters.sortBy = sortBy;
+  if (sortBy) filters.sortOrder = sortOrder;
 
   // Fetch docket entries with filters
   const { data, isLoading, error } = useQuery({
@@ -461,20 +487,32 @@ export default function Docket() {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Time
+                <th
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                  onClick={() => handleSort('hearingTime')}
+                >
+                  Time{getSortIndicator('hearingTime')}
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Case
+                <th
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                  onClick={() => handleSort('caseNumber')}
+                >
+                  Case{getSortIndicator('caseNumber')}
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Party
+                <th
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                  onClick={() => handleSort('caseTitle')}
+                >
+                  Party{getSortIndicator('caseTitle')}
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Matter
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
+                <th
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                  onClick={() => handleSort('status')}
+                >
+                  Status{getSortIndicator('status')}
                 </th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions

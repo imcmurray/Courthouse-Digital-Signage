@@ -395,7 +395,7 @@ app.get('/api/schema-check', async (req, res) => {
 // GET /api/docket - List docket entries with optional filters and pagination
 app.get('/api/docket', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { date, courtroom, status, judge, chapter, limit = '10', page = '1' } = req.query;
+    const { date, courtroom, status, judge, chapter, limit = '10', page = '1', sortBy, sortOrder } = req.query;
 
     // Parse pagination params
     const pageSize = Math.min(parseInt(limit as string, 10) || 10, 100);
@@ -425,13 +425,26 @@ app.get('/api/docket', authenticateToken, async (req: AuthenticatedRequest, res:
     // Get total count for pagination
     const total = await prisma.docketEntry.count({ where });
 
+    // Build orderBy clause - support dynamic sorting
+    const validSortFields = ['hearingTime', 'hearingDate', 'caseNumber', 'caseTitle', 'status', 'courtroom', 'hearingJudge', 'caseChapter'];
+    const validSortOrders = ['asc', 'desc'];
+
+    let orderBy: Record<string, string>[] = [
+      { hearingTime: 'asc' },
+      { caseTitle: 'asc' }
+    ];
+
+    if (sortBy && typeof sortBy === 'string' && validSortFields.includes(sortBy)) {
+      const order = (sortOrder && typeof sortOrder === 'string' && validSortOrders.includes(sortOrder))
+        ? sortOrder
+        : 'asc';
+      orderBy = [{ [sortBy]: order }];
+    }
+
     // Get paginated entries
     const entries = await prisma.docketEntry.findMany({
       where,
-      orderBy: [
-        { hearingTime: 'asc' },
-        { caseTitle: 'asc' }
-      ],
+      orderBy,
       take: pageSize,
       skip: offset
     });
