@@ -193,6 +193,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           <button
             onClick={() => setSidebarOpen(!isSidebarOpen)}
             className="p-4 border-t border-white/10 text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+            aria-label={isSidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
           >
             <svg
               className={`h-5 w-5 transition-transform ${isSidebarOpen ? '' : 'rotate-180'}`}
@@ -210,6 +211,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           <button
             onClick={() => setMobileSidebarOpen(false)}
             className="p-4 border-t border-white/10 text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+            aria-label="Close menu"
           >
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -262,6 +264,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
               <button
                 onClick={handleLogout}
                 className="px-3 py-2 text-sm text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                aria-label="Log out"
               >
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
