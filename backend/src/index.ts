@@ -98,10 +98,9 @@ const authenticateApiKey = async (req: ApiKeyRequest, res: Response, next: NextF
       return res.status(404).json({ error: 'Display not found' });
     }
 
-    // Verify the API key matches
-    // The apiKeyHash stored is the plain key (from seed), so we compare directly
-    // In production, you'd hash the incoming key and compare hashes
-    if (display.apiKeyHash !== apiKey) {
+    // Verify the API key matches using bcrypt
+    const isValidKey = await bcrypt.compare(apiKey, display.apiKeyHash);
+    if (!isValidKey) {
       return res.status(401).json({ error: 'Invalid API key' });
     }
 
@@ -369,7 +368,7 @@ app.get('/api/schema-check', async (req, res) => {
 // =========================================
 
 // GET /api/docket - List docket entries with optional filters
-app.get('/api/docket', async (req: Request, res: Response) => {
+app.get('/api/docket', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { date, courtroom, status, judge, chapter } = req.query;
 
@@ -410,7 +409,7 @@ app.get('/api/docket', async (req: Request, res: Response) => {
 });
 
 // POST /api/docket - Create a single docket entry
-app.post('/api/docket', async (req: Request, res: Response) => {
+app.post('/api/docket', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const {
       caseNumber,
@@ -483,7 +482,7 @@ app.post('/api/docket', async (req: Request, res: Response) => {
 });
 
 // GET /api/docket/:id - Get a single docket entry
-app.get('/api/docket/:id', async (req: Request, res: Response) => {
+app.get('/api/docket/:id', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const entry = await prisma.docketEntry.findUnique({
       where: { id: req.params.id },
@@ -507,7 +506,7 @@ app.get('/api/docket/:id', async (req: Request, res: Response) => {
 });
 
 // PUT /api/docket/:id - Update a docket entry
-app.put('/api/docket/:id', async (req: Request, res: Response) => {
+app.put('/api/docket/:id', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const updateData: Record<string, unknown> = {};
     const allowedFields = [
@@ -549,7 +548,7 @@ app.put('/api/docket/:id', async (req: Request, res: Response) => {
 });
 
 // DELETE /api/docket/:id - Delete a docket entry
-app.delete('/api/docket/:id', async (req: Request, res: Response) => {
+app.delete('/api/docket/:id', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     await prisma.docketEntry.delete({
       where: { id: req.params.id }
@@ -857,8 +856,10 @@ app.post('/api/displays', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Missing required fields: id, name, location' });
     }
 
-    // Generate a simple API key hash (in production, use proper key generation)
-    const apiKeyHash = require('crypto').randomBytes(32).toString('hex');
+    // Generate API key and hash it with bcrypt
+    const crypto = require('crypto');
+    const apiKey = crypto.randomBytes(32).toString('hex');
+    const apiKeyHash = await bcrypt.hash(apiKey, 10);
 
     const display = await prisma.display.create({
       data: {
@@ -883,7 +884,13 @@ app.post('/api/displays', async (req: Request, res: Response) => {
     });
 
     console.log(`[DB] INSERT into displays - created id: ${display.id}`);
-    res.status(201).json(display);
+
+    // Return display info along with the plain API key (only returned on creation!)
+    res.status(201).json({
+      ...display,
+      apiKey: apiKey,  // Return plain key only on creation
+      apiKeyHash: undefined  // Don't expose the hash
+    });
   } catch (error: unknown) {
     if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002') {
       return res.status(409).json({ error: 'Display with this ID already exists' });
