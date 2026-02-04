@@ -1,9 +1,12 @@
+import { useState, useCallback, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useQuery } from '@tanstack/react-query';
+import { useBlocker } from 'react-router-dom';
 import { DocketEntry, CreateDocketEntryInput, UpdateDocketEntryInput } from '../api/docket';
 import { displaysApi, Display } from '../api/displays';
+import UnsavedChangesDialog from './UnsavedChangesDialog';
 
 const docketSchema = z.object({
   caseNumber: z.string().min(1, 'Case number is required'),
@@ -40,6 +43,8 @@ interface DocketFormProps {
 
 export default function DocketForm({ entry, onSubmit, onClose, isLoading }: DocketFormProps) {
   const isEditing = !!entry;
+  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
+  const [pendingCloseAction, setPendingCloseAction] = useState(false);
 
   // Fetch displays for dropdown
   const { data: displaysData } = useQuery({
@@ -61,7 +66,7 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
     handleSubmit,
     watch,
     setValue,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<DocketFormData>({
     resolver: zodResolver(docketSchema),
     defaultValues: {
@@ -85,12 +90,29 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
       status: entry?.status || 'scheduled',
       statusNote: entry?.statusNote || '',
       comment: entry?.comment || '',
-      displayIds: entry?.displayIds || [],
+      displayIds: [],
     },
   });
 
   const isZoom = watch('isZoom');
   const selectedDisplayIds = watch('displayIds') || [];
+
+  // Block navigation when form is dirty
+  const blocker = useBlocker(
+    useCallback(
+      ({ currentLocation, nextLocation }: { currentLocation: { pathname: string }; nextLocation: { pathname: string } }) =>
+        isDirty && currentLocation.pathname !== nextLocation.pathname,
+      [isDirty]
+    )
+  );
+
+  // Show dialog when navigation is blocked
+  useEffect(() => {
+    if (blocker.state === 'blocked') {
+      setShowUnsavedDialog(true);
+      setPendingCloseAction(false); // This is a navigation block, not a close button click
+    }
+  }, [blocker.state]);
 
   const handleFormSubmit = (data: DocketFormData) => {
     // Clean up optional empty strings
@@ -104,6 +126,40 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
     onSubmit(cleanedData as CreateDocketEntryInput);
   };
 
+  // Handle close attempt - check for unsaved changes
+  const handleCloseAttempt = () => {
+    if (isDirty) {
+      setPendingCloseAction(true);
+      setShowUnsavedDialog(true);
+    } else {
+      onClose();
+    }
+  };
+
+  // Handle stay in unsaved dialog
+  const handleStay = () => {
+    setShowUnsavedDialog(false);
+    // If navigation was blocked, reset the blocker
+    if (blocker.state === 'blocked') {
+      blocker.reset();
+    }
+    setPendingCloseAction(false);
+  };
+
+  // Handle leave in unsaved dialog
+  const handleLeave = () => {
+    setShowUnsavedDialog(false);
+    // If navigation was blocked, proceed with navigation
+    if (blocker.state === 'blocked') {
+      blocker.proceed();
+    }
+    // If close button/cancel was clicked, close the form
+    if (pendingCloseAction) {
+      onClose();
+    }
+    setPendingCloseAction(false);
+  };
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
@@ -113,7 +169,7 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
             {isEditing ? 'Edit Docket Entry' : 'Add New Docket Entry'}
           </h2>
           <button
-            onClick={onClose}
+            onClick={handleCloseAttempt}
             className="text-gray-400 hover:text-gray-600"
             type="button"
           >
@@ -470,7 +526,7 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
           <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleCloseAttempt}
               className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
             >
               Cancel
@@ -495,6 +551,13 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
           </div>
         </form>
       </div>
+
+      {/* Unsaved Changes Dialog */}
+      <UnsavedChangesDialog
+        isOpen={showUnsavedDialog}
+        onStay={handleStay}
+        onLeave={handleLeave}
+      />
     </div>
   );
 }
