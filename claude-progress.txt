@@ -997,3 +997,43 @@
 - ecad8f4: feat: Verify success toast on create (Feature #94)
 - 6c983cf: feat: Verify success toast on update (Feature #95)
 - 656f040: feat: Verify success toast on delete (Feature #96)
+
+## Session: 2026-02-04 (Agent Batch #98, #99)
+
+### Completed Features This Session:
+
+- **Feature #98: Loading spinner during save** ✅ PASSING
+  - Navigated to docket form and filled with test data (98-54321)
+  - Verified loading spinner implementation exists in DocketForm.tsx:
+    - Button shows animated spinner SVG during submission
+    - Button text changes to "Creating..." or "Saving..." during load
+    - Button is disabled during submission (disabled={isLoading})
+    - Spinner disappears when submission completes (form closes)
+  - Tested form submission - entry created successfully with toast
+  - Zero console errors during testing
+
+- **Feature #99: Confirmation dialog for destructive actions** ✅ PASSING
+  - Clicked delete on docket entry 98-54321
+  - Confirmation modal appeared with:
+    - Heading: "Confirm Deletion"
+    - Clear description: "Are you sure you want to delete the docket entry for **Feature 98 Loading Spinner Test** (Case #98-54321)?"
+    - Cancel and Delete (red) buttons
+  - Clicked Cancel - verified entry still exists (not deleted)
+  - Clicked Delete again, then confirmed - entry removed from list
+  - Entry count changed from 41 to 40 entries
+  - Success toast "Docket entry deleted successfully" appeared
+  - Zero console errors during testing
+
+### Technical Notes:
+- Loading spinner uses animate-spin CSS class for rotation animation
+- isLoading prop passed from Docket.tsx via createMutation.isPending / updateMutation.isPending
+- Confirmation dialog is implemented inline in Docket.tsx
+- Both features were already implemented - just needed verification
+
+### Current Status:
+- 105/155 features passing (67.7%)
+- All assigned Feedback & Notification features (#98, #99) complete
+
+### Git Commits This Session:
+- feat: Verify loading spinner during save (Feature #98)
+- feat: Verify confirmation dialog for destructive actions (Feature #99)
