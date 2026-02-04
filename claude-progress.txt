@@ -650,3 +650,32 @@
 - 7241687: feat: Implement direct URL access for docket entry editing (Feature #69)
 - 3b495f6: feat: Verify invalid docket entry URLs handled gracefully (Feature #70)
 - aa301a4: feat: Verify URL manipulation does not bypass security (Feature #71)
+
+## Session: 2026-02-04 (Agent Batch #72)
+
+### Completed Features This Session:
+
+- **Feature #72: Filter state reflected in URL** ✅ PASSING
+  - Navigated to docket list at /admin/docket
+  - Applied date filter (2026-02-05) - URL updated to include ?date=2026-02-05
+  - Applied status filter (scheduled) - URL updated to include &status=scheduled
+  - Applied courtroom filter (301) - URL updated to include &courtroom=301
+  - Final URL: /admin/docket?date=2026-02-05&status=scheduled&courtroom=301
+  - Tested direct URL navigation with filters - all filters correctly populated in form
+  - Verified data shown matches filter (all entries have "scheduled" status)
+  - No mock data patterns found in codebase
+  - Zero console errors during testing
+
+### Technical Notes:
+- Docket.tsx uses React Router's useSearchParams hook for URL parameter management
+- Filter changes trigger URL updates via setSearchParams()
+- When navigating to URL with filters, the component reads from searchParams and applies to form
+- sessionStorage also persists filters for navigation within session
+- URL parameters take precedence over sessionStorage values
+
+### Current Status:
+- 77/155 features passing (49.7%)
+- URL & Direct Access feature #72 complete
+
+### Git Commits This Session:
+- 6747a44: feat: Verify filter state reflected in URL (Feature #72)
