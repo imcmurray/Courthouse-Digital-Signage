@@ -1,10 +1,13 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { docketApi, DocketEntry, CreateDocketEntryInput, UpdateDocketEntryInput, DocketFilters } from '../api/docket';
 import DocketForm from '../components/DocketForm';
 import { getErrorMessage } from '../utils/errorHandling';
+
+// Session storage key for persisting filters
+const DOCKET_FILTERS_KEY = 'docket-filters';
 
 export default function Docket() {
   const queryClient = useQueryClient();
@@ -16,11 +19,50 @@ export default function Docket() {
   const [clearDate, setClearDate] = useState('');
   const [archiveOnClear, setArchiveOnClear] = useState(false);
   const [clearCount, setClearCount] = useState<number | null>(null);
+  const [filtersRestored, setFiltersRestored] = useState(false);
 
   // Import CSV state
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [importPreview, setImportPreview] = useState<CreateDocketEntryInput[]>([]);
   const [importError, setImportError] = useState<string | null>(null);
+
+  // Restore filters from sessionStorage on mount if URL has no filters
+  useEffect(() => {
+    if (filtersRestored) return;
+
+    // Check if URL already has filters
+    const hasUrlFilters = searchParams.has('date') || searchParams.has('status') ||
+                          searchParams.has('courtroom') || searchParams.has('judge') ||
+                          searchParams.has('page') || searchParams.has('sortBy');
+
+    if (!hasUrlFilters) {
+      // Try to restore from sessionStorage
+      const savedFilters = sessionStorage.getItem(DOCKET_FILTERS_KEY);
+      if (savedFilters) {
+        try {
+          const filters = JSON.parse(savedFilters);
+          const newParams = new URLSearchParams();
+
+          if (filters.date) newParams.set('date', filters.date);
+          if (filters.status) newParams.set('status', filters.status);
+          if (filters.courtroom) newParams.set('courtroom', filters.courtroom);
+          if (filters.judge) newParams.set('judge', filters.judge);
+          if (filters.page && filters.page !== '1') newParams.set('page', filters.page);
+          if (filters.sortBy) newParams.set('sortBy', filters.sortBy);
+          if (filters.sortOrder) newParams.set('sortOrder', filters.sortOrder);
+
+          // Only update if we have filters to restore
+          if (newParams.toString()) {
+            setSearchParams(newParams, { replace: true });
+          }
+        } catch {
+          // Invalid JSON, ignore
+        }
+      }
+    }
+
+    setFiltersRestored(true);
+  }, [searchParams, setSearchParams, filtersRestored]);
 
   // Get filters from URL params
   const dateFilter = searchParams.get('date') || '';
@@ -32,6 +74,26 @@ export default function Docket() {
   const pageSize = 10; // Default 10 entries per page
   const sortBy = searchParams.get('sortBy') || '';
   const sortOrder = (searchParams.get('sortOrder') as 'asc' | 'desc') || 'asc';
+
+  // Save filters to sessionStorage whenever they change
+  useEffect(() => {
+    if (!filtersRestored) return; // Don't save until we've restored
+
+    const filters: Record<string, string> = {};
+    if (dateFilter) filters.date = dateFilter;
+    if (statusFilter) filters.status = statusFilter;
+    if (courtroomFilter) filters.courtroom = courtroomFilter;
+    if (judgeFilter) filters.judge = judgeFilter;
+    if (pageParam && pageParam !== '1') filters.page = pageParam;
+    if (sortBy) filters.sortBy = sortBy;
+    if (sortOrder && sortBy) filters.sortOrder = sortOrder;
+
+    if (Object.keys(filters).length > 0) {
+      sessionStorage.setItem(DOCKET_FILTERS_KEY, JSON.stringify(filters));
+    } else {
+      sessionStorage.removeItem(DOCKET_FILTERS_KEY);
+    }
+  }, [dateFilter, statusFilter, courtroomFilter, judgeFilter, pageParam, sortBy, sortOrder, filtersRestored]);
 
   // Update URL params when filters change
   const updateFilter = useCallback((key: string, value: string) => {
