@@ -66,7 +66,7 @@ app.use((req, res, next) => {
 // =========================================
 // Authentication Middleware
 // =========================================
-const authenticateToken = (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+const authenticateToken = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
@@ -76,6 +76,21 @@ const authenticateToken = (req: AuthenticatedRequest, res: Response, next: NextF
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
+
+    // Check if user still exists and is active in database
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      select: { id: true, isActive: true }
+    });
+
+    if (!user) {
+      return res.status(403).json({ error: 'User not found' });
+    }
+
+    if (!user.isActive) {
+      return res.status(403).json({ error: 'User account has been deactivated' });
+    }
+
     req.user = decoded;
     next();
   } catch (err) {
