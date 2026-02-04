@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { docketApi, DocketEntry, CreateDocketEntryInput, UpdateDocketEntryInput, DocketFilters } from '../api/docket';
@@ -12,6 +12,8 @@ const DOCKET_FILTERS_KEY = 'docket-filters';
 export default function Docket() {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { id: editIdFromUrl } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<DocketEntry | null>(null);
   const [deleteConfirmEntry, setDeleteConfirmEntry] = useState<DocketEntry | null>(null);
@@ -20,6 +22,7 @@ export default function Docket() {
   const [archiveOnClear, setArchiveOnClear] = useState(false);
   const [clearCount, setClearCount] = useState<number | null>(null);
   const [filtersRestored, setFiltersRestored] = useState(false);
+  const [editIdLoaded, setEditIdLoaded] = useState(false);
 
   // Import CSV state
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -94,6 +97,26 @@ export default function Docket() {
       sessionStorage.removeItem(DOCKET_FILTERS_KEY);
     }
   }, [dateFilter, statusFilter, courtroomFilter, judgeFilter, pageParam, sortBy, sortOrder, filtersRestored]);
+
+  // Handle direct URL access to edit a specific entry by ID
+  useEffect(() => {
+    if (!editIdFromUrl || editIdLoaded) return;
+
+    // Fetch the entry by ID and open edit modal
+    const fetchEntryById = async () => {
+      try {
+        const entry = await docketApi.getById(editIdFromUrl);
+        setEditingEntry(entry);
+        setEditIdLoaded(true);
+      } catch (error) {
+        console.error('Failed to fetch docket entry by ID:', error);
+        // If the entry doesn't exist, redirect to docket list
+        navigate('/admin/docket', { replace: true });
+      }
+    };
+
+    fetchEntryById();
+  }, [editIdFromUrl, editIdLoaded, navigate]);
 
   // Update URL params when filters change
   const updateFilter = useCallback((key: string, value: string) => {
@@ -175,6 +198,10 @@ export default function Docket() {
       queryClient.invalidateQueries({ queryKey: ['docket'] });
       toast.success('Docket entry updated successfully');
       setEditingEntry(null);
+      // If we came from a direct URL, navigate back to docket list
+      if (editIdFromUrl) {
+        navigate('/admin/docket', { replace: true });
+      }
     },
     onError: (error: unknown) => {
       toast.error(getErrorMessage(error, 'Failed to update docket entry'));
@@ -743,7 +770,13 @@ export default function Docket() {
         <DocketForm
           entry={editingEntry}
           onSubmit={handleUpdate}
-          onClose={() => setEditingEntry(null)}
+          onClose={() => {
+            setEditingEntry(null);
+            // If we came from a direct URL, navigate back to docket list
+            if (editIdFromUrl) {
+              navigate('/admin/docket', { replace: true });
+            }
+          }}
           isLoading={updateMutation.isPending}
         />
       )}

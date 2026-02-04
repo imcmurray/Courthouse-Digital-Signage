@@ -74,6 +74,16 @@ const router = createBrowserRouter([
         ),
       },
       {
+        path: '/admin/docket/edit/:id',
+        element: (
+          <ProtectedRoute allowedRoles={['admin', 'editor']}>
+            <AdminLayout>
+              <Docket />
+            </AdminLayout>
+          </ProtectedRoute>
+        ),
+      },
+      {
         path: '/admin/displays',
         element: (
           <ProtectedRoute allowedRoles={['admin', 'editor']}>
