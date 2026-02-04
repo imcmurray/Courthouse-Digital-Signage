@@ -156,3 +156,46 @@
 ### Next Steps:
 - Continue with remaining admin portal features
 - Implement actual content for placeholder pages
+
+## Session: 2026-02-04 (Agent Batch #15, #16, #21)
+
+### Completed Features This Session:
+
+- **Feature #15: User can logout successfully** ✅ PASSING
+  - Login as admin user verified
+  - Logout button click in header redirects to /login
+  - JWT tokens properly cleared from localStorage (both auth_token and refresh_token)
+  - Accessing protected routes after logout redirects to login
+  - Toast message shows "Logged out successfully"
+
+- **Feature #16: Protected routes redirect unauthenticated users to login** ✅ PASSING
+  - Unauthenticated users accessing /admin/users redirected to /login
+  - Return URL preserved via React Router state (from location)
+  - Updated Login.tsx to read return URL and redirect after successful login
+  - After login, user redirected to originally requested page (/admin/users)
+  - Falls back to /admin/dashboard if no redirect specified
+
+- **Feature #21: API requests require valid authentication** ✅ PASSING
+  - Added authenticateToken middleware to all docket API endpoints:
+    - GET /api/docket
+    - POST /api/docket
+    - GET /api/docket/:id
+    - PUT /api/docket/:id
+    - DELETE /api/docket/:id
+  - Unauthenticated requests now return 401 with "Access token required"
+  - Invalid JWT tokens return 403 with "Invalid or expired token"
+  - Valid JWT tokens return 200 with data
+
+### Technical Notes:
+- Login page now preserves redirect URL from ProtectedRoute's location state
+- Docket API endpoints now require JWT authentication
+- Display client endpoints (GET /api/displays/:id/config, GET /api/displays/:id/docket) still use API key auth for display clients
+
+### Current Status:
+- 25/155 features passing (16.1%)
+- Security & Access Control features making good progress
+
+### Git Commits This Session:
+- b49aba1: feat: Verify user logout functionality (Feature #15)
+- 4015aec: feat: Implement redirect to original page after login (Feature #16)
+- 4a25096: feat: Add JWT authentication to docket API endpoints (Feature #21)
