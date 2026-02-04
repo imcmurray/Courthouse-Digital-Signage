@@ -488,7 +488,8 @@ app.post('/api/docket', authenticateToken, async (req: AuthenticatedRequest, res
       zoomPhone,
       status,
       statusNote,
-      comment
+      comment,
+      displayIds
     } = req.body;
 
     // Validate required fields
@@ -525,12 +526,32 @@ app.post('/api/docket', authenticateToken, async (req: AuthenticatedRequest, res
 
     console.log(`[DB] INSERT into docket_entries - created id: ${entry.id}`);
 
+    // Create display-docket associations if displayIds provided
+    if (displayIds && Array.isArray(displayIds) && displayIds.length > 0) {
+      // Create display-docket associations one by one to handle potential duplicates
+      for (const displayId of displayIds) {
+        try {
+          await prisma.displayDocketEntry.create({
+            data: {
+              displayId: displayId as string,
+              docketEntryId: entry.id
+            }
+          });
+        } catch (err) {
+          // Ignore duplicate key errors
+          console.log(`[DB] Skipping duplicate display-docket association: ${displayId} -> ${entry.id}`);
+        }
+      }
+      console.log(`[DB] Created display-docket associations for entry ${entry.id}`);
+    }
+
     // Create audit log for the action
     await createAuditLog('create', 'docket_entry', entry.id, req.user?.userId || null, {
       caseNumber,
       caseTitle,
       hearingDate,
-      hearingTime
+      hearingTime,
+      displayIds
     });
 
     // Emit WebSocket event for real-time updates
@@ -1200,6 +1221,35 @@ app.put('/api/displays/:id', async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/display-docket-entries - Query display-docket associations (for verification/testing)
+app.get('/api/display-docket-entries', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { displayId, docketEntryId } = req.query;
+
+    const where: Record<string, string> = {};
+    if (displayId) where.displayId = displayId as string;
+    if (docketEntryId) where.docketEntryId = docketEntryId as string;
+
+    const associations = await prisma.displayDocketEntry.findMany({
+      where,
+      include: {
+        display: {
+          select: { id: true, name: true, location: true }
+        },
+        docketEntry: {
+          select: { id: true, caseNumber: true, caseTitle: true, hearingDate: true }
+        }
+      }
+    });
+
+    console.log(`[DB] SELECT from display_docket_entries - found ${associations.length} records`);
+    res.json({ associations, total: associations.length });
+  } catch (error) {
+    console.error('Failed to fetch display-docket associations:', error);
+    res.status(500).json({ error: 'Failed to fetch display-docket associations' });
+  }
+});
+
 // DELETE /api/displays/:id - Delete a display
 app.delete('/api/displays/:id', async (req: Request, res: Response) => {
   try {
@@ -1214,11 +1264,13 @@ app.delete('/api/displays/:id', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Display not found' });
     }
 
+    // The cascade delete is configured in Prisma schema - DisplayDocketEntry records
+    // will be automatically deleted when the display is deleted
     await prisma.display.delete({
       where: { id }
     });
 
-    console.log(`[DB] DELETE FROM displays WHERE id = '${id}'`);
+    console.log(`[DB] DELETE FROM displays WHERE id = '${id}' (cascade delete removed associations)`);
 
     res.json({ success: true, message: 'Display deleted successfully' });
   } catch (error) {
