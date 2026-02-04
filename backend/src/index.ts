@@ -493,6 +493,14 @@ app.post('/api/docket', authenticateToken, async (req: AuthenticatedRequest, res
 
     console.log(`[DB] INSERT into docket_entries - created id: ${entry.id}`);
 
+    // Create audit log for the action
+    await createAuditLog('create', 'docket_entry', entry.id, req.user?.userId || null, {
+      caseNumber,
+      caseTitle,
+      hearingDate,
+      hearingTime
+    });
+
     // Emit WebSocket event for real-time updates
     io.emit('docket:update', {});
 
@@ -649,6 +657,9 @@ app.put('/api/docket/:id', authenticateToken, async (req: AuthenticatedRequest, 
 
     console.log(`[DB] UPDATE docket_entries WHERE id = ${req.params.id}`);
 
+    // Create audit log for the update
+    await createAuditLog('update', 'docket_entry', entry.id, req.user?.userId || null, updateData);
+
     // Emit WebSocket event for real-time updates
     io.emit('docket:update', {});
     io.emit('docket:entry:update', { id: entry.id });
@@ -732,11 +743,26 @@ app.delete('/api/docket/clear', authenticateToken, requireAdmin, async (req: Aut
 // DELETE /api/docket/:id - Delete a docket entry
 app.delete('/api/docket/:id', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
+    // Get entry info before deletion for audit log
+    const entry = await prisma.docketEntry.findUnique({
+      where: { id: req.params.id }
+    });
+
+    if (!entry) {
+      return res.status(404).json({ error: 'Docket entry not found' });
+    }
+
     await prisma.docketEntry.delete({
       where: { id: req.params.id }
     });
 
     console.log(`[DB] DELETE from docket_entries WHERE id = ${req.params.id}`);
+
+    // Create audit log for the deletion
+    await createAuditLog('delete', 'docket_entry', req.params.id, req.user?.userId || null, {
+      caseNumber: entry.caseNumber,
+      caseTitle: entry.caseTitle
+    });
 
     // Emit WebSocket event for real-time updates
     io.emit('docket:update', {});
@@ -1593,6 +1619,83 @@ app.delete('/api/api-keys/:id', authenticateToken, requireAdmin, async (req: Aut
   } catch (error) {
     console.error('Failed to revoke API key:', error);
     res.status(500).json({ error: 'Failed to revoke API key' });
+  }
+});
+
+// =========================================
+// Audit Log Utility Function
+// =========================================
+async function createAuditLog(
+  action: string,
+  entityType: string,
+  entityId: string | null,
+  userId: string | null,
+  changes: Record<string, unknown> | null = null,
+  ipAddress: string | null = null
+) {
+  try {
+    await prisma.auditLog.create({
+      data: {
+        action,
+        entityType,
+        entityId,
+        userId,
+        changes: changes ? JSON.stringify(changes) : null,
+        ipAddress
+      }
+    });
+    console.log(`[AUDIT] ${action} ${entityType}${entityId ? ` (${entityId})` : ''} by user ${userId || 'unknown'}`);
+  } catch (error) {
+    console.error('Failed to create audit log:', error);
+  }
+}
+
+// =========================================
+// Audit Log Endpoints (Admin Only)
+// =========================================
+
+// GET /api/audit-logs - List audit logs with optional filters
+app.get('/api/audit-logs', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { action, entityType, userId, startDate, endDate, limit = '100', offset = '0' } = req.query;
+
+    // Build filter conditions
+    const where: Record<string, unknown> = {};
+
+    if (action) where.action = action;
+    if (entityType) where.entityType = entityType;
+    if (userId) where.userId = userId;
+
+    if (startDate || endDate) {
+      where.createdAt = {};
+      if (startDate) {
+        (where.createdAt as Record<string, unknown>).gte = new Date(startDate as string);
+      }
+      if (endDate) {
+        (where.createdAt as Record<string, unknown>).lte = new Date(endDate as string);
+      }
+    }
+
+    const [logs, total] = await Promise.all([
+      prisma.auditLog.findMany({
+        where,
+        include: {
+          user: {
+            select: { id: true, name: true, email: true }
+          }
+        },
+        orderBy: { createdAt: 'desc' },
+        take: Math.min(parseInt(limit as string, 10), 500),
+        skip: parseInt(offset as string, 10)
+      }),
+      prisma.auditLog.count({ where })
+    ]);
+
+    console.log(`[DB] SELECT from audit_logs - found ${logs.length} records`);
+    res.json({ logs, total });
+  } catch (error) {
+    console.error('Failed to fetch audit logs:', error);
+    res.status(500).json({ error: 'Failed to fetch audit logs' });
   }
 });
 

@@ -11,6 +11,7 @@ import Users from './pages/Users';
 import Announcements from './pages/Announcements';
 import Displays from './pages/Displays';
 import ApiKeys from './pages/ApiKeys';
+import AuditLogs from './pages/AuditLogs';
 
 const queryClient = new QueryClient();
 
@@ -109,10 +110,7 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={['admin']}>
                   <AdminLayout>
-                    <div className="bg-white p-6 rounded-lg shadow">
-                      <h2 className="text-xl font-semibold">Audit Logs</h2>
-                      <p className="mt-2 text-gray-600">Audit log viewer will be implemented here.</p>
-                    </div>
+                    <AuditLogs />
                   </AdminLayout>
                 </ProtectedRoute>
               }
