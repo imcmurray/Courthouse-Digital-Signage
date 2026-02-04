@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
+import Breadcrumb from './Breadcrumb';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -161,11 +162,14 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         {/* Top header */}
         <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-gray-800">
-              {allNavItems.find(item => isActive(item.path))?.label ||
-                adminOnlyNavItems.find(item => isActive(item.path))?.label ||
-                'Admin'}
-            </h2>
+            <div>
+              <Breadcrumb />
+              <h2 className="text-xl font-semibold text-gray-800">
+                {allNavItems.find(item => isActive(item.path))?.label ||
+                  adminOnlyNavItems.find(item => isActive(item.path))?.label ||
+                  'Admin'}
+              </h2>
+            </div>
 
             <div className="flex items-center space-x-4">
               {/* User info */}
