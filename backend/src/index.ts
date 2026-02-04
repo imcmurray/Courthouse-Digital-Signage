@@ -29,7 +29,7 @@ interface AuthenticatedRequest extends Request {
 
 // Environment variables
 const PORT = process.env.PORT || 3000;
-const CORS_ORIGIN = process.env.CORS_ORIGIN?.split(',') || ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:8080'];
+const CORS_ORIGIN = process.env.CORS_ORIGIN?.split(',') || ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:5176', 'http://localhost:8080'];
 
 // Socket.io setup
 const io = new Server(httpServer, {
@@ -40,7 +40,12 @@ const io = new Server(httpServer, {
 });
 
 // Middleware
-app.use(cors({ origin: CORS_ORIGIN }));
+app.use(cors({
+  origin: CORS_ORIGIN,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
+  credentials: true
+}));
 app.use(express.json());
 
 // Request logging
@@ -124,6 +129,17 @@ const authenticateApiKey = async (req: ApiKeyRequest, res: Response, next: NextF
     console.error('API key authentication error:', error);
     return res.status(500).json({ error: 'Authentication failed' });
   }
+};
+
+// Middleware to check admin role
+const requireAdmin = (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  next();
 };
 
 // =========================================
@@ -569,6 +585,71 @@ app.delete('/api/docket/:id', authenticateToken, async (req: AuthenticatedReques
   }
 });
 
+// DELETE /api/docket/clear - Clear docket entries by date with optional archive
+app.delete('/api/docket/clear', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { date, courtroom, archive } = req.body;
+
+    if (!date) {
+      return res.status(400).json({ error: 'Date is required to clear docket entries' });
+    }
+
+    // Parse the date
+    const filterDate = new Date(date);
+    filterDate.setHours(0, 0, 0, 0);
+    const nextDay = new Date(filterDate);
+    nextDay.setDate(nextDay.getDate() + 1);
+
+    // Build where clause
+    const where: Record<string, unknown> = {
+      hearingDate: {
+        gte: filterDate,
+        lt: nextDay
+      }
+    };
+
+    if (courtroom) {
+      where.courtroom = courtroom;
+    }
+
+    // Count entries to be cleared
+    const count = await prisma.docketEntry.count({ where });
+
+    if (count === 0) {
+      return res.status(404).json({
+        error: 'No docket entries found for the specified date',
+        count: 0
+      });
+    }
+
+    // If archive option is set, mark entries as archived by setting status to 'archived'
+    // For now, we don't have an archived_docket_entries table, so archive just sets status
+    if (archive) {
+      await prisma.docketEntry.updateMany({
+        where,
+        data: { status: 'archived' as unknown as string }
+      });
+      console.log(`[DB] Archived ${count} docket entries for date ${date}`);
+    } else {
+      // Delete the entries
+      await prisma.docketEntry.deleteMany({ where });
+      console.log(`[DB] Deleted ${count} docket entries for date ${date}`);
+    }
+
+    // Emit WebSocket event for real-time updates
+    io.emit('docket:update', {});
+
+    res.json({
+      message: archive ? `Archived ${count} docket entries` : `Deleted ${count} docket entries`,
+      count,
+      archived: archive || false
+    });
+  } catch (error) {
+    console.error('Failed to clear docket entries:', error);
+    res.status(500).json({ error: 'Failed to clear docket entries' });
+  }
+});
+
 // =========================================
 // Display-specific Endpoints
 // =========================================
@@ -903,17 +984,6 @@ app.post('/api/displays', async (req: Request, res: Response) => {
 // =========================================
 // User Management Endpoints (Admin Only)
 // =========================================
-
-// Middleware to check admin role
-const requireAdmin = (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-  if (!req.user) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'Admin access required' });
-  }
-  next();
-};
 
 // GET /api/users - List all users (admin only)
 app.get('/api/users', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
