@@ -56,7 +56,21 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const [isSidebarOpen, setSidebarOpen] = useState(true);
+  const isMobile = useIsMobile();
+  const [isSidebarOpen, setSidebarOpen] = useState(!isMobile);
+  const [isMobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
+  // Close mobile sidebar when navigating
+  useEffect(() => {
+    if (isMobile) {
+      setMobileSidebarOpen(false);
+    }
+  }, [location.pathname, isMobile]);
+
+  // Handle clicking outside the mobile sidebar to close it
+  const handleOverlayClick = () => {
+    setMobileSidebarOpen(false);
+  };
 
   const handleLogout = async () => {
     try {
@@ -72,11 +86,25 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
 
   return (
     <div className="min-h-screen flex bg-gray-50">
+      {/* Mobile overlay */}
+      {isMobile && isMobileSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40"
+          onClick={handleOverlayClick}
+        />
+      )}
+
       {/* Sidebar */}
       <aside
-        className={`${
-          isSidebarOpen ? 'w-64' : 'w-20'
-        } bg-primary text-white transition-all duration-300 flex flex-col`}
+        className={`
+          ${isMobile
+            ? `fixed inset-y-0 left-0 z-50 w-64 transform transition-transform duration-300 ease-in-out ${
+                isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+              }`
+            : `${isSidebarOpen ? 'w-64' : 'w-20'} transition-all duration-300`
+          }
+          bg-primary text-white flex flex-col
+        `}
       >
         {/* Logo/Header */}
         <div className="p-4 border-b border-white/10">
@@ -157,34 +185,62 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           )}
         </nav>
 
-        {/* Toggle button */}
-        <button
-          onClick={() => setSidebarOpen(!isSidebarOpen)}
-          className="p-4 border-t border-white/10 text-white/70 hover:text-white hover:bg-white/10 transition-colors"
-        >
-          <svg
-            className={`h-5 w-5 transition-transform ${isSidebarOpen ? '' : 'rotate-180'}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
+        {/* Toggle button - only show on desktop */}
+        {!isMobile && (
+          <button
+            onClick={() => setSidebarOpen(!isSidebarOpen)}
+            className="p-4 border-t border-white/10 text-white/70 hover:text-white hover:bg-white/10 transition-colors"
           >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
-          </svg>
-        </button>
+            <svg
+              className={`h-5 w-5 transition-transform ${isSidebarOpen ? '' : 'rotate-180'}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+            </svg>
+          </button>
+        )}
+
+        {/* Close button for mobile sidebar */}
+        {isMobile && (
+          <button
+            onClick={() => setMobileSidebarOpen(false)}
+            className="p-4 border-t border-white/10 text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+          >
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
       </aside>
 
       {/* Main content */}
       <div className="flex-1 flex flex-col">
         {/* Top header */}
-        <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
+        <header className="bg-white shadow-sm border-b border-gray-200 px-4 md:px-6 py-4">
           <div className="flex items-center justify-between">
-            <div>
-              <Breadcrumb />
-              <h2 className="text-xl font-semibold text-gray-800">
-                {allNavItems.find(item => isActive(item.path))?.label ||
-                  adminOnlyNavItems.find(item => isActive(item.path))?.label ||
-                  'Admin'}
-              </h2>
+            <div className="flex items-center space-x-4">
+              {/* Hamburger menu button - only show on mobile */}
+              {isMobile && (
+                <button
+                  onClick={() => setMobileSidebarOpen(true)}
+                  className="p-2 -ml-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                  aria-label="Open menu"
+                >
+                  <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                </button>
+              )}
+              <div>
+                <Breadcrumb />
+                <h2 className="text-xl font-semibold text-gray-800">
+                  {allNavItems.find(item => isActive(item.path))?.label ||
+                    adminOnlyNavItems.find(item => isActive(item.path))?.label ||
+                    'Admin'}
+                </h2>
+              </div>
             </div>
 
             <div className="flex items-center space-x-4">
