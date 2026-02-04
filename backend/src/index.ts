@@ -166,6 +166,60 @@ const requireAdmin = (req: AuthenticatedRequest, res: Response, next: NextFuncti
   next();
 };
 
+// Interface for standalone API key authenticated request
+interface StandaloneApiKeyRequest extends Request {
+  apiKeyInfo?: {
+    id: string;
+    name: string;
+    permissions: string[];
+  };
+}
+
+// Middleware to authenticate standalone API keys (from api_keys table)
+const authenticateStandaloneApiKey = async (req: StandaloneApiKeyRequest, res: Response, next: NextFunction) => {
+  const apiKey = req.headers['x-api-key'] as string;
+
+  if (!apiKey) {
+    return res.status(401).json({ error: 'API key required. Use X-API-Key header.' });
+  }
+
+  try {
+    // Find all API keys and compare with bcrypt
+    const apiKeys = await prisma.apiKey.findMany();
+
+    for (const key of apiKeys) {
+      // Check if key is expired
+      if (key.expiresAt && new Date(key.expiresAt) < new Date()) {
+        continue; // Skip expired keys
+      }
+
+      const isValidKey = await bcrypt.compare(apiKey, key.keyHash);
+      if (isValidKey) {
+        // Update lastUsedAt
+        await prisma.apiKey.update({
+          where: { id: key.id },
+          data: { lastUsedAt: new Date() }
+        });
+
+        // Attach API key info to request
+        req.apiKeyInfo = {
+          id: key.id,
+          name: key.name,
+          permissions: JSON.parse(key.permissions)
+        };
+
+        return next();
+      }
+    }
+
+    // No matching key found
+    return res.status(401).json({ error: 'Invalid API key' });
+  } catch (error) {
+    console.error('API key authentication error:', error);
+    return res.status(500).json({ error: 'Authentication failed' });
+  }
+};
+
 // =========================================
 // Authentication Endpoints
 // =========================================
@@ -1661,6 +1715,20 @@ app.post('/api/api-keys', authenticateToken, requireAdmin, async (req: Authentic
     console.error('Failed to create API key:', error);
     res.status(500).json({ error: 'Failed to create API key' });
   }
+});
+
+// GET /api/api-keys/validate - Validate an API key (uses X-API-Key header)
+// This endpoint allows clients to verify their API key is valid
+// NOTE: This route MUST be defined BEFORE /api/api-keys/:id to avoid matching 'validate' as an id
+app.get('/api/api-keys/validate', authenticateStandaloneApiKey, async (req: StandaloneApiKeyRequest, res: Response) => {
+  res.json({
+    valid: true,
+    keyInfo: {
+      id: req.apiKeyInfo?.id,
+      name: req.apiKeyInfo?.name,
+      permissions: req.apiKeyInfo?.permissions
+    }
+  });
 });
 
 // GET /api/api-keys/:id - Get a single API key (admin only)
