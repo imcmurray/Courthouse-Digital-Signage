@@ -4,6 +4,7 @@ import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import AdminLayout from './components/AdminLayout';
+import SessionExpiredModal from './components/SessionExpiredModal';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Docket from './pages/Docket';
@@ -151,6 +152,7 @@ function App() {
           </Routes>
         </BrowserRouter>
         <Toaster position="top-right" />
+        <SessionExpiredModal />
       </AuthProvider>
     </QueryClientProvider>
   );

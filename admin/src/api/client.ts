@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { triggerSessionExpired } from '../components/SessionExpiredModal';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
@@ -32,6 +33,13 @@ export const clearStoredTokens = (): void => {
   localStorage.removeItem(REFRESH_TOKEN_KEY);
 };
 
+// Track if we're already showing the session expired modal
+let isSessionExpiredModalShown = false;
+
+export const resetSessionExpiredFlag = (): void => {
+  isSessionExpiredModalShown = false;
+};
+
 // Request interceptor to add auth token
 apiClient.interceptors.request.use(
   (config) => {
@@ -52,8 +60,8 @@ apiClient.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    // If 403 and not already retried, try to refresh token
-    if (error.response?.status === 403 && !originalRequest._retry) {
+    // If 401 (no token) or 403 (invalid/expired token) and not already retried
+    if ((error.response?.status === 401 || error.response?.status === 403) && !originalRequest._retry) {
       originalRequest._retry = true;
 
       const refreshToken = getStoredRefreshToken();
@@ -69,10 +77,18 @@ apiClient.interceptors.response.use(
           originalRequest.headers.Authorization = `Bearer ${accessToken}`;
           return apiClient(originalRequest);
         } catch (refreshError) {
-          // Refresh failed, clear tokens and redirect to login
-          clearStoredTokens();
-          window.location.href = '/login';
+          // Refresh failed, show session expired modal instead of redirecting
+          if (!isSessionExpiredModalShown) {
+            isSessionExpiredModalShown = true;
+            triggerSessionExpired();
+          }
           return Promise.reject(refreshError);
+        }
+      } else {
+        // No refresh token available, show session expired modal
+        if (!isSessionExpiredModalShown && getStoredToken()) {
+          isSessionExpiredModalShown = true;
+          triggerSessionExpired();
         }
       }
     }
