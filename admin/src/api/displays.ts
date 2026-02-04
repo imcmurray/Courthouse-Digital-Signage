@@ -73,6 +73,11 @@ export const displaysApi = {
   delete: async (id: string): Promise<void> => {
     await apiClient.delete(`/api/displays/${id}`);
   },
+
+  regenerateKey: async (id: string): Promise<{ apiKey: string; displayId: string }> => {
+    const response = await apiClient.post<{ success: boolean; message: string; apiKey: string; displayId: string }>(`/api/displays/${id}/regenerate-key`);
+    return response.data;
+  },
 };
 
 export default displaysApi;

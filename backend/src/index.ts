@@ -1,5 +1,6 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import crypto from 'crypto';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { PrismaClient } from '@prisma/client';
@@ -1038,7 +1039,6 @@ app.post('/api/displays', async (req: Request, res: Response) => {
     }
 
     // Generate API key and hash it with bcrypt
-    const crypto = require('crypto');
     const apiKey = crypto.randomBytes(32).toString('hex');
     const apiKeyHash = await bcrypt.hash(apiKey, 10);
 
@@ -1166,6 +1166,47 @@ app.delete('/api/displays/:id', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Failed to delete display:', error);
     res.status(500).json({ error: 'Failed to delete display' });
+  }
+});
+
+// POST /api/displays/:id/regenerate-key - Regenerate API key for a display
+app.post('/api/displays/:id/regenerate-key', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    // Check if display exists
+    const existingDisplay = await prisma.display.findUnique({
+      where: { id }
+    });
+
+    if (!existingDisplay) {
+      return res.status(404).json({ error: 'Display not found' });
+    }
+
+    // Generate new API key and hash it with bcrypt
+    const newApiKey = crypto.randomBytes(32).toString('hex');
+    const newApiKeyHash = await bcrypt.hash(newApiKey, 10);
+
+    // Update display with new API key hash
+    await prisma.display.update({
+      where: { id },
+      data: {
+        apiKeyHash: newApiKeyHash
+      }
+    });
+
+    console.log(`[DB] Regenerated API key for display '${id}'`);
+
+    // Return the new API key (only time it will be visible)
+    res.json({
+      success: true,
+      message: 'API key regenerated successfully',
+      apiKey: newApiKey,
+      displayId: id
+    });
+  } catch (error) {
+    console.error('Failed to regenerate API key:', error);
+    res.status(500).json({ error: 'Failed to regenerate API key' });
   }
 });
 

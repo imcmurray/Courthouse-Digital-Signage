@@ -8,7 +8,9 @@ export default function Displays() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingDisplay, setEditingDisplay] = useState<Display | null>(null);
   const [deleteConfirmDisplay, setDeleteConfirmDisplay] = useState<Display | null>(null);
+  const [regenerateConfirmDisplay, setRegenerateConfirmDisplay] = useState<Display | null>(null);
   const [newApiKey, setNewApiKey] = useState<string | null>(null);
+  const [regeneratedApiKey, setRegeneratedApiKey] = useState<string | null>(null);
 
   // Form state
   const [formData, setFormData] = useState<CreateDisplayInput>({
@@ -78,6 +80,27 @@ export default function Displays() {
       toast.error(error.response?.data?.error || 'Failed to delete display');
     },
   });
+
+  // Regenerate API key mutation
+  const regenerateKeyMutation = useMutation({
+    mutationFn: displaysApi.regenerateKey,
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['displays'] });
+      toast.success('API key regenerated successfully');
+      setRegenerateConfirmDisplay(null);
+      // Show the new API key modal
+      setRegeneratedApiKey(data.apiKey);
+    },
+    onError: (error: { response?: { data?: { error?: string } } }) => {
+      toast.error(error.response?.data?.error || 'Failed to regenerate API key');
+    },
+  });
+
+  const handleRegenerateKey = () => {
+    if (regenerateConfirmDisplay) {
+      regenerateKeyMutation.mutate(regenerateConfirmDisplay.id);
+    }
+  };
 
   const resetForm = () => {
     setFormData({
@@ -259,9 +282,15 @@ export default function Displays() {
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <button
                     onClick={() => openEditModal(display)}
-                    className="text-primary hover:text-primary/80 mr-4"
+                    className="text-primary hover:text-primary/80 mr-3"
                   >
                     Edit
+                  </button>
+                  <button
+                    onClick={() => setRegenerateConfirmDisplay(display)}
+                    className="text-amber-600 hover:text-amber-800 mr-3"
+                  >
+                    Regenerate Key
                   </button>
                   <button
                     onClick={() => setDeleteConfirmDisplay(display)}
@@ -590,6 +619,100 @@ export default function Displays() {
                 className="px-4 py-2 text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50"
               >
                 {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Regenerate API Key Confirmation Modal */}
+      {regenerateConfirmDisplay && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center mb-4">
+              <div className="flex-shrink-0 h-12 w-12 rounded-full bg-amber-100 flex items-center justify-center">
+                <svg className="h-6 w-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <div className="ml-4">
+                <h3 className="text-lg font-semibold text-gray-900">Regenerate API Key</h3>
+                <p className="text-sm text-gray-500">This will invalidate the current key</p>
+              </div>
+            </div>
+            <div className="p-3 bg-gray-50 rounded-lg">
+              <p className="text-sm font-medium text-gray-900">{regenerateConfirmDisplay.name}</p>
+              <p className="text-xs text-gray-500 font-mono">{regenerateConfirmDisplay.id}</p>
+            </div>
+            <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+              <p className="text-sm text-amber-800">
+                <strong>Warning:</strong> The current API key will be immediately invalidated.
+                The display client will stop working until you update it with the new key.
+              </p>
+            </div>
+            <div className="mt-4 flex justify-end space-x-3">
+              <button
+                onClick={() => setRegenerateConfirmDisplay(null)}
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRegenerateKey}
+                disabled={regenerateKeyMutation.isPending}
+                className="px-4 py-2 text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:opacity-50"
+              >
+                {regenerateKeyMutation.isPending ? 'Regenerating...' : 'Regenerate Key'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Regenerated API Key Modal (shown after successful regeneration) */}
+      {regeneratedApiKey && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-lg w-full mx-4">
+            <div className="flex items-center mb-4">
+              <div className="flex-shrink-0 h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
+                <svg className="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <div className="ml-4">
+                <h3 className="text-lg font-semibold text-gray-900">API Key Regenerated!</h3>
+                <p className="text-sm text-gray-500">Save the new key below - it won't be shown again.</p>
+              </div>
+            </div>
+
+            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                New Display API Key
+              </label>
+              <div className="flex items-center">
+                <code className="flex-1 text-sm bg-white p-2 rounded border font-mono break-all">
+                  {regeneratedApiKey}
+                </code>
+                <button
+                  onClick={() => copyToClipboard(regeneratedApiKey)}
+                  className="ml-2 px-3 py-2 text-primary border border-primary rounded hover:bg-primary/10"
+                >
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                Update the display client with this new key: <code className="bg-gray-100 px-1 rounded">?apiKey=YOUR_NEW_KEY</code>
+              </p>
+            </div>
+
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={() => setRegeneratedApiKey(null)}
+                className="px-4 py-2 text-white bg-primary rounded-lg hover:bg-primary/90"
+              >
+                Done
               </button>
             </div>
           </div>
