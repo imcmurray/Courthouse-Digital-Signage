@@ -287,10 +287,27 @@ export default function Announcements() {
                   value={formData.text}
                   onChange={(e) => setFormData({ ...formData, text: e.target.value })}
                   required
+                  maxLength={500}
                   rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary ${
+                    formData.text.length >= 500
+                      ? 'border-red-500'
+                      : formData.text.length >= 450
+                        ? 'border-yellow-500'
+                        : 'border-gray-300'
+                  }`}
                   placeholder="Enter announcement text..."
                 />
+                <div className={`text-xs mt-1 flex justify-between ${
+                  formData.text.length >= 500
+                    ? 'text-red-600'
+                    : formData.text.length >= 450
+                      ? 'text-yellow-600'
+                      : 'text-gray-500'
+                }`}>
+                  <span>Maximum 500 characters</span>
+                  <span>{formData.text.length}/500</span>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
