@@ -392,10 +392,15 @@ app.get('/api/schema-check', async (req, res) => {
 // Docket Endpoints
 // =========================================
 
-// GET /api/docket - List docket entries with optional filters
+// GET /api/docket - List docket entries with optional filters and pagination
 app.get('/api/docket', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { date, courtroom, status, judge, chapter } = req.query;
+    const { date, courtroom, status, judge, chapter, limit = '10', page = '1' } = req.query;
+
+    // Parse pagination params
+    const pageSize = Math.min(parseInt(limit as string, 10) || 10, 100);
+    const currentPage = Math.max(parseInt(page as string, 10) || 1, 1);
+    const offset = (currentPage - 1) * pageSize;
 
     // Build filter conditions
     const where: Record<string, unknown> = {};
@@ -417,16 +422,30 @@ app.get('/api/docket', authenticateToken, async (req: AuthenticatedRequest, res:
     if (judge) where.hearingJudge = judge;
     if (chapter) where.caseChapter = chapter;
 
+    // Get total count for pagination
+    const total = await prisma.docketEntry.count({ where });
+
+    // Get paginated entries
     const entries = await prisma.docketEntry.findMany({
       where,
       orderBy: [
         { hearingTime: 'asc' },
         { caseTitle: 'asc' }
-      ]
+      ],
+      take: pageSize,
+      skip: offset
     });
 
-    console.log(`[DB] SELECT from docket_entries - found ${entries.length} records`);
-    res.json({ entries, total: entries.length });
+    const totalPages = Math.ceil(total / pageSize);
+
+    console.log(`[DB] SELECT from docket_entries - found ${entries.length} of ${total} records (page ${currentPage}/${totalPages})`);
+    res.json({
+      entries,
+      total,
+      page: currentPage,
+      limit: pageSize,
+      totalPages
+    });
   } catch (error) {
     console.error('Failed to fetch docket entries:', error);
     res.status(500).json({ error: 'Failed to fetch docket entries' });

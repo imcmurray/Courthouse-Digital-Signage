@@ -26,6 +26,9 @@ export default function Docket() {
   const courtroomFilter = searchParams.get('courtroom') || '';
   const statusFilter = searchParams.get('status') || '';
   const judgeFilter = searchParams.get('judge') || '';
+  const pageParam = searchParams.get('page') || '1';
+  const currentPage = Math.max(parseInt(pageParam, 10) || 1, 1);
+  const pageSize = 10; // Default 10 entries per page
 
   // Update URL params when filters change
   const updateFilter = useCallback((key: string, value: string) => {
@@ -35,11 +38,23 @@ export default function Docket() {
     } else {
       newParams.delete(key);
     }
+    // Reset to page 1 when filters change
+    if (key !== 'page') {
+      newParams.delete('page');
+    }
     setSearchParams(newParams, { replace: true });
   }, [searchParams, setSearchParams]);
 
+  // Navigate to a specific page
+  const goToPage = useCallback((page: number) => {
+    updateFilter('page', page > 1 ? page.toString() : '');
+  }, [updateFilter]);
+
   // Build filters object for API
-  const filters: DocketFilters = {};
+  const filters: DocketFilters = {
+    page: currentPage,
+    limit: pageSize
+  };
   if (dateFilter) filters.date = dateFilter;
   if (courtroomFilter) filters.courtroom = courtroomFilter;
   if (statusFilter) filters.status = statusFilter;
@@ -543,6 +558,70 @@ export default function Docket() {
         {entries.length === 0 && (
           <div className="text-center py-12 text-gray-500">
             No docket entries found. Click "Add Entry" to create one.
+          </div>
+        )}
+
+        {/* Pagination */}
+        {data && data.totalPages > 1 && (
+          <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+            <div className="text-sm text-gray-600">
+              Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, data.total)} of {data.total} entries
+            </div>
+            <div className="flex items-center space-x-2">
+              {/* Previous button */}
+              <button
+                onClick={() => goToPage(currentPage - 1)}
+                disabled={currentPage <= 1}
+                className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Previous
+              </button>
+
+              {/* Page numbers */}
+              {Array.from({ length: data.totalPages }, (_, i) => i + 1)
+                .filter(page => {
+                  // Show first page, last page, current page, and pages around current
+                  if (page === 1 || page === data.totalPages) return true;
+                  if (Math.abs(page - currentPage) <= 1) return true;
+                  return false;
+                })
+                .reduce((acc: (number | string)[], page, idx, arr) => {
+                  // Add ellipsis between non-consecutive pages
+                  if (idx > 0 && arr[idx - 1] !== page - 1) {
+                    acc.push('...');
+                  }
+                  acc.push(page);
+                  return acc;
+                }, [])
+                .map((item, idx) =>
+                  typeof item === 'string' ? (
+                    <span key={`ellipsis-${idx}`} className="px-2 text-gray-400">
+                      {item}
+                    </span>
+                  ) : (
+                    <button
+                      key={item}
+                      onClick={() => goToPage(item)}
+                      className={`px-3 py-1 text-sm border rounded ${
+                        currentPage === item
+                          ? 'bg-primary text-white border-primary'
+                          : 'border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      {item}
+                    </button>
+                  )
+                )}
+
+              {/* Next button */}
+              <button
+                onClick={() => goToPage(currentPage + 1)}
+                disabled={currentPage >= data.totalPages}
+                className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Next
+              </button>
+            </div>
           </div>
         )}
       </div>

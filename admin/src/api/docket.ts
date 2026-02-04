@@ -54,6 +54,9 @@ export interface UpdateDocketEntryInput extends Partial<CreateDocketEntryInput> 
 export interface DocketResponse {
   entries: DocketEntry[];
   total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
 }
 
 export interface DocketFilters {
@@ -62,6 +65,8 @@ export interface DocketFilters {
   status?: string;
   judge?: string;
   chapter?: string;
+  page?: number;
+  limit?: number;
 }
 
 export const docketApi = {
@@ -72,6 +77,8 @@ export const docketApi = {
     if (filters?.status) params.append('status', filters.status);
     if (filters?.judge) params.append('judge', filters.judge);
     if (filters?.chapter) params.append('chapter', filters.chapter);
+    if (filters?.page) params.append('page', filters.page.toString());
+    if (filters?.limit) params.append('limit', filters.limit.toString());
 
     const queryString = params.toString();
     const url = queryString ? `/api/docket?${queryString}` : '/api/docket';
