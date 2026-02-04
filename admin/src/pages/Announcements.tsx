@@ -126,6 +126,12 @@ export default function Announcements() {
     return 'Low';
   };
 
+  // Check if an announcement is expired
+  const isExpired = (expiresAt: string | null): boolean => {
+    if (!expiresAt) return false;
+    return new Date(expiresAt) < new Date();
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -213,20 +219,26 @@ export default function Announcements() {
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <button
-                    onClick={() => toggleEnabledMutation.mutate({
-                      id: announcement.id,
-                      enabled: !announcement.enabled
-                    })}
-                    disabled={toggleEnabledMutation.isPending}
-                    className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full cursor-pointer transition-colors ${
-                      announcement.enabled
-                        ? 'bg-green-100 text-green-800 hover:bg-green-200'
-                        : 'bg-red-100 text-red-800 hover:bg-red-200'
-                    }`}
-                  >
-                    {announcement.enabled ? 'Active' : 'Disabled'}
-                  </button>
+                  {isExpired(announcement.expiresAt) ? (
+                    <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-orange-100 text-orange-800">
+                      Expired
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => toggleEnabledMutation.mutate({
+                        id: announcement.id,
+                        enabled: !announcement.enabled
+                      })}
+                      disabled={toggleEnabledMutation.isPending}
+                      className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full cursor-pointer transition-colors ${
+                        announcement.enabled
+                          ? 'bg-green-100 text-green-800 hover:bg-green-200'
+                          : 'bg-red-100 text-red-800 hover:bg-red-200'
+                      }`}
+                    >
+                      {announcement.enabled ? 'Active' : 'Disabled'}
+                    </button>
+                  )}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {announcement.expiresAt
