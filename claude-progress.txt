@@ -604,3 +604,49 @@
 - 88d367e: feat: Implement filter persistence during session navigation (Feature #66)
 - 4dfe3b7: feat: Verify pagination position maintained on return (Feature #67)
 - 4b0c607: feat: Verify tab/URL state preserved on page refresh (Feature #68)
+
+## Session: 2026-02-04 (Agent Batch #69, #70, #71)
+
+### Completed Features This Session:
+
+- **Feature #69: Direct URL access with valid ID works** ✅ PASSING
+  - Added /admin/docket/edit/:id route in App.tsx
+  - Updated Docket.tsx to handle URL parameter and auto-open edit modal
+  - Closed browser, navigated directly to /admin/docket/edit/[valid-uuid]
+  - Verified login prompt appears for unauthenticated users
+  - After login, redirected to the correct edit page with modal open
+  - Entry data (AUDIT-TEST-50) loaded correctly in edit form
+  - Successfully edited and saved the entry via direct URL access
+  - Verified changes reflected in docket list
+
+- **Feature #70: Direct URL with invalid ID shows error** ✅ PASSING
+  - Navigated to /admin/docket/edit/invalid-uuid-here
+  - Verified graceful handling - redirected to /admin/docket list
+  - Error logged to console: "Failed to fetch docket entry by ID"
+  - Navigated to /admin/docket/edit/00000000-0000-0000-0000-000000000000 (valid UUID format, non-existent)
+  - Verified same graceful handling - redirected to docket list
+  - User can continue working normally after redirect
+
+- **Feature #71: URL manipulation does not bypass security** ✅ PASSING
+  - Logged in as editor user (editor@courthouse.gov / editor123)
+  - Verified editor sidebar shows only: Dashboard, Docket, Displays, Announcements
+  - Navigated directly to /admin/users via URL
+  - Verified "Access Denied" page displayed with message "You don't have permission to access this page"
+  - Tested API directly: GET /api/users returns 403 Forbidden with "Admin access required"
+  - Both frontend (ProtectedRoute) and backend enforce role-based access control
+
+### Technical Notes:
+- Added /admin/docket/edit/:id route to support deep linking to specific entries
+- Docket.tsx now uses useParams to get ID from URL and auto-fetches entry
+- Invalid IDs trigger redirect to docket list (graceful error handling)
+- Frontend uses ProtectedRoute component with allowedRoles prop
+- Backend enforces admin-only routes with middleware
+
+### Current Status:
+- 76/155 features passing (49.0%)
+- All assigned URL & Direct Access features (#69, #70, #71) complete
+
+### Git Commits This Session:
+- 7241687: feat: Implement direct URL access for docket entry editing (Feature #69)
+- 3b495f6: feat: Verify invalid docket entry URLs handled gracefully (Feature #70)
+- aa301a4: feat: Verify URL manipulation does not bypass security (Feature #71)
