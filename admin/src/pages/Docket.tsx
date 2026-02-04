@@ -36,7 +36,7 @@ export default function Docket() {
     // Check if URL already has filters
     const hasUrlFilters = searchParams.has('date') || searchParams.has('status') ||
                           searchParams.has('courtroom') || searchParams.has('judge') ||
-                          searchParams.has('page') || searchParams.has('sortBy');
+                          searchParams.has('search') || searchParams.has('page') || searchParams.has('sortBy');
 
     if (!hasUrlFilters) {
       // Try to restore from sessionStorage
@@ -50,6 +50,7 @@ export default function Docket() {
           if (filters.status) newParams.set('status', filters.status);
           if (filters.courtroom) newParams.set('courtroom', filters.courtroom);
           if (filters.judge) newParams.set('judge', filters.judge);
+          if (filters.search) newParams.set('search', filters.search);
           if (filters.page && filters.page !== '1') newParams.set('page', filters.page);
           if (filters.sortBy) newParams.set('sortBy', filters.sortBy);
           if (filters.sortOrder) newParams.set('sortOrder', filters.sortOrder);
@@ -72,6 +73,7 @@ export default function Docket() {
   const courtroomFilter = searchParams.get('courtroom') || '';
   const statusFilter = searchParams.get('status') || '';
   const judgeFilter = searchParams.get('judge') || '';
+  const searchFilter = searchParams.get('search') || '';
   const pageParam = searchParams.get('page') || '1';
   const currentPage = Math.max(parseInt(pageParam, 10) || 1, 1);
   const pageSize = 10; // Default 10 entries per page
@@ -87,6 +89,7 @@ export default function Docket() {
     if (statusFilter) filters.status = statusFilter;
     if (courtroomFilter) filters.courtroom = courtroomFilter;
     if (judgeFilter) filters.judge = judgeFilter;
+    if (searchFilter) filters.search = searchFilter;
     if (pageParam && pageParam !== '1') filters.page = pageParam;
     if (sortBy) filters.sortBy = sortBy;
     if (sortOrder && sortBy) filters.sortOrder = sortOrder;
@@ -96,7 +99,7 @@ export default function Docket() {
     } else {
       sessionStorage.removeItem(DOCKET_FILTERS_KEY);
     }
-  }, [dateFilter, statusFilter, courtroomFilter, judgeFilter, pageParam, sortBy, sortOrder, filtersRestored]);
+  }, [dateFilter, statusFilter, courtroomFilter, judgeFilter, searchFilter, pageParam, sortBy, sortOrder, filtersRestored]);
 
   // Handle direct URL access to edit a specific entry by ID
   useEffect(() => {
@@ -169,6 +172,7 @@ export default function Docket() {
   if (courtroomFilter) filters.courtroom = courtroomFilter;
   if (statusFilter) filters.status = statusFilter;
   if (judgeFilter) filters.judge = judgeFilter;
+  if (searchFilter) filters.search = searchFilter;
   if (sortBy) filters.sortBy = sortBy;
   if (sortBy) filters.sortOrder = sortOrder;
 
@@ -503,6 +507,31 @@ export default function Docket() {
       {/* Filters */}
       <div className="bg-white shadow-sm rounded-lg p-4">
         <div className="flex flex-wrap gap-4 items-end">
+          {/* Search Input */}
+          <div className="flex-1 min-w-[200px] max-w-[400px]">
+            <label htmlFor="search-filter" className="block text-sm font-medium text-gray-700 mb-1">
+              Search
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                id="search-filter"
+                value={searchFilter}
+                onChange={(e) => updateFilter('search', e.target.value)}
+                placeholder="Search case #, party, matter, judge..."
+                className="w-full px-3 py-2 pl-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+              />
+              <svg
+                className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+          </div>
+
           {/* Date Filter */}
           <div>
             <label htmlFor="date-filter" className="block text-sm font-medium text-gray-700 mb-1">
@@ -555,7 +584,7 @@ export default function Docket() {
           </div>
 
           {/* Clear Filters Button */}
-          {(dateFilter || statusFilter || courtroomFilter || judgeFilter) && (
+          {(dateFilter || statusFilter || courtroomFilter || judgeFilter || searchFilter) && (
             <button
               onClick={() => setSearchParams({})}
               className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
@@ -565,7 +594,7 @@ export default function Docket() {
           )}
 
           {/* Filter Status Indicator */}
-          {(dateFilter || statusFilter || courtroomFilter) && (
+          {(dateFilter || statusFilter || courtroomFilter || searchFilter) && (
             <div className="text-sm text-gray-500 ml-auto">
               Showing {entries.length} filtered {entries.length === 1 ? 'entry' : 'entries'}
             </div>

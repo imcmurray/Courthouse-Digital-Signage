@@ -747,3 +747,58 @@
 ### Git Commits This Session:
 - e9d577d: feat: Implement API key validation endpoint and verify revocation (Feature #78)
 - 251afb7: feat: Implement expired announcement status display (Feature #79)
+
+## Session: 2026-02-04 (Agent Batch #80, #81, #82)
+
+### Completed Features This Session:
+
+- **Feature #80: Form fields have sensible defaults** ✅ PASSING
+  - Docket form defaults verified:
+    - Hearing Date defaults to today (2026-02-04)
+    - Hearing Time defaults to 09:00
+    - Status defaults to "scheduled"
+    - Chapter defaults to "Chapter 7"
+  - Display form defaults verified:
+    - ticker_enabled defaults to true
+    - ticker_speed defaults to "medium"
+    - Show Weather Widget enabled by default
+    - Show Zoom Info enabled by default
+    - Highlight Current Hearing enabled by default
+    - Notice banner has default text: "Please turn your phones OFF in the Courthouse"
+  - Verified with browser automation and screenshots
+
+- **Feature #81: Reset button clears form to defaults** ✅ PASSING
+  - Added Reset button to DocketForm component
+  - Uses react-hook-form reset() function with getDefaultValues()
+  - Reset button disabled when form is clean, enabled when dirty
+  - Tested workflow:
+    - Filled form with test data (case number, title, changed chapter to 13, status to in_progress)
+    - Clicked Reset button
+    - Verified all fields cleared: case number empty, title empty, chapter back to 7, status back to scheduled
+    - Date and time also reset to defaults (today, 09:00)
+  - Verified with browser automation and screenshots
+
+- **Feature #82: Filters reset on context change** ✅ PASSING
+  - Expected behavior documented and verified:
+    - Within same session: Filters ARE PRESERVED when navigating between pages
+    - Applied date filter (2026-02-03) and status filter (scheduled) on docket
+    - Navigated to Announcements page
+    - Returned to Docket - filters preserved via URL params and sessionStorage
+    - URL shows: /admin/docket?date=2026-02-03&status=scheduled
+  - Across sessions: Filters reset on logout (expected security behavior)
+  - Each entity has its own independent filter state
+
+### Technical Notes:
+- DocketForm.tsx updated with Reset button and getDefaultValues() helper function
+- Filters persist via URL query parameters (React Router useSearchParams)
+- sessionStorage provides backup for filter persistence during navigation
+- Implementation leverages Feature #66's filter persistence work
+
+### Current Status:
+- 87/155 features passing (56.1%)
+- All assigned Default & Reset features (#80, #81, #82) complete
+
+### Git Commits This Session:
+- c9645d2: feat: Verify form fields have sensible defaults (Feature #80)
+- 210d60c: feat: Implement Reset button for docket form (Feature #81)
+- b7128c7: feat: Verify filters reset/persist on context change (Feature #82)

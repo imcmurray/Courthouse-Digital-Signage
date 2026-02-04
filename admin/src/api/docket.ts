@@ -65,6 +65,7 @@ export interface DocketFilters {
   status?: string;
   judge?: string;
   chapter?: string;
+  search?: string;
   page?: number;
   limit?: number;
   sortBy?: string;
@@ -79,6 +80,7 @@ export const docketApi = {
     if (filters?.status) params.append('status', filters.status);
     if (filters?.judge) params.append('judge', filters.judge);
     if (filters?.chapter) params.append('chapter', filters.chapter);
+    if (filters?.search) params.append('search', filters.search);
     if (filters?.page) params.append('page', filters.page.toString());
     if (filters?.limit) params.append('limit', filters.limit.toString());
     if (filters?.sortBy) params.append('sortBy', filters.sortBy);

@@ -464,7 +464,7 @@ app.get('/api/schema-check', async (req, res) => {
 // GET /api/docket - List docket entries with optional filters and pagination
 app.get('/api/docket', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { date, courtroom, status, judge, chapter, limit = '10', page = '1', sortBy, sortOrder } = req.query;
+    const { date, courtroom, status, judge, chapter, search, limit = '10', page = '1', sortBy, sortOrder } = req.query;
 
     // Parse pagination params
     const pageSize = Math.min(parseInt(limit as string, 10) || 10, 100);
@@ -490,6 +490,18 @@ app.get('/api/docket', authenticateToken, async (req: AuthenticatedRequest, res:
     if (status) where.status = status;
     if (judge) where.hearingJudge = judge;
     if (chapter) where.caseChapter = chapter;
+
+    // Text search across case number, case title, and hearing matter
+    // Note: SQLite's LIKE is case-insensitive for ASCII by default
+    if (search && typeof search === 'string' && search.trim()) {
+      const searchTerm = search.trim();
+      where.OR = [
+        { caseNumber: { contains: searchTerm } },
+        { caseTitle: { contains: searchTerm } },
+        { hearingMatter: { contains: searchTerm } },
+        { hearingJudge: { contains: searchTerm } }
+      ];
+    }
 
     // Get total count for pagination
     const total = await prisma.docketEntry.count({ where });
