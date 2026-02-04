@@ -708,3 +708,42 @@
 
 ### Git Commits This Session:
 - 7862747: feat: Verify back button after submit does not resubmit (Feature #75)
+
+## Session: 2026-02-04 (Agent Batch #78, #79)
+
+### Completed Features This Session:
+
+- **Feature #78: Revoked API key stops working immediately** ✅ PASSING
+  - Created API key "Feature78-Revocation-Test" with read permissions
+  - Verified key works: GET /api/api-keys/validate returns valid=true with key info
+  - Implemented /api/api-keys/validate endpoint for testing standalone API keys
+  - Added authenticateStandaloneApiKey middleware to validate keys from api_keys table
+  - Revoked key via admin portal (confirmation dialog appeared)
+  - Immediately tested same API call - returns HTTP 401 "Invalid API key"
+  - Verified key no longer in active keys list (only 2 keys remain)
+  - Verified with browser automation and screenshots
+
+- **Feature #79: Expired announcements auto-hidden** ✅ PASSING
+  - Created announcement "FEATURE79_EXPIRED_TEST" with past expiration (2026-02-03)
+  - Verified expired announcement NOT returned by API with ?active=true filter
+  - Verified expired announcement DOES appear in full announcement list (without filter)
+  - Display client ticker does NOT show expired announcement (filtered out)
+  - Added isExpired() function to Announcements.tsx
+  - Expired announcements now show "Expired" badge (orange) in Status column
+  - Other announcements continue to show "Active" (green) or "Disabled" (red)
+  - Verified with browser automation and screenshots
+
+### Technical Notes:
+- API key validation endpoint must be defined BEFORE /:id routes to avoid matching "validate" as an ID
+- Standalone API keys use bcrypt comparison against api_keys table (different from display API keys)
+- Announcement expiration filtering happens server-side via GET /api/announcements?active=true
+- Display client uses this filtered endpoint to exclude expired announcements from ticker
+- Admin list shows all announcements regardless of expiration, with visual "Expired" status indicator
+
+### Current Status:
+- 84/155 features passing (54.2%)
+- Data Cleanup & Cascade features #78, #79 complete
+
+### Git Commits This Session:
+- e9d577d: feat: Implement API key validation endpoint and verify revocation (Feature #78)
+- 251afb7: feat: Implement expired announcement status display (Feature #79)
