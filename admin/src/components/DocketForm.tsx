@@ -1,7 +1,9 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { useQuery } from '@tanstack/react-query';
 import { DocketEntry, CreateDocketEntryInput, UpdateDocketEntryInput } from '../api/docket';
+import { displaysApi, Display } from '../api/displays';
 
 const docketSchema = z.object({
   caseNumber: z.string().min(1, 'Case number is required'),
@@ -24,6 +26,7 @@ const docketSchema = z.object({
   status: z.enum(['scheduled', 'in_progress', 'completed', 'cancelled', 'continued', 'stricken', 'reserved']).optional(),
   statusNote: z.string().optional(),
   comment: z.string().optional(),
+  displayIds: z.array(z.string()).optional(),
 });
 
 type DocketFormData = z.infer<typeof docketSchema>;
@@ -38,6 +41,14 @@ interface DocketFormProps {
 export default function DocketForm({ entry, onSubmit, onClose, isLoading }: DocketFormProps) {
   const isEditing = !!entry;
 
+  // Fetch displays for dropdown
+  const { data: displaysData } = useQuery({
+    queryKey: ['displays'],
+    queryFn: displaysApi.getAll,
+  });
+
+  const displays = displaysData?.displays || [];
+
   // Format the date for the input (YYYY-MM-DD)
   const formatDateForInput = (dateString?: string) => {
     if (!dateString) return '';
@@ -49,6 +60,7 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
     register,
     handleSubmit,
     watch,
+    setValue,
     formState: { errors },
   } = useForm<DocketFormData>({
     resolver: zodResolver(docketSchema),
@@ -73,10 +85,12 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
       status: entry?.status || 'scheduled',
       statusNote: entry?.statusNote || '',
       comment: entry?.comment || '',
+      displayIds: entry?.displayIds || [],
     },
   });
 
   const isZoom = watch('isZoom');
+  const selectedDisplayIds = watch('displayIds') || [];
 
   const handleFormSubmit = (data: DocketFormData) => {
     // Clean up optional empty strings
@@ -358,6 +372,51 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
                 </div>
               </div>
             )}
+          </div>
+
+          {/* Display Assignment Section */}
+          <div>
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Display Assignment</h3>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Assign to Displays (optional)
+              </label>
+              <p className="text-sm text-gray-500 mb-3">
+                Select which displays should show this docket entry. Leave empty to show on all displays.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-40 overflow-y-auto border border-gray-200 rounded-lg p-3">
+                {displays.length === 0 ? (
+                  <p className="text-sm text-gray-500 col-span-2">No displays available</p>
+                ) : (
+                  displays.map((display: Display) => (
+                    <label key={display.id} className="flex items-center space-x-2 p-2 hover:bg-gray-50 rounded cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedDisplayIds.includes(display.id)}
+                        onChange={(e) => {
+                          const currentIds = selectedDisplayIds || [];
+                          if (e.target.checked) {
+                            setValue('displayIds', [...currentIds, display.id]);
+                          } else {
+                            setValue('displayIds', currentIds.filter((id: string) => id !== display.id));
+                          }
+                        }}
+                        className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm font-medium text-gray-900 block truncate">{display.name}</span>
+                        <span className="text-xs text-gray-500 block truncate">{display.location}</span>
+                      </div>
+                    </label>
+                  ))
+                )}
+              </div>
+              {selectedDisplayIds.length > 0 && (
+                <p className="mt-2 text-sm text-gray-600">
+                  {selectedDisplayIds.length} display{selectedDisplayIds.length !== 1 ? 's' : ''} selected
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Status Section */}
