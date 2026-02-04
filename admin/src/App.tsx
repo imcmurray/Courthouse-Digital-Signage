@@ -8,6 +8,7 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Docket from './pages/Docket';
 import Users from './pages/Users';
+import Announcements from './pages/Announcements';
 
 const queryClient = new QueryClient();
 
@@ -75,10 +76,7 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={['admin', 'editor']}>
                   <AdminLayout>
-                    <div className="bg-white p-6 rounded-lg shadow">
-                      <h2 className="text-xl font-semibold">Announcements</h2>
-                      <p className="mt-2 text-gray-600">Announcement management will be implemented here.</p>
-                    </div>
+                    <Announcements />
                   </AdminLayout>
                 </ProtectedRoute>
               }
