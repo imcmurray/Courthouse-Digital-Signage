@@ -6,6 +6,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import AdminLayout from './components/AdminLayout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
+import Users from './pages/Users';
 
 const queryClient = new QueryClient();
 
@@ -80,10 +81,7 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={['admin']}>
                   <AdminLayout>
-                    <div className="bg-white p-6 rounded-lg shadow">
-                      <h2 className="text-xl font-semibold">User Management</h2>
-                      <p className="mt-2 text-gray-600">User management will be implemented here.</p>
-                    </div>
+                    <Users />
                   </AdminLayout>
                 </ProtectedRoute>
               }
