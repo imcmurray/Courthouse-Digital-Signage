@@ -526,3 +526,38 @@
 - 64ed56a: feat: Verify display configuration persists after refresh (Feature #46)
 - 7953a2e: feat: Verify deleted data does not reappear (Feature #47)
 - 53d0d08: feat: Verify display client shows real database data (Feature #48)
+
+## Session: 2026-02-04 (Agent Batch #64, #152)
+
+### Completed Features This Session:
+
+- **Feature #64: Session timeout shows relogin prompt** ✅ PASSING
+  - Implemented SessionExpiredModal component
+  - Modal appears when JWT token expires and refresh fails
+  - Shows "Session Expired" message with explanation
+  - User can login directly in modal without leaving page
+  - After successful login, shows "Session restored!" toast
+  - User can continue working on same page without losing context
+  - Two options: "Go to Login Page" or "Continue Session"
+  - Updated API client to trigger modal instead of hard redirect
+
+- **Feature #152: Invalid CSV format shows clear error** ✅ PASSING
+  - Tested CSV with wrong headers: Shows "Missing required columns: caseNumber, caseTitle, caseChapter, hearingDate, hearingTime, hearingMatter, hearingJudge"
+  - Tested CSV with wrong column count: Shows "Row 2 has 5 columns, expected 7"
+  - User guided on correct format: Modal shows required columns list
+  - "Download CSV Template" button available for reference
+  - Error messages clearly indicate what's wrong and how to fix
+
+### Technical Notes:
+- Created SessionExpiredModal.tsx component with inline login form
+- Added vite-env.d.ts for TypeScript ImportMeta support
+- Updated client.ts to use triggerSessionExpired() instead of window.location.href redirect
+- CSV error handling was already implemented in Docket.tsx
+
+### Current Status:
+- 69/155 features passing (44.5%)
+- Both assigned Error Handling features complete
+
+### Git Commits This Session:
+- 88b8e57: feat: Implement session expired modal with relogin prompt (Feature #64)
+- bc602ae: feat: Verify invalid CSV format shows clear error messages (Feature #152)
