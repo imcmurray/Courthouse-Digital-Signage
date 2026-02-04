@@ -844,3 +844,38 @@
 - 1f71e69: feat: Verify empty search returns all results (Feature #83)
 - 0b8a2bf: feat: Verify whitespace-only search handled gracefully (Feature #84)
 - a9474a9: feat: Verify special characters in search handled safely (Feature #85)
+
+## Session: 2026-02-04 (Agent Batch #86, #87)
+
+### Completed Features This Session:
+
+- **Feature #86: Zero results shows appropriate message** ✅ PASSING
+  - Navigated to docket list
+  - Searched for "xyznonexistent123456789"
+  - Updated empty state message to be context-aware:
+    - Shows "No results found" + "Try different search terms or adjust your filters." when filters are active
+    - Shows default "No docket entries found. Click 'Add Entry' to create one." when no filters
+  - "Clear Filters" button available to reset search
+  - Zero console errors during testing
+
+- **Feature #87: Filter combination with zero results** ✅ PASSING
+  - Applied date filter far in future (2030-12-31)
+  - Applied status filter "completed" that won't match
+  - Verified combined filters showed empty result message
+  - Verified can clear individual filters (cleared date field)
+  - Changed status filter and verified results immediately updated (0 → 25 entries)
+  - URL properly reflects filter state
+
+### Technical Notes:
+- Updated Docket.tsx empty state to check for active filters before displaying message
+- Filters can be cleared individually by clearing the form field values
+- "Clear Filters" button clears all filters at once
+- URL query parameters update dynamically as filters change
+
+### Current Status:
+- 92/155 features passing (59.4%)
+- All assigned Search & Filter Edge Cases features (#86, #87) complete
+
+### Git Commits This Session:
+- 324d772: feat: Improve zero results message for search (Feature #86)
+- f378d54: feat: Verify filter combination with zero results (Feature #87)
