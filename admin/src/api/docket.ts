@@ -97,6 +97,22 @@ export const docketApi = {
   delete: async (id: string): Promise<void> => {
     await apiClient.delete(`/api/docket/${id}`);
   },
+
+  clearByDate: async (date: string, options?: { courtroom?: string; archive?: boolean }): Promise<{ message: string; count: number; archived: boolean }> => {
+    const response = await apiClient.delete<{ message: string; count: number; archived: boolean }>('/api/docket/clear', {
+      data: { date, ...options },
+    });
+    return response.data;
+  },
+
+  bulkImport: async (entries: CreateDocketEntryInput[]): Promise<{ message: string; count: number; entries: DocketEntry[] }> => {
+    const response = await apiClient.post<{ message: string; count: number; entries: DocketEntry[] }>('/api/docket/bulk', { entries });
+    return response.data;
+  },
+
+  downloadTemplate: (): string => {
+    return '/api/docket/template';
+  },
 };
 
 export default docketApi;

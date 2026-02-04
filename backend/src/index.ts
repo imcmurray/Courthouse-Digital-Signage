@@ -41,7 +41,15 @@ const io = new Server(httpServer, {
 
 // Middleware
 app.use(cors({
-  origin: CORS_ORIGIN,
+  origin: function(origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    if (CORS_ORIGIN.indexOf(origin) !== -1) {
+      return callback(null, true);
+    }
+    console.log(`CORS rejected origin: ${origin}, allowed: ${CORS_ORIGIN.join(', ')}`);
+    return callback(null, false);
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
   credentials: true
@@ -495,6 +503,97 @@ app.post('/api/docket', authenticateToken, async (req: AuthenticatedRequest, res
     console.error('Failed to create docket entry:', error);
     res.status(500).json({ error: 'Failed to create docket entry' });
   }
+});
+
+// POST /api/docket/bulk - Bulk create docket entries (CSV import)
+app.post('/api/docket/bulk', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { entries } = req.body;
+
+    if (!Array.isArray(entries) || entries.length === 0) {
+      return res.status(400).json({ error: 'Entries array is required and must not be empty' });
+    }
+
+    if (entries.length > 500) {
+      return res.status(400).json({ error: 'Maximum 500 entries per import' });
+    }
+
+    // Validate all entries have required fields
+    const requiredFields = ['caseNumber', 'caseTitle', 'caseChapter', 'hearingDate', 'hearingTime', 'hearingMatter', 'hearingJudge'];
+    const validationErrors: string[] = [];
+
+    entries.forEach((entry, index) => {
+      const missingFields = requiredFields.filter(field => !entry[field]);
+      if (missingFields.length > 0) {
+        validationErrors.push(`Entry ${index + 1}: Missing required fields: ${missingFields.join(', ')}`);
+      }
+    });
+
+    if (validationErrors.length > 0) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: validationErrors.slice(0, 10) // Return first 10 errors
+      });
+    }
+
+    // Create all entries in a transaction
+    const createdEntries = await prisma.$transaction(
+      entries.map(entry =>
+        prisma.docketEntry.create({
+          data: {
+            caseNumber: entry.caseNumber,
+            caseTitle: entry.caseTitle,
+            caseChapter: entry.caseChapter,
+            adversaryNumber: entry.adversaryNumber || null,
+            adversaryTitle: entry.adversaryTitle || null,
+            hearingDate: new Date(entry.hearingDate),
+            hearingTime: entry.hearingTime,
+            hearingMatter: entry.hearingMatter,
+            hearingJudge: entry.hearingJudge,
+            courtroom: entry.courtroom || null,
+            movingParty: entry.movingParty || null,
+            opposingParty: entry.opposingParty || null,
+            trustee: entry.trustee || null,
+            isZoom: entry.isZoom === true || entry.isZoom === 'true',
+            zoomMeetingId: entry.zoomMeetingId || null,
+            zoomPasscode: entry.zoomPasscode || null,
+            zoomPhone: entry.zoomPhone || null,
+            status: entry.status || 'scheduled',
+            statusNote: entry.statusNote || null,
+            comment: entry.comment || null
+          }
+        })
+      )
+    );
+
+    console.log(`[DB] BULK INSERT into docket_entries - created ${createdEntries.length} records`);
+
+    // Emit WebSocket event for real-time updates
+    io.emit('docket:update', {});
+
+    res.status(201).json({
+      message: `Successfully imported ${createdEntries.length} entries`,
+      count: createdEntries.length,
+      entries: createdEntries
+    });
+  } catch (error: unknown) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002') {
+      return res.status(409).json({ error: 'Duplicate entry found. Check case numbers, dates, and times.' });
+    }
+    console.error('Failed to bulk import docket entries:', error);
+    res.status(500).json({ error: 'Failed to bulk import docket entries' });
+  }
+});
+
+// GET /api/docket/template - Download CSV template
+app.get('/api/docket/template', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  const csvHeader = 'caseNumber,caseTitle,caseChapter,hearingDate,hearingTime,hearingMatter,hearingJudge,courtroom,isZoom,zoomMeetingId,zoomPasscode,zoomPhone,status,adversaryNumber,adversaryTitle,movingParty,opposingParty,trustee,statusNote,comment';
+  const sampleRow = '26-12345,Smith John and Jane,7,2026-02-04,09:00,341 Meeting of Creditors,Judge Anderson,321,false,,,,,scheduled,,,,,,';
+  const csvContent = `${csvHeader}\n${sampleRow}`;
+
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', 'attachment; filename="docket-template.csv"');
+  res.send(csvContent);
 });
 
 // GET /api/docket/:id - Get a single docket entry

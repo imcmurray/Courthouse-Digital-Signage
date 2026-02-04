@@ -11,6 +11,15 @@ export default function Docket() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<DocketEntry | null>(null);
   const [deleteConfirmEntry, setDeleteConfirmEntry] = useState<DocketEntry | null>(null);
+  const [isClearModalOpen, setIsClearModalOpen] = useState(false);
+  const [clearDate, setClearDate] = useState('');
+  const [archiveOnClear, setArchiveOnClear] = useState(false);
+  const [clearCount, setClearCount] = useState<number | null>(null);
+
+  // Import CSV state
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importPreview, setImportPreview] = useState<CreateDocketEntryInput[]>([]);
+  const [importError, setImportError] = useState<string | null>(null);
 
   // Get filters from URL params
   const dateFilter = searchParams.get('date') || '';
@@ -81,6 +90,44 @@ export default function Docket() {
     },
   });
 
+  // Clear docket mutation
+  const clearMutation = useMutation({
+    mutationFn: ({ date, archive }: { date: string; archive: boolean }) =>
+      docketApi.clearByDate(date, { archive }),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['docket'] });
+      toast.success(result.message);
+      setIsClearModalOpen(false);
+      setClearDate('');
+      setArchiveOnClear(false);
+      setClearCount(null);
+    },
+    onError: (error: { response?: { data?: { error?: string } } }) => {
+      toast.error(error.response?.data?.error || 'Failed to clear docket entries');
+    },
+  });
+
+  // Bulk import mutation
+  const importMutation = useMutation({
+    mutationFn: docketApi.bulkImport,
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['docket'] });
+      toast.success(result.message);
+      setIsImportModalOpen(false);
+      setImportPreview([]);
+      setImportError(null);
+    },
+    onError: (error: { response?: { data?: { error?: string; details?: string[] } } }) => {
+      const errorMsg = error.response?.data?.error || 'Failed to import docket entries';
+      const details = error.response?.data?.details;
+      if (details && details.length > 0) {
+        setImportError(`${errorMsg}: ${details.join(', ')}`);
+      } else {
+        toast.error(errorMsg);
+      }
+    },
+  });
+
   const handleCreate = (data: CreateDocketEntryInput) => {
     createMutation.mutate(data);
   };
@@ -94,6 +141,137 @@ export default function Docket() {
   const handleDelete = () => {
     if (deleteConfirmEntry) {
       deleteMutation.mutate(deleteConfirmEntry.id);
+    }
+  };
+
+  const handleClearDocket = () => {
+    if (clearDate) {
+      clearMutation.mutate({ date: clearDate, archive: archiveOnClear });
+    }
+  };
+
+  const handleImportConfirm = () => {
+    if (importPreview.length > 0) {
+      importMutation.mutate(importPreview);
+    }
+  };
+
+  // Parse CSV file
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setImportError(null);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const text = e.target?.result as string;
+        const lines = text.split('\n').filter(line => line.trim());
+
+        if (lines.length < 2) {
+          setImportError('CSV file must have a header row and at least one data row');
+          return;
+        }
+
+        // Parse header
+        const headers = lines[0].split(',').map(h => h.trim());
+        const requiredHeaders = ['caseNumber', 'caseTitle', 'caseChapter', 'hearingDate', 'hearingTime', 'hearingMatter', 'hearingJudge'];
+        const missingHeaders = requiredHeaders.filter(h => !headers.includes(h));
+
+        if (missingHeaders.length > 0) {
+          setImportError(`Missing required columns: ${missingHeaders.join(', ')}`);
+          return;
+        }
+
+        // Parse data rows
+        const entries: CreateDocketEntryInput[] = [];
+        for (let i = 1; i < lines.length; i++) {
+          const values = parseCSVLine(lines[i]);
+          if (values.length !== headers.length) {
+            setImportError(`Row ${i + 1} has ${values.length} columns, expected ${headers.length}`);
+            return;
+          }
+
+          const entry: Record<string, string | boolean | undefined> = {};
+          headers.forEach((header, index) => {
+            const value = values[index]?.trim();
+            if (header === 'isZoom') {
+              entry[header] = value === 'true' || value === '1' || value === 'yes';
+            } else {
+              entry[header] = value || undefined;
+            }
+          });
+
+          entries.push(entry as unknown as CreateDocketEntryInput);
+        }
+
+        setImportPreview(entries);
+      } catch (err) {
+        setImportError('Failed to parse CSV file');
+      }
+    };
+    reader.readAsText(file);
+    // Reset the input so the same file can be uploaded again
+    event.target.value = '';
+  };
+
+  // Parse a CSV line handling quoted values
+  const parseCSVLine = (line: string): string[] => {
+    const values: string[] = [];
+    let current = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === ',' && !inQuotes) {
+        values.push(current);
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    values.push(current);
+    return values;
+  };
+
+  const downloadTemplate = () => {
+    const token = localStorage.getItem('auth_token');
+    window.open(`http://localhost:3000/api/docket/template?token=${token}`, '_blank');
+  };
+
+  // Open clear modal and precompute count
+  const openClearModal = () => {
+    // Set default to today if no date filter
+    const defaultDate = dateFilter || new Date().toISOString().split('T')[0];
+    setClearDate(defaultDate);
+    setArchiveOnClear(false);
+    setIsClearModalOpen(true);
+    // Count will be shown based on entries in current filter
+    if (data?.entries) {
+      // Filter entries matching the date
+      const matchingEntries = data.entries.filter(e => {
+        const entryDate = new Date(e.hearingDate).toISOString().split('T')[0];
+        return entryDate === defaultDate;
+      });
+      setClearCount(matchingEntries.length);
+    } else {
+      setClearCount(0);
+    }
+  };
+
+  // Update count when date changes in clear modal
+  const handleClearDateChange = (newDate: string) => {
+    setClearDate(newDate);
+    if (data?.entries) {
+      const matchingEntries = data.entries.filter(e => {
+        const entryDate = new Date(e.hearingDate).toISOString().split('T')[0];
+        return entryDate === newDate;
+      });
+      setClearCount(matchingEntries.length);
+    } else {
+      setClearCount(0);
     }
   };
 
@@ -158,15 +336,35 @@ export default function Docket() {
             Manage hearing calendar entries for court displays.
           </p>
         </div>
-        <button
-          onClick={() => setIsFormOpen(true)}
-          className="flex items-center px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
-        >
-          <svg className="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-          </svg>
-          Add Entry
-        </button>
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={() => setIsImportModalOpen(true)}
+            className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+          >
+            <svg className="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+            </svg>
+            Import CSV
+          </button>
+          <button
+            onClick={openClearModal}
+            className="flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+          >
+            <svg className="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            Clear Docket
+          </button>
+          <button
+            onClick={() => setIsFormOpen(true)}
+            className="flex items-center px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+          >
+            <svg className="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+            Add Entry
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -390,6 +588,184 @@ export default function Docket() {
                 className="px-4 py-2 text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50"
               >
                 {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Clear Docket Modal */}
+      {isClearModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-gray-900">Clear Docket Entries</h3>
+            <p className="mt-2 text-gray-600">
+              Select the date to clear all docket entries for that day.
+            </p>
+
+            <div className="mt-4 space-y-4">
+              {/* Date Selection */}
+              <div>
+                <label htmlFor="clear-date" className="block text-sm font-medium text-gray-700 mb-1">
+                  Date to Clear
+                </label>
+                <input
+                  type="date"
+                  id="clear-date"
+                  value={clearDate}
+                  onChange={(e) => handleClearDateChange(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                />
+              </div>
+
+              {/* Archive Option */}
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="archive-option"
+                  checked={archiveOnClear}
+                  onChange={(e) => setArchiveOnClear(e.target.checked)}
+                  className="h-4 w-4 text-primary border-gray-300 rounded focus:ring-primary"
+                />
+                <label htmlFor="archive-option" className="ml-2 block text-sm text-gray-700">
+                  Archive entries instead of deleting
+                </label>
+              </div>
+
+              {/* Count Display */}
+              {clearCount !== null && (
+                <div className={`p-3 rounded-lg ${clearCount > 0 ? 'bg-amber-50 text-amber-800' : 'bg-gray-50 text-gray-600'}`}>
+                  <strong>{clearCount}</strong> {clearCount === 1 ? 'entry' : 'entries'} will be {archiveOnClear ? 'archived' : 'deleted'}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6 flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setIsClearModalOpen(false);
+                  setClearDate('');
+                  setArchiveOnClear(false);
+                  setClearCount(null);
+                }}
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleClearDocket}
+                disabled={clearMutation.isPending || !clearDate || clearCount === 0}
+                className="px-4 py-2 text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {clearMutation.isPending ? 'Clearing...' : archiveOnClear ? 'Archive Entries' : 'Clear Entries'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Import CSV Modal */}
+      {isImportModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold text-gray-900">Import Docket Entries from CSV</h3>
+            <p className="mt-2 text-gray-600">
+              Upload a CSV file with docket entries. Download the template first to see the required format.
+            </p>
+
+            <div className="mt-4 space-y-4">
+              {/* Download Template */}
+              <div className="flex items-center space-x-4">
+                <button
+                  onClick={downloadTemplate}
+                  className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                >
+                  <svg className="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Download CSV Template
+                </button>
+                <span className="text-sm text-gray-500">
+                  Required columns: caseNumber, caseTitle, caseChapter, hearingDate, hearingTime, hearingMatter, hearingJudge
+                </span>
+              </div>
+
+              {/* File Upload */}
+              <div>
+                <label htmlFor="csv-file" className="block text-sm font-medium text-gray-700 mb-1">
+                  Upload CSV File
+                </label>
+                <input
+                  type="file"
+                  id="csv-file"
+                  accept=".csv"
+                  onChange={handleFileUpload}
+                  className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary/90"
+                />
+              </div>
+
+              {/* Error Message */}
+              {importError && (
+                <div className="p-3 bg-red-50 text-red-600 rounded-lg text-sm">
+                  {importError}
+                </div>
+              )}
+
+              {/* Preview Table */}
+              {importPreview.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">
+                    Preview ({importPreview.length} entries)
+                  </h4>
+                  <div className="overflow-x-auto border rounded-lg max-h-64">
+                    <table className="min-w-full divide-y divide-gray-200 text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-3 py-2 text-left font-medium text-gray-500">#</th>
+                          <th className="px-3 py-2 text-left font-medium text-gray-500">Case #</th>
+                          <th className="px-3 py-2 text-left font-medium text-gray-500">Title</th>
+                          <th className="px-3 py-2 text-left font-medium text-gray-500">Ch.</th>
+                          <th className="px-3 py-2 text-left font-medium text-gray-500">Date</th>
+                          <th className="px-3 py-2 text-left font-medium text-gray-500">Time</th>
+                          <th className="px-3 py-2 text-left font-medium text-gray-500">Judge</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {importPreview.map((entry, index) => (
+                          <tr key={index}>
+                            <td className="px-3 py-2 text-gray-500">{index + 1}</td>
+                            <td className="px-3 py-2">{entry.caseNumber}</td>
+                            <td className="px-3 py-2 max-w-xs truncate">{entry.caseTitle}</td>
+                            <td className="px-3 py-2">{entry.caseChapter}</td>
+                            <td className="px-3 py-2">{entry.hearingDate}</td>
+                            <td className="px-3 py-2">{entry.hearingTime}</td>
+                            <td className="px-3 py-2">{entry.hearingJudge}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6 flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setIsImportModalOpen(false);
+                  setImportPreview([]);
+                  setImportError(null);
+                }}
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleImportConfirm}
+                disabled={importMutation.isPending || importPreview.length === 0}
+                className="px-4 py-2 text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {importMutation.isPending ? 'Importing...' : `Import ${importPreview.length} Entries`}
               </button>
             </div>
           </div>

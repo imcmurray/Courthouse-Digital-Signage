@@ -1,0 +1,4 @@
+caseNumber,caseTitle,caseChapter,hearingDate,hearingTime,hearingMatter,hearingJudge,courtroom,isZoom,zoomMeetingId,zoomPasscode,zoomPhone,status
+CSV-IMPORT-001,Test Debtor One,7,2026-02-05,09:00,Initial 341 Meeting,Judge Smith,321,false,,,,scheduled
+CSV-IMPORT-002,Test Debtor Two,13,2026-02-05,10:00,Confirmation Hearing,Judge Smith,321,true,123-456-7890,test123,1-800-555-0001,scheduled
+CSV-IMPORT-003,Test Corp Three,11,2026-02-05,14:00,Disclosure Statement Hearing,Judge Smith,321,false,,,,scheduled
