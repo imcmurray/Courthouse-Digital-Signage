@@ -199,11 +199,12 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
             <h3 className="text-lg font-medium text-gray-900 mb-4">Case Information</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="caseNumber" className="block text-sm font-medium text-gray-700 mb-1">
                   Case Number <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
+                  id="caseNumber"
                   {...register('caseNumber')}
                   placeholder="e.g., 25-27186"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
@@ -214,11 +215,12 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="caseTitle" className="block text-sm font-medium text-gray-700 mb-1">
                   Case Title (Debtor Name) <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
+                  id="caseTitle"
                   {...register('caseTitle')}
                   placeholder="e.g., John Smith"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
@@ -229,10 +231,11 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="caseChapter" className="block text-sm font-medium text-gray-700 mb-1">
                   Chapter <span className="text-red-500">*</span>
                 </label>
                 <select
+                  id="caseChapter"
                   {...register('caseChapter')}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
                 >
@@ -249,22 +252,24 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
             {/* Adversary fields */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="adversaryNumber" className="block text-sm font-medium text-gray-700 mb-1">
                   Adversary Number (optional)
                 </label>
                 <input
                   type="text"
+                  id="adversaryNumber"
                   {...register('adversaryNumber')}
                   placeholder="e.g., 25-01234"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="adversaryTitle" className="block text-sm font-medium text-gray-700 mb-1">
                   Adversary Title (optional)
                 </label>
                 <input
                   type="text"
+                  id="adversaryTitle"
                   {...register('adversaryTitle')}
                   placeholder="e.g., Smith v. Jones"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
@@ -278,11 +283,12 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
             <h3 className="text-lg font-medium text-gray-900 mb-4">Hearing Information</h3>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="hearingDate" className="block text-sm font-medium text-gray-700 mb-1">
                   Hearing Date <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="date"
+                  id="hearingDate"
                   {...register('hearingDate')}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
                 />
@@ -292,11 +298,12 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="hearingTime" className="block text-sm font-medium text-gray-700 mb-1">
                   Hearing Time <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="time"
+                  id="hearingTime"
                   {...register('hearingTime')}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
                 />
@@ -306,11 +313,12 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="hearingJudge" className="block text-sm font-medium text-gray-700 mb-1">
                   Judge <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
+                  id="hearingJudge"
                   {...register('hearingJudge')}
                   placeholder="e.g., Judge Anderson"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
@@ -321,11 +329,12 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="courtroom" className="block text-sm font-medium text-gray-700 mb-1">
                   Courtroom
                 </label>
                 <input
                   type="text"
+                  id="courtroom"
                   {...register('courtroom')}
                   placeholder="e.g., 321"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
@@ -334,10 +343,11 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
             </div>
 
             <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="hearingMatter" className="block text-sm font-medium text-gray-700 mb-1">
                 Matter Description <span className="text-red-500">*</span>
               </label>
               <textarea
+                id="hearingMatter"
                 {...register('hearingMatter')}
                 rows={3}
                 placeholder="e.g., Motion for Relief from Stay"
@@ -354,33 +364,36 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
             <h3 className="text-lg font-medium text-gray-900 mb-4">Parties (Optional)</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="movingParty" className="block text-sm font-medium text-gray-700 mb-1">
                   Moving Party
                 </label>
                 <input
                   type="text"
+                  id="movingParty"
                   {...register('movingParty')}
                   placeholder="e.g., Bank of America"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="opposingParty" className="block text-sm font-medium text-gray-700 mb-1">
                   Opposing Party
                 </label>
                 <input
                   type="text"
+                  id="opposingParty"
                   {...register('opposingParty')}
                   placeholder="e.g., Debtor"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="trustee" className="block text-sm font-medium text-gray-700 mb-1">
                   Trustee
                 </label>
                 <input
                   type="text"
+                  id="trustee"
                   {...register('trustee')}
                   placeholder="e.g., Jane Doe, Trustee"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
@@ -407,33 +420,36 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
             {isZoom && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pl-6 border-l-2 border-blue-200">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="zoomMeetingId" className="block text-sm font-medium text-gray-700 mb-1">
                     Meeting ID
                   </label>
                   <input
                     type="text"
+                    id="zoomMeetingId"
                     {...register('zoomMeetingId')}
                     placeholder="e.g., 123 456 7890"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="zoomPasscode" className="block text-sm font-medium text-gray-700 mb-1">
                     Passcode
                   </label>
                   <input
                     type="text"
+                    id="zoomPasscode"
                     {...register('zoomPasscode')}
                     placeholder="e.g., abc123"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="zoomPhone" className="block text-sm font-medium text-gray-700 mb-1">
                     Dial-in Number
                   </label>
                   <input
                     type="text"
+                    id="zoomPhone"
                     {...register('zoomPhone')}
                     placeholder="e.g., +1 (123) 456-7890"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
@@ -493,10 +509,11 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
             <h3 className="text-lg font-medium text-gray-900 mb-4">Status</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">
                   Status
                 </label>
                 <select
+                  id="status"
                   {...register('status')}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
                 >
@@ -510,11 +527,12 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="statusNote" className="block text-sm font-medium text-gray-700 mb-1">
                   Status Note (optional)
                 </label>
                 <input
                   type="text"
+                  id="statusNote"
                   {...register('statusNote')}
                   placeholder="e.g., Continued to next week"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
@@ -523,10 +541,11 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
             </div>
 
             <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="comment" className="block text-sm font-medium text-gray-700 mb-1">
                 Internal Comment (optional)
               </label>
               <textarea
+                id="comment"
                 {...register('comment')}
                 rows={2}
                 placeholder="Internal notes (not displayed on signage)"
