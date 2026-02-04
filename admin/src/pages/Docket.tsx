@@ -1,19 +1,45 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { docketApi, DocketEntry, CreateDocketEntryInput, UpdateDocketEntryInput } from '../api/docket';
+import { docketApi, DocketEntry, CreateDocketEntryInput, UpdateDocketEntryInput, DocketFilters } from '../api/docket';
 import DocketForm from '../components/DocketForm';
 
 export default function Docket() {
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<DocketEntry | null>(null);
   const [deleteConfirmEntry, setDeleteConfirmEntry] = useState<DocketEntry | null>(null);
 
-  // Fetch docket entries
+  // Get filters from URL params
+  const dateFilter = searchParams.get('date') || '';
+  const courtroomFilter = searchParams.get('courtroom') || '';
+  const statusFilter = searchParams.get('status') || '';
+  const judgeFilter = searchParams.get('judge') || '';
+
+  // Update URL params when filters change
+  const updateFilter = useCallback((key: string, value: string) => {
+    const newParams = new URLSearchParams(searchParams);
+    if (value) {
+      newParams.set(key, value);
+    } else {
+      newParams.delete(key);
+    }
+    setSearchParams(newParams, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  // Build filters object for API
+  const filters: DocketFilters = {};
+  if (dateFilter) filters.date = dateFilter;
+  if (courtroomFilter) filters.courtroom = courtroomFilter;
+  if (statusFilter) filters.status = statusFilter;
+  if (judgeFilter) filters.judge = judgeFilter;
+
+  // Fetch docket entries with filters
   const { data, isLoading, error } = useQuery({
-    queryKey: ['docket'],
-    queryFn: () => docketApi.getAll(),
+    queryKey: ['docket', filters],
+    queryFn: () => docketApi.getAll(Object.keys(filters).length > 0 ? filters : undefined),
   });
 
   // Create entry mutation
@@ -141,6 +167,79 @@ export default function Docket() {
           </svg>
           Add Entry
         </button>
+      </div>
+
+      {/* Filters */}
+      <div className="bg-white shadow-sm rounded-lg p-4">
+        <div className="flex flex-wrap gap-4 items-end">
+          {/* Date Filter */}
+          <div>
+            <label htmlFor="date-filter" className="block text-sm font-medium text-gray-700 mb-1">
+              Hearing Date
+            </label>
+            <input
+              type="date"
+              id="date-filter"
+              value={dateFilter}
+              onChange={(e) => updateFilter('date', e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+            />
+          </div>
+
+          {/* Status Filter */}
+          <div>
+            <label htmlFor="status-filter" className="block text-sm font-medium text-gray-700 mb-1">
+              Status
+            </label>
+            <select
+              id="status-filter"
+              value={statusFilter}
+              onChange={(e) => updateFilter('status', e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+            >
+              <option value="">All Statuses</option>
+              <option value="scheduled">Scheduled</option>
+              <option value="in_progress">In Progress</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+              <option value="continued">Continued</option>
+              <option value="stricken">Stricken</option>
+              <option value="reserved">Reserved</option>
+            </select>
+          </div>
+
+          {/* Courtroom Filter */}
+          <div>
+            <label htmlFor="courtroom-filter" className="block text-sm font-medium text-gray-700 mb-1">
+              Courtroom
+            </label>
+            <input
+              type="text"
+              id="courtroom-filter"
+              value={courtroomFilter}
+              onChange={(e) => updateFilter('courtroom', e.target.value)}
+              placeholder="e.g., 321"
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary w-32"
+            />
+          </div>
+
+          {/* Clear Filters Button */}
+          {(dateFilter || statusFilter || courtroomFilter || judgeFilter) && (
+            <button
+              onClick={() => setSearchParams({})}
+              className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              Clear Filters
+            </button>
+          )}
+
+          {/* Filter Status Indicator */}
+          {(dateFilter || statusFilter || courtroomFilter) && (
+            <div className="text-sm text-gray-500 ml-auto">
+              Showing {entries.length} filtered {entries.length === 1 ? 'entry' : 'entries'}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Docket Table */}
