@@ -29,7 +29,7 @@ interface AuthenticatedRequest extends Request {
 
 // Environment variables
 const PORT = process.env.PORT || 3000;
-const CORS_ORIGIN = process.env.CORS_ORIGIN?.split(',') || ['http://localhost:5173', 'http://localhost:8080'];
+const CORS_ORIGIN = process.env.CORS_ORIGIN?.split(',') || ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:8080'];
 
 // Socket.io setup
 const io = new Server(httpServer, {
@@ -516,8 +516,8 @@ app.delete('/api/docket/:id', async (req: Request, res: Response) => {
 // Display-specific Endpoints
 // =========================================
 
-// GET /api/displays/:id/config - Get display configuration
-app.get('/api/displays/:id/config', async (req: Request, res: Response) => {
+// GET /api/displays/:id/config - Get display configuration (requires API key)
+app.get('/api/displays/:id/config', authenticateApiKey, async (req: ApiKeyRequest, res: Response) => {
   try {
     const display = await prisma.display.findUnique({
       where: { id: req.params.id }
@@ -526,6 +526,8 @@ app.get('/api/displays/:id/config', async (req: Request, res: Response) => {
     if (!display) {
       return res.status(404).json({ error: 'Display not found' });
     }
+
+    console.log(`[API] Display config fetched for: ${req.display?.name || req.params.id}`);
 
     res.json({
       id: display.id,
@@ -548,8 +550,8 @@ app.get('/api/displays/:id/config', async (req: Request, res: Response) => {
   }
 });
 
-// GET /api/displays/:id/docket - Get docket entries for a specific display
-app.get('/api/displays/:id/docket', async (req: Request, res: Response) => {
+// GET /api/displays/:id/docket - Get docket entries for a specific display (requires API key)
+app.get('/api/displays/:id/docket', authenticateApiKey, async (req: ApiKeyRequest, res: Response) => {
   try {
     const display = await prisma.display.findUnique({
       where: { id: req.params.id }
@@ -558,6 +560,8 @@ app.get('/api/displays/:id/docket', async (req: Request, res: Response) => {
     if (!display) {
       return res.status(404).json({ error: 'Display not found' });
     }
+
+    console.log(`[API] Display docket fetched for: ${req.display?.name || req.params.id}`);
 
     // Build filter based on display configuration
     const where: Record<string, unknown> = {};
@@ -844,6 +848,64 @@ const requireAdmin = (req: AuthenticatedRequest, res: Response, next: NextFuncti
     return res.status(403).json({ error: 'Admin access required' });
   }
   next();
+};
+
+// Interface for API key authenticated request
+interface ApiKeyRequest extends Request {
+  display?: {
+    id: string;
+    name: string;
+  };
+}
+
+// Middleware to authenticate display clients via X-API-Key header
+const authenticateApiKey = async (req: ApiKeyRequest, res: Response, next: NextFunction) => {
+  const apiKey = req.headers['x-api-key'] as string;
+
+  if (!apiKey) {
+    return res.status(401).json({ error: 'API key required. Use X-API-Key header.' });
+  }
+
+  try {
+    // The display ID is in the URL params
+    const displayId = req.params.id;
+
+    // Find the display
+    const display = await prisma.display.findUnique({
+      where: { id: displayId }
+    });
+
+    if (!display) {
+      return res.status(404).json({ error: 'Display not found' });
+    }
+
+    // Verify the API key matches
+    // The apiKeyHash stored is the plain key (from seed), so we compare directly
+    // In production, you'd hash the incoming key and compare hashes
+    if (display.apiKeyHash !== apiKey) {
+      return res.status(401).json({ error: 'Invalid API key' });
+    }
+
+    // Attach display info to request
+    req.display = {
+      id: display.id,
+      name: display.name
+    };
+
+    // Update last heartbeat for the display
+    await prisma.display.update({
+      where: { id: displayId },
+      data: {
+        lastHeartbeat: new Date(),
+        status: 'online'
+      }
+    });
+
+    next();
+  } catch (error) {
+    console.error('API key authentication error:', error);
+    return res.status(500).json({ error: 'Authentication failed' });
+  }
 };
 
 // GET /api/users - List all users (admin only)
