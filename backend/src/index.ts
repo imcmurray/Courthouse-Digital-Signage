@@ -831,6 +831,234 @@ app.post('/api/displays', async (req: Request, res: Response) => {
   }
 });
 
+// =========================================
+// User Management Endpoints (Admin Only)
+// =========================================
+
+// Middleware to check admin role
+const requireAdmin = (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  next();
+};
+
+// GET /api/users - List all users (admin only)
+app.get('/api/users', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const users = await prisma.user.findMany({
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+      orderBy: { name: 'asc' }
+    });
+
+    console.log(`[DB] SELECT from users - found ${users.length} records`);
+    res.json({ users, total: users.length });
+  } catch (error) {
+    console.error('Failed to fetch users:', error);
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
+
+// POST /api/users - Create a new user (admin only)
+app.post('/api/users', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { email, password, name, role } = req.body;
+
+    // Validate required fields
+    if (!email || !password || !name) {
+      return res.status(400).json({ error: 'Email, password, and name are required' });
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: 'Invalid email format' });
+    }
+
+    // Validate password length
+    if (password.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    }
+
+    // Validate role
+    const validRoles = ['admin', 'editor', 'viewer'];
+    const userRole = role || 'viewer';
+    if (!validRoles.includes(userRole)) {
+      return res.status(400).json({ error: 'Invalid role. Must be admin, editor, or viewer' });
+    }
+
+    // Hash password
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    // Create user
+    const user = await prisma.user.create({
+      data: {
+        email: email.toLowerCase(),
+        passwordHash,
+        name,
+        role: userRole,
+        isActive: true,
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+      }
+    });
+
+    console.log(`[DB] INSERT into users - created user: ${user.email}`);
+    res.status(201).json(user);
+  } catch (error: unknown) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002') {
+      return res.status(409).json({ error: 'A user with this email already exists' });
+    }
+    console.error('Failed to create user:', error);
+    res.status(500).json({ error: 'Failed to create user' });
+  }
+});
+
+// GET /api/users/:id - Get a single user (admin only)
+app.get('/api/users/:id', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.params.id },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+      }
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    console.log(`[DB] SELECT from users WHERE id = ${req.params.id}`);
+    res.json(user);
+  } catch (error) {
+    console.error('Failed to fetch user:', error);
+    res.status(500).json({ error: 'Failed to fetch user' });
+  }
+});
+
+// PUT /api/users/:id - Update a user (admin only)
+app.put('/api/users/:id', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { email, password, name, role, isActive } = req.body;
+
+    // Check if user exists
+    const existingUser = await prisma.user.findUnique({
+      where: { id: req.params.id }
+    });
+
+    if (!existingUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Build update data
+    const updateData: Record<string, unknown> = {};
+
+    if (email !== undefined) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({ error: 'Invalid email format' });
+      }
+      updateData.email = email.toLowerCase();
+    }
+
+    if (password !== undefined) {
+      if (password.length < 8) {
+        return res.status(400).json({ error: 'Password must be at least 8 characters' });
+      }
+      updateData.passwordHash = await bcrypt.hash(password, 10);
+    }
+
+    if (name !== undefined) updateData.name = name;
+
+    if (role !== undefined) {
+      const validRoles = ['admin', 'editor', 'viewer'];
+      if (!validRoles.includes(role)) {
+        return res.status(400).json({ error: 'Invalid role. Must be admin, editor, or viewer' });
+      }
+      updateData.role = role;
+    }
+
+    if (isActive !== undefined) updateData.isActive = isActive;
+
+    const user = await prisma.user.update({
+      where: { id: req.params.id },
+      data: updateData,
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+      }
+    });
+
+    console.log(`[DB] UPDATE users WHERE id = ${req.params.id}`);
+    res.json(user);
+  } catch (error: unknown) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002') {
+      return res.status(409).json({ error: 'A user with this email already exists' });
+    }
+    console.error('Failed to update user:', error);
+    res.status(500).json({ error: 'Failed to update user' });
+  }
+});
+
+// DELETE /api/users/:id - Deactivate a user (admin only)
+app.delete('/api/users/:id', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    // Check if user exists
+    const existingUser = await prisma.user.findUnique({
+      where: { id: req.params.id }
+    });
+
+    if (!existingUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Prevent deleting yourself
+    if (req.user?.userId === req.params.id) {
+      return res.status(400).json({ error: 'Cannot deactivate your own account' });
+    }
+
+    // Soft delete by setting isActive to false
+    await prisma.user.update({
+      where: { id: req.params.id },
+      data: { isActive: false }
+    });
+
+    console.log(`[DB] UPDATE users SET isActive=false WHERE id = ${req.params.id}`);
+    res.status(204).send();
+  } catch (error) {
+    console.error('Failed to deactivate user:', error);
+    res.status(500).json({ error: 'Failed to deactivate user' });
+  }
+});
+
 // Socket.io connection handling
 io.on('connection', (socket) => {
   console.log(`Client connected: ${socket.id}`);
