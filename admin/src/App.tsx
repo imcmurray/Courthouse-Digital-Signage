@@ -10,6 +10,7 @@ import Docket from './pages/Docket';
 import Users from './pages/Users';
 import Announcements from './pages/Announcements';
 import Displays from './pages/Displays';
+import ApiKeys from './pages/ApiKeys';
 
 const queryClient = new QueryClient();
 
@@ -97,10 +98,7 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={['admin']}>
                   <AdminLayout>
-                    <div className="bg-white p-6 rounded-lg shadow">
-                      <h2 className="text-xl font-semibold">API Key Management</h2>
-                      <p className="mt-2 text-gray-600">API key management will be implemented here.</p>
-                    </div>
+                    <ApiKeys />
                   </AdminLayout>
                 </ProtectedRoute>
               }

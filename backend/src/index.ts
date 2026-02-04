@@ -1427,6 +1427,175 @@ app.delete('/api/users/:id', authenticateToken, requireAdmin, async (req: Authen
   }
 });
 
+// =========================================
+// API Key Management Endpoints (Admin Only)
+// =========================================
+
+// GET /api/api-keys - List all API keys (admin only)
+app.get('/api/api-keys', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const apiKeys = await prisma.apiKey.findMany({
+      include: {
+        display: {
+          select: { id: true, name: true }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    // Never return the key hash, only the prefix for identification
+    const sanitizedKeys = apiKeys.map(key => ({
+      id: key.id,
+      name: key.name,
+      keyPrefix: key.keyPrefix,
+      permissions: JSON.parse(key.permissions),
+      displayId: key.displayId,
+      display: key.display,
+      expiresAt: key.expiresAt,
+      lastUsedAt: key.lastUsedAt,
+      createdAt: key.createdAt
+    }));
+
+    console.log(`[DB] SELECT from api_keys - found ${apiKeys.length} records`);
+    res.json({ apiKeys: sanitizedKeys, total: apiKeys.length });
+  } catch (error) {
+    console.error('Failed to fetch API keys:', error);
+    res.status(500).json({ error: 'Failed to fetch API keys' });
+  }
+});
+
+// POST /api/api-keys - Create a new API key (admin only)
+app.post('/api/api-keys', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { name, permissions, displayId, expiresAt } = req.body;
+
+    // Validate required fields
+    if (!name || typeof name !== 'string' || name.trim().length === 0) {
+      return res.status(400).json({ error: 'Name is required' });
+    }
+
+    // Validate permissions
+    const validPermissions = ['read', 'write', 'admin'];
+    let permissionsArray = permissions || ['read'];
+    if (!Array.isArray(permissionsArray)) {
+      permissionsArray = [permissionsArray];
+    }
+    for (const perm of permissionsArray) {
+      if (!validPermissions.includes(perm)) {
+        return res.status(400).json({ error: `Invalid permission: ${perm}. Valid permissions are: ${validPermissions.join(', ')}` });
+      }
+    }
+
+    // If displayId provided, verify display exists
+    if (displayId) {
+      const display = await prisma.display.findUnique({
+        where: { id: displayId }
+      });
+      if (!display) {
+        return res.status(400).json({ error: 'Display not found' });
+      }
+    }
+
+    // Generate API key
+    const apiKey = crypto.randomBytes(32).toString('hex');
+    const keyPrefix = apiKey.substring(0, 8);
+    const keyHash = await bcrypt.hash(apiKey, 10);
+
+    // Create API key record
+    const newApiKey = await prisma.apiKey.create({
+      data: {
+        name: name.trim(),
+        keyHash,
+        keyPrefix,
+        permissions: JSON.stringify(permissionsArray),
+        displayId: displayId || null,
+        expiresAt: expiresAt ? new Date(expiresAt) : null
+      },
+      include: {
+        display: {
+          select: { id: true, name: true }
+        }
+      }
+    });
+
+    console.log(`[DB] INSERT into api_keys - created id: ${newApiKey.id}`);
+
+    // Return the key details along with the plain API key (only shown once!)
+    res.status(201).json({
+      id: newApiKey.id,
+      name: newApiKey.name,
+      keyPrefix: newApiKey.keyPrefix,
+      permissions: permissionsArray,
+      displayId: newApiKey.displayId,
+      display: newApiKey.display,
+      expiresAt: newApiKey.expiresAt,
+      createdAt: newApiKey.createdAt,
+      apiKey: apiKey // Only returned on creation!
+    });
+  } catch (error) {
+    console.error('Failed to create API key:', error);
+    res.status(500).json({ error: 'Failed to create API key' });
+  }
+});
+
+// GET /api/api-keys/:id - Get a single API key (admin only)
+app.get('/api/api-keys/:id', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const apiKey = await prisma.apiKey.findUnique({
+      where: { id: req.params.id },
+      include: {
+        display: {
+          select: { id: true, name: true }
+        }
+      }
+    });
+
+    if (!apiKey) {
+      return res.status(404).json({ error: 'API key not found' });
+    }
+
+    console.log(`[DB] SELECT from api_keys WHERE id = ${req.params.id}`);
+    res.json({
+      id: apiKey.id,
+      name: apiKey.name,
+      keyPrefix: apiKey.keyPrefix,
+      permissions: JSON.parse(apiKey.permissions),
+      displayId: apiKey.displayId,
+      display: apiKey.display,
+      expiresAt: apiKey.expiresAt,
+      lastUsedAt: apiKey.lastUsedAt,
+      createdAt: apiKey.createdAt
+    });
+  } catch (error) {
+    console.error('Failed to fetch API key:', error);
+    res.status(500).json({ error: 'Failed to fetch API key' });
+  }
+});
+
+// DELETE /api/api-keys/:id - Revoke/delete an API key (admin only)
+app.delete('/api/api-keys/:id', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    // Check if API key exists
+    const existingKey = await prisma.apiKey.findUnique({
+      where: { id: req.params.id }
+    });
+
+    if (!existingKey) {
+      return res.status(404).json({ error: 'API key not found' });
+    }
+
+    await prisma.apiKey.delete({
+      where: { id: req.params.id }
+    });
+
+    console.log(`[DB] DELETE from api_keys WHERE id = ${req.params.id}`);
+    res.json({ success: true, message: 'API key revoked successfully' });
+  } catch (error) {
+    console.error('Failed to revoke API key:', error);
+    res.status(500).json({ error: 'Failed to revoke API key' });
+  }
+});
+
 // Socket.io connection handling
 io.on('connection', (socket) => {
   console.log(`Client connected: ${socket.id}`);
