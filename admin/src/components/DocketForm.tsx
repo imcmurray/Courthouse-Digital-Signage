@@ -8,8 +8,12 @@ import { DocketEntry, CreateDocketEntryInput, UpdateDocketEntryInput } from '../
 import { displaysApi, Display } from '../api/displays';
 import UnsavedChangesDialog from './UnsavedChangesDialog';
 
+const caseNumberRegex = /^(\d{2,4}-\d{1,6}|\d{4,})$/;
+
 const docketSchema = z.object({
-  caseNumber: z.string().min(1, 'Case number is required'),
+  caseNumber: z.string()
+    .min(1, 'Case number is required')
+    .regex(caseNumberRegex, 'Case number format invalid. Use format: YY-##### (e.g., 25-27186) or YYYY-##### (e.g., 2025-12345)'),
   caseTitle: z.string().min(1, 'Case title is required'),
   caseChapter: z.string().min(1, 'Chapter is required'),
   adversaryNumber: z.string().optional(),
