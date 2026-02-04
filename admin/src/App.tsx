@@ -21,7 +21,24 @@ function RootLayout() {
   return (
     <AuthProvider>
       <Outlet />
-      <Toaster position="top-right" />
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          // Default duration for success toasts
+          success: {
+            duration: 4000,
+          },
+          // Error toasts stay longer and have different styling
+          error: {
+            duration: 6000,
+            style: {
+              background: '#FEE2E2',
+              color: '#991B1B',
+              border: '1px solid #FECACA',
+            },
+          },
+        }}
+      />
       <SessionExpiredModal />
     </AuthProvider>
   );
