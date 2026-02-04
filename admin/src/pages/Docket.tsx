@@ -716,7 +716,14 @@ export default function Docket() {
 
         {entries.length === 0 && (
           <div className="text-center py-12 text-gray-500">
-            No docket entries found. Click "Add Entry" to create one.
+            {(searchFilter || dateFilter || statusFilter || courtroomFilter || judgeFilter) ? (
+              <>
+                <p className="text-lg font-medium text-gray-600 mb-2">No results found</p>
+                <p className="text-sm">Try different search terms or adjust your filters.</p>
+              </>
+            ) : (
+              'No docket entries found. Click "Add Entry" to create one.'
+            )}
           </div>
         )}
 
