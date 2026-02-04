@@ -662,29 +662,8 @@ app.put('/api/docket/:id', authenticateToken, async (req: AuthenticatedRequest, 
   }
 });
 
-// DELETE /api/docket/:id - Delete a docket entry
-app.delete('/api/docket/:id', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    await prisma.docketEntry.delete({
-      where: { id: req.params.id }
-    });
-
-    console.log(`[DB] DELETE from docket_entries WHERE id = ${req.params.id}`);
-
-    // Emit WebSocket event for real-time updates
-    io.emit('docket:update', {});
-
-    res.status(204).send();
-  } catch (error: unknown) {
-    if (error && typeof error === 'object' && 'code' in error && error.code === 'P2025') {
-      return res.status(404).json({ error: 'Docket entry not found' });
-    }
-    console.error('Failed to delete docket entry:', error);
-    res.status(500).json({ error: 'Failed to delete docket entry' });
-  }
-});
-
 // DELETE /api/docket/clear - Clear docket entries by date with optional archive
+// IMPORTANT: This route must come BEFORE /api/docket/:id to avoid matching "clear" as an id
 app.delete('/api/docket/clear', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { date, courtroom, archive } = req.body;
@@ -746,6 +725,28 @@ app.delete('/api/docket/clear', authenticateToken, requireAdmin, async (req: Aut
   } catch (error) {
     console.error('Failed to clear docket entries:', error);
     res.status(500).json({ error: 'Failed to clear docket entries' });
+  }
+});
+
+// DELETE /api/docket/:id - Delete a docket entry
+app.delete('/api/docket/:id', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    await prisma.docketEntry.delete({
+      where: { id: req.params.id }
+    });
+
+    console.log(`[DB] DELETE from docket_entries WHERE id = ${req.params.id}`);
+
+    // Emit WebSocket event for real-time updates
+    io.emit('docket:update', {});
+
+    res.status(204).send();
+  } catch (error: unknown) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'P2025') {
+      return res.status(404).json({ error: 'Docket entry not found' });
+    }
+    console.error('Failed to delete docket entry:', error);
+    res.status(500).json({ error: 'Failed to delete docket entry' });
   }
 });
 

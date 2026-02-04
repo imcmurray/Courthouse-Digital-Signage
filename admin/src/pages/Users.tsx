@@ -55,6 +55,18 @@ export default function Users() {
     },
   });
 
+  // Reactivate user mutation
+  const reactivateMutation = useMutation({
+    mutationFn: (id: string) => usersApi.update(id, { isActive: true }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      toast.success('User reactivated successfully');
+    },
+    onError: (error: { response?: { data?: { error?: string } } }) => {
+      toast.error(error.response?.data?.error || 'Failed to reactivate user');
+    },
+  });
+
   const handleCreate = (data: CreateUserInput) => {
     createMutation.mutate(data);
   };
@@ -189,12 +201,20 @@ export default function Users() {
                   >
                     Edit
                   </button>
-                  {user.isActive && (
+                  {user.isActive ? (
                     <button
                       onClick={() => setDeleteConfirmUser(user)}
                       className="text-red-600 hover:text-red-800"
                     >
                       Deactivate
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => reactivateMutation.mutate(user.id)}
+                      disabled={reactivateMutation.isPending}
+                      className="text-green-600 hover:text-green-800 disabled:opacity-50"
+                    >
+                      {reactivateMutation.isPending ? 'Reactivating...' : 'Reactivate'}
                     </button>
                   )}
                 </td>
