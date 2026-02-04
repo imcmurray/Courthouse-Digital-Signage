@@ -69,6 +69,64 @@ const authenticateToken = (req: AuthenticatedRequest, res: Response, next: NextF
   }
 };
 
+// Interface for API key authenticated request
+interface ApiKeyRequest extends Request {
+  display?: {
+    id: string;
+    name: string;
+  };
+}
+
+// Middleware to authenticate display clients via X-API-Key header
+const authenticateApiKey = async (req: ApiKeyRequest, res: Response, next: NextFunction) => {
+  const apiKey = req.headers['x-api-key'] as string;
+
+  if (!apiKey) {
+    return res.status(401).json({ error: 'API key required. Use X-API-Key header.' });
+  }
+
+  try {
+    // The display ID is in the URL params
+    const displayId = req.params.id;
+
+    // Find the display
+    const display = await prisma.display.findUnique({
+      where: { id: displayId }
+    });
+
+    if (!display) {
+      return res.status(404).json({ error: 'Display not found' });
+    }
+
+    // Verify the API key matches
+    // The apiKeyHash stored is the plain key (from seed), so we compare directly
+    // In production, you'd hash the incoming key and compare hashes
+    if (display.apiKeyHash !== apiKey) {
+      return res.status(401).json({ error: 'Invalid API key' });
+    }
+
+    // Attach display info to request
+    req.display = {
+      id: display.id,
+      name: display.name
+    };
+
+    // Update last heartbeat for the display
+    await prisma.display.update({
+      where: { id: displayId },
+      data: {
+        lastHeartbeat: new Date(),
+        status: 'online'
+      }
+    });
+
+    next();
+  } catch (error) {
+    console.error('API key authentication error:', error);
+    return res.status(500).json({ error: 'Authentication failed' });
+  }
+};
+
 // =========================================
 // Authentication Endpoints
 // =========================================
@@ -848,64 +906,6 @@ const requireAdmin = (req: AuthenticatedRequest, res: Response, next: NextFuncti
     return res.status(403).json({ error: 'Admin access required' });
   }
   next();
-};
-
-// Interface for API key authenticated request
-interface ApiKeyRequest extends Request {
-  display?: {
-    id: string;
-    name: string;
-  };
-}
-
-// Middleware to authenticate display clients via X-API-Key header
-const authenticateApiKey = async (req: ApiKeyRequest, res: Response, next: NextFunction) => {
-  const apiKey = req.headers['x-api-key'] as string;
-
-  if (!apiKey) {
-    return res.status(401).json({ error: 'API key required. Use X-API-Key header.' });
-  }
-
-  try {
-    // The display ID is in the URL params
-    const displayId = req.params.id;
-
-    // Find the display
-    const display = await prisma.display.findUnique({
-      where: { id: displayId }
-    });
-
-    if (!display) {
-      return res.status(404).json({ error: 'Display not found' });
-    }
-
-    // Verify the API key matches
-    // The apiKeyHash stored is the plain key (from seed), so we compare directly
-    // In production, you'd hash the incoming key and compare hashes
-    if (display.apiKeyHash !== apiKey) {
-      return res.status(401).json({ error: 'Invalid API key' });
-    }
-
-    // Attach display info to request
-    req.display = {
-      id: display.id,
-      name: display.name
-    };
-
-    // Update last heartbeat for the display
-    await prisma.display.update({
-      where: { id: displayId },
-      data: {
-        lastHeartbeat: new Date(),
-        status: 'online'
-      }
-    });
-
-    next();
-  } catch (error) {
-    console.error('API key authentication error:', error);
-    return res.status(500).json({ error: 'Authentication failed' });
-  }
 };
 
 // GET /api/users - List all users (admin only)

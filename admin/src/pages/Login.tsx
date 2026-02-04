@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -16,8 +16,12 @@ type LoginFormData = z.infer<typeof loginSchema>;
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login, isAuthenticated, isLoading } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Get the redirect path from state (set by ProtectedRoute)
+  const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/admin/dashboard';
 
   // All hooks must be called before any conditional returns
   const {
@@ -28,12 +32,12 @@ export default function Login() {
     resolver: zodResolver(loginSchema),
   });
 
-  // Redirect authenticated users to dashboard
+  // Redirect authenticated users to the originally requested page or dashboard
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
-      navigate('/admin/dashboard', { replace: true });
+      navigate(from, { replace: true });
     }
-  }, [isAuthenticated, isLoading, navigate]);
+  }, [isAuthenticated, isLoading, navigate, from]);
 
   // Show loading state while checking authentication
   if (isLoading) {
@@ -58,7 +62,7 @@ export default function Login() {
     try {
       await login(data.email, data.password);
       toast.success('Login successful!');
-      navigate('/admin/dashboard');
+      navigate(from, { replace: true });
     } catch (error: unknown) {
       // Extract error message from axios error response
       let errorMessage = 'Login failed. Please check your credentials.';
