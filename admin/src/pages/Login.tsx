@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -16,9 +16,10 @@ type LoginFormData = z.infer<typeof loginSchema>;
 
 export default function Login() {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, isAuthenticated, isLoading } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // All hooks must be called before any conditional returns
   const {
     register,
     handleSubmit,
@@ -27,6 +28,31 @@ export default function Login() {
     resolver: zodResolver(loginSchema),
   });
 
+  // Redirect authenticated users to dashboard
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) {
+      navigate('/admin/dashboard', { replace: true });
+    }
+  }, [isAuthenticated, isLoading, navigate]);
+
+  // Show loading state while checking authentication
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  // Don't render login form if already authenticated (will redirect via useEffect)
+  if (isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-gray-600">Redirecting to dashboard...</div>
+      </div>
+    );
+  }
+
   const onSubmit = async (data: LoginFormData) => {
     setIsSubmitting(true);
     try {
@@ -34,11 +60,21 @@ export default function Login() {
       toast.success('Login successful!');
       navigate('/admin/dashboard');
     } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error
-          ? error.message
-          : (error as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-            'Login failed. Please check your credentials.';
+      // Extract error message from axios error response
+      let errorMessage = 'Login failed. Please check your credentials.';
+
+      if (error && typeof error === 'object') {
+        const axiosError = error as { response?: { data?: { error?: string } }; message?: string };
+        if (axiosError.response?.data?.error) {
+          errorMessage = axiosError.response.data.error;
+        } else if (axiosError.message && !axiosError.message.includes('status code')) {
+          // Don't use generic axios messages like "Request failed with status code 401"
+          errorMessage = axiosError.message;
+        }
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+
       toast.error(errorMessage);
     } finally {
       setIsSubmitting(false);

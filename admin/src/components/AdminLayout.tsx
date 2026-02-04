@@ -84,6 +84,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
 
   const isActive = (path: string) => location.pathname === path;
 
+  // On mobile, always show labels when sidebar is open; on desktop, respect isSidebarOpen
+  const showLabels = isMobile ? true : isSidebarOpen;
+
   return (
     <div className="min-h-screen flex bg-gray-50">
       {/* Mobile overlay */}
@@ -124,7 +127,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                 />
               </svg>
             </div>
-            {isSidebarOpen && (
+            {showLabels && (
               <div>
                 <h1 className="font-bold text-lg">Court Signage</h1>
                 <p className="text-xs text-white/60">Admin Portal</p>
@@ -151,7 +154,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                 <svg className="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
                 </svg>
-                {isSidebarOpen && <span>{item.label}</span>}
+                {showLabels && <span>{item.label}</span>}
               </Link>
             ))}
 
@@ -159,7 +162,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           {user?.role === 'admin' && (
             <>
               <div className="pt-4 pb-2">
-                {isSidebarOpen && (
+                {showLabels && (
                   <span className="text-xs font-semibold text-white/50 uppercase tracking-wider">
                     Administration
                   </span>
@@ -178,7 +181,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                   <svg className="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
                   </svg>
-                  {isSidebarOpen && <span>{item.label}</span>}
+                  {showLabels && <span>{item.label}</span>}
                 </Link>
               ))}
             </>

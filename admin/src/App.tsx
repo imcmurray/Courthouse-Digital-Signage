@@ -6,6 +6,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import AdminLayout from './components/AdminLayout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
+import Docket from './pages/Docket';
 import Users from './pages/Users';
 
 const queryClient = new QueryClient();
@@ -38,10 +39,7 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={['admin', 'editor']}>
                   <AdminLayout>
-                    <div className="bg-white p-6 rounded-lg shadow">
-                      <h2 className="text-xl font-semibold">Docket Management</h2>
-                      <p className="mt-2 text-gray-600">Docket management will be implemented here.</p>
-                    </div>
+                    <Docket />
                   </AdminLayout>
                 </ProtectedRoute>
               }
@@ -52,10 +50,7 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={['admin', 'editor']}>
                   <AdminLayout>
-                    <div className="bg-white p-6 rounded-lg shadow">
-                      <h2 className="text-xl font-semibold">Add New Docket Entry</h2>
-                      <p className="mt-2 text-gray-600">New docket entry form will be implemented here.</p>
-                    </div>
+                    <Docket />
                   </AdminLayout>
                 </ProtectedRoute>
               }
