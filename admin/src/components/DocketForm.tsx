@@ -61,38 +61,47 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
     return date.toISOString().split('T')[0];
   };
 
+  // Define default values for reuse
+  const getDefaultValues = () => ({
+    caseNumber: entry?.caseNumber || '',
+    caseTitle: entry?.caseTitle || '',
+    caseChapter: entry?.caseChapter || '7',
+    adversaryNumber: entry?.adversaryNumber || '',
+    adversaryTitle: entry?.adversaryTitle || '',
+    hearingDate: formatDateForInput(entry?.hearingDate) || new Date().toISOString().split('T')[0],
+    hearingTime: entry?.hearingTime || '09:00',
+    hearingMatter: entry?.hearingMatter || '',
+    hearingJudge: entry?.hearingJudge || '',
+    courtroom: entry?.courtroom || '',
+    movingParty: entry?.movingParty || '',
+    opposingParty: entry?.opposingParty || '',
+    trustee: entry?.trustee || '',
+    isZoom: entry?.isZoom || false,
+    zoomMeetingId: entry?.zoomMeetingId || '',
+    zoomPasscode: entry?.zoomPasscode || '',
+    zoomPhone: entry?.zoomPhone || '',
+    status: entry?.status || 'scheduled',
+    statusNote: entry?.statusNote || '',
+    comment: entry?.comment || '',
+    displayIds: [],
+  });
+
   const {
     register,
     handleSubmit,
     watch,
     setValue,
+    reset,
     formState: { errors, isDirty },
   } = useForm<DocketFormData>({
     resolver: zodResolver(docketSchema),
-    defaultValues: {
-      caseNumber: entry?.caseNumber || '',
-      caseTitle: entry?.caseTitle || '',
-      caseChapter: entry?.caseChapter || '7',
-      adversaryNumber: entry?.adversaryNumber || '',
-      adversaryTitle: entry?.adversaryTitle || '',
-      hearingDate: formatDateForInput(entry?.hearingDate) || new Date().toISOString().split('T')[0],
-      hearingTime: entry?.hearingTime || '09:00',
-      hearingMatter: entry?.hearingMatter || '',
-      hearingJudge: entry?.hearingJudge || '',
-      courtroom: entry?.courtroom || '',
-      movingParty: entry?.movingParty || '',
-      opposingParty: entry?.opposingParty || '',
-      trustee: entry?.trustee || '',
-      isZoom: entry?.isZoom || false,
-      zoomMeetingId: entry?.zoomMeetingId || '',
-      zoomPasscode: entry?.zoomPasscode || '',
-      zoomPhone: entry?.zoomPhone || '',
-      status: entry?.status || 'scheduled',
-      statusNote: entry?.statusNote || '',
-      comment: entry?.comment || '',
-      displayIds: [],
-    },
+    defaultValues: getDefaultValues(),
   });
+
+  // Handle form reset to defaults
+  const handleReset = () => {
+    reset(getDefaultValues());
+  };
 
   const isZoom = watch('isZoom');
   const selectedDisplayIds = watch('displayIds') || [];
@@ -530,6 +539,14 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
               className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
             >
               Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleReset}
+              disabled={!isDirty}
+              className="px-4 py-2 text-gray-700 bg-amber-100 rounded-lg hover:bg-amber-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Reset
             </button>
             <button
               type="submit"
