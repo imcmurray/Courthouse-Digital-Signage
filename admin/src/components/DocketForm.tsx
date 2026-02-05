@@ -211,7 +211,7 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
                 />
                 {errors.caseNumber && (
-                  <p className="mt-1 text-sm text-red-600">{errors.caseNumber.message}</p>
+                  <p className="mt-1 text-sm text-red-600" role="alert">{errors.caseNumber.message}</p>
                 )}
               </div>
 
@@ -227,7 +227,7 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
                 />
                 {errors.caseTitle && (
-                  <p className="mt-1 text-sm text-red-600">{errors.caseTitle.message}</p>
+                  <p className="mt-1 text-sm text-red-600" role="alert">{errors.caseTitle.message}</p>
                 )}
               </div>
 
@@ -245,7 +245,7 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
                   <option value="13">Chapter 13</option>
                 </select>
                 {errors.caseChapter && (
-                  <p className="mt-1 text-sm text-red-600">{errors.caseChapter.message}</p>
+                  <p className="mt-1 text-sm text-red-600" role="alert">{errors.caseChapter.message}</p>
                 )}
               </div>
             </div>
@@ -294,7 +294,7 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
                 />
                 {errors.hearingDate && (
-                  <p className="mt-1 text-sm text-red-600">{errors.hearingDate.message}</p>
+                  <p className="mt-1 text-sm text-red-600" role="alert">{errors.hearingDate.message}</p>
                 )}
               </div>
 
@@ -309,7 +309,7 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
                 />
                 {errors.hearingTime && (
-                  <p className="mt-1 text-sm text-red-600">{errors.hearingTime.message}</p>
+                  <p className="mt-1 text-sm text-red-600" role="alert">{errors.hearingTime.message}</p>
                 )}
               </div>
 
@@ -325,7 +325,7 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
                 />
                 {errors.hearingJudge && (
-                  <p className="mt-1 text-sm text-red-600">{errors.hearingJudge.message}</p>
+                  <p className="mt-1 text-sm text-red-600" role="alert">{errors.hearingJudge.message}</p>
                 )}
               </div>
 
@@ -355,7 +355,7 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
               />
               {errors.hearingMatter && (
-                <p className="mt-1 text-sm text-red-600">{errors.hearingMatter.message}</p>
+                <p className="mt-1 text-sm text-red-600" role="alert">{errors.hearingMatter.message}</p>
               )}
             </div>
           </div>

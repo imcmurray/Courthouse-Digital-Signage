@@ -93,7 +93,7 @@ export default function UserForm({ user, onSubmit, onClose, isLoading }: UserFor
               placeholder="John Doe"
             />
             {errors.name && (
-              <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>
+              <p className="mt-1 text-sm text-red-600" role="alert">{errors.name.message}</p>
             )}
           </div>
 
@@ -112,7 +112,7 @@ export default function UserForm({ user, onSubmit, onClose, isLoading }: UserFor
               placeholder="user@courthouse.gov"
             />
             {errors.email && (
-              <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
+              <p className="mt-1 text-sm text-red-600" role="alert">{errors.email.message}</p>
             )}
           </div>
 
@@ -131,7 +131,7 @@ export default function UserForm({ user, onSubmit, onClose, isLoading }: UserFor
               placeholder={isEditing ? '••••••••' : 'Minimum 8 characters'}
             />
             {errors.password && (
-              <p className="mt-1 text-sm text-red-600">{errors.password.message}</p>
+              <p className="mt-1 text-sm text-red-600" role="alert">{errors.password.message}</p>
             )}
           </div>
 
@@ -152,7 +152,7 @@ export default function UserForm({ user, onSubmit, onClose, isLoading }: UserFor
               <option value="admin">Admin - Full access including user management</option>
             </select>
             {errors.role && (
-              <p className="mt-1 text-sm text-red-600">{errors.role.message}</p>
+              <p className="mt-1 text-sm text-red-600" role="alert">{errors.role.message}</p>
             )}
           </div>
 

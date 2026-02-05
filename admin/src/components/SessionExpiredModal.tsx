@@ -136,7 +136,7 @@ export default function SessionExpiredModal({ onSessionRestored }: SessionExpire
                 placeholder="admin@courthouse.gov"
               />
               {errors.email && (
-                <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
+                <p className="mt-1 text-sm text-red-600" role="alert">{errors.email.message}</p>
               )}
             </div>
 
@@ -155,7 +155,7 @@ export default function SessionExpiredModal({ onSessionRestored }: SessionExpire
                 placeholder="Enter your password"
               />
               {errors.password && (
-                <p className="mt-1 text-sm text-red-600">{errors.password.message}</p>
+                <p className="mt-1 text-sm text-red-600" role="alert">{errors.password.message}</p>
               )}
             </div>
 

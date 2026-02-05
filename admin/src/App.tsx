@@ -27,14 +27,22 @@ function RootLayout() {
           // Default duration for success toasts
           success: {
             duration: 4000,
+            ariaProps: {
+              role: 'status',
+              'aria-live': 'polite',
+            },
           },
-          // Error toasts stay longer and have different styling
+          // Error toasts stay longer, have different styling, and use assertive aria-live
           error: {
             duration: 6000,
             style: {
               background: '#FEE2E2',
               color: '#991B1B',
               border: '1px solid #FECACA',
+            },
+            ariaProps: {
+              role: 'alert',
+              'aria-live': 'assertive',
             },
           },
         }}
