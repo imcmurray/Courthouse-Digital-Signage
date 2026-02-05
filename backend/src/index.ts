@@ -72,7 +72,8 @@ app.use((req, res, next) => {
 // =========================================
 const authenticateToken = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+  // Support token from Authorization header OR query parameter (for file downloads)
+  const token = (authHeader && authHeader.split(' ')[1]) || (req.query.token as string);
 
   if (!token) {
     return res.status(401).json({ error: 'Access token required' });
