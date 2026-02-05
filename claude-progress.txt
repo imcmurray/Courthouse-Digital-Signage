@@ -1510,3 +1510,35 @@
 
 ### Git Commits This Session:
 - f4a6a70: feat: Fix timezone handling in display docket filter and verify display filters work (Feature #150)
+
+## Session: 2026-02-05 (Agent Feature #154)
+
+### Completed Features This Session:
+
+- **Feature #154: Current hearing highlighted on display** ✅ PASSING
+  - Used existing in_progress entry (133-99999 Zoom hearing) to verify highlighting
+  - Display client correctly applies "current" CSS class to in_progress entries
+  - JavaScript logic: `if (entry.status === 'in_progress') classes.push('current')`
+  - CSS styling verified:
+    - Green gradient background: `linear-gradient(90deg, rgb(74, 122, 58), rgb(58, 106, 42))`
+    - Yellow border: `2px solid rgb(255, 215, 0)`
+  - Highlight clearly distinguishes from standard blue gradient rows
+  - Changed status from "in_progress" to "completed"
+  - Verified highlight removed after status change (row returns to blue gradient)
+  - Screenshots taken for each verification step
+  - Zero console errors during testing
+  - No mock data patterns found in codebase
+
+### Technical Notes:
+- Display client CSS: `.docket-table tbody tr.current` applies highlighting styles
+- JavaScript in display.js line 213 handles status-based class assignment
+- Highlighting works via CSS `!important` override on background property
+- Real-time updates via WebSocket propagate status changes
+
+### Current Status:
+- 152/155 features passing (98.1%)
+- Feature #154 (Current hearing highlighted on display) complete
+
+### Git Commits This Session:
+- 0d9f833: feat: Verify current hearing highlighted on display (Feature #154)
+
