@@ -109,6 +109,16 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
 
   const isZoom = watch('isZoom');
   const selectedDisplayIds = watch('displayIds') || [];
+  const hearingDate = watch('hearingDate');
+
+  // Check if hearing date is in the past
+  const isPastDate = () => {
+    if (!hearingDate) return false;
+    const selected = new Date(hearingDate + 'T00:00:00');
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return selected < today;
+  };
 
   // Block navigation when form is dirty
   const blocker = useBlocker(
@@ -295,6 +305,11 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
                 />
                 {errors.hearingDate && (
                   <p className="mt-1 text-sm text-red-600" role="alert">{errors.hearingDate.message}</p>
+                )}
+                {!errors.hearingDate && isPastDate() && (
+                  <p className="mt-1 text-sm text-amber-600" role="status">
+                    ⚠️ Warning: This date is in the past
+                  </p>
                 )}
               </div>
 
