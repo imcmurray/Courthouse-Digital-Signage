@@ -1447,3 +1447,36 @@
 ### Git Commits This Session:
 - 775f935: feat: Verify deep link to specific docket date works (Feature #147)
 
+
+## Session: 2026-02-05 (Agent Feature #151)
+
+### Completed Features This Session:
+
+- **Feature #151: WebSocket reconnects after disconnect** ✅ PASSING
+  - Opened display client with proper API key authentication
+  - Verified WebSocket connected (console log: "WebSocket connected")
+  - Killed backend server process to simulate disconnect
+  - Verified WebSocket disconnected message appeared
+  - Server auto-restarted via tsx watch
+  - Verified WebSocket auto-reconnected (console log: "WebSocket connected" again)
+  - Verified display resumed receiving real-time updates:
+    - "Docket update received" (multiple events)
+    - "New announcement received"
+    - "Announcement removed"
+  - No user intervention required - Socket.io handles reconnection automatically
+  - Zero console errors (only expected fetch errors during brief downtime)
+  - No mock data patterns found in codebase
+
+### Technical Notes:
+- Socket.io has built-in auto-reconnection enabled by default
+- Reconnection settings: reconnection=true, reconnectionAttempts=Infinity
+- Default reconnection delay: 1 second, max 5 seconds
+- Display client at display/js/display.js uses io(CONFIG.apiBaseUrl)
+- Server restarts handled transparently - clients reconnect automatically
+
+### Current Status:
+- 152/155 features passing (98.1%)
+- Feature #151 (WebSocket reconnects after disconnect) complete
+
+### Git Commits This Session:
+- df0241b: feat: Verify WebSocket auto-reconnect after server restart (Feature #151)
