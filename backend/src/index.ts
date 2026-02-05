@@ -2,11 +2,13 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import crypto from 'crypto';
 import path from 'path';
+import fs from 'fs';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import multer from 'multer';
 
 const app = express();
 const httpServer = createServer(app);
@@ -32,6 +34,43 @@ interface AuthenticatedRequest extends Request {
 // Environment variables
 const PORT = process.env.PORT || 3000;
 const CORS_ORIGIN = process.env.CORS_ORIGIN?.split(',') || ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:5176', 'http://localhost:5177', 'http://localhost:5178', 'http://localhost:5179', 'http://localhost:5180', 'http://localhost:5181', 'http://localhost:5182', 'http://localhost:5183', 'http://localhost:5184', 'http://localhost:5185', 'http://localhost:8080', 'http://127.0.0.1:5173', 'http://127.0.0.1:5174', 'http://127.0.0.1:5175', 'http://127.0.0.1:5176', 'http://127.0.0.1:5177', 'http://127.0.0.1:5178', 'http://127.0.0.1:5179', 'http://127.0.0.1:5180', 'http://127.0.0.1:8080'];
+
+// Uploads directory setup
+const UPLOADS_DIR = path.join(__dirname, '../../uploads');
+if (!fs.existsSync(UPLOADS_DIR)) {
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+}
+
+// Multer configuration for file uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, UPLOADS_DIR);
+  },
+  filename: (req, file, cb) => {
+    // Generate unique filename with original extension
+    const ext = path.extname(file.originalname).toLowerCase();
+    const filename = `court-logo-${Date.now()}${ext}`;
+    cb(null, filename);
+  }
+});
+
+const fileFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+  // Accept only PNG and SVG files
+  const allowedTypes = ['image/png', 'image/svg+xml'];
+  if (allowedTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Only PNG and SVG files are allowed'));
+  }
+};
+
+const upload = multer({
+  storage,
+  fileFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+  }
+});
 
 // Socket.io setup
 const io = new Server(httpServer, {
@@ -1060,6 +1099,18 @@ app.get('/api/displays/:id/config', authenticateApiKey, async (req: ApiKeyReques
       return res.status(404).json({ error: 'Display not found' });
     }
 
+    // Fetch global settings for court name, subtitle, and logo
+    const settings = await prisma.setting.findMany({
+      where: {
+        key: { in: ['court_name', 'court_subtitle', 'timezone', 'court_logo'] }
+      }
+    });
+
+    const settingsMap: Record<string, string> = {};
+    for (const setting of settings) {
+      settingsMap[setting.key] = JSON.parse(setting.value);
+    }
+
     console.log(`[API] Display config fetched for: ${req.display?.name || req.params.id}`);
 
     res.json({
@@ -1075,7 +1126,12 @@ app.get('/api/displays/:id/config', authenticateApiKey, async (req: ApiKeyReques
       showZoomInfo: display.showZoomInfo,
       highlightCurrent: display.highlightCurrent,
       theme: display.theme,
-      columns: JSON.parse(display.columns)
+      columns: JSON.parse(display.columns),
+      // Global settings
+      courtName: settingsMap.court_name || 'U.S. Bankruptcy Court',
+      courtSubtitle: settingsMap.court_subtitle || 'District of Utah',
+      timezone: settingsMap.timezone || 'America/Denver',
+      courtLogo: settingsMap.court_logo || null
     });
   } catch (error) {
     console.error('Failed to fetch display config:', error);
@@ -2080,6 +2136,203 @@ app.get('/api/audit-logs/export', authenticateToken, requireAdmin, async (req: A
     res.status(500).json({ error: 'Failed to export audit logs' });
   }
 });
+
+// =========================================
+// Settings Endpoints
+// =========================================
+
+// GET /api/settings - Get all settings
+app.get('/api/settings', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const settings = await prisma.setting.findMany({
+      include: {
+        updatedBy: {
+          select: { id: true, name: true, email: true }
+        }
+      }
+    });
+
+    // Transform settings array to a more usable object format
+    const settingsObject: Record<string, unknown> = {};
+    const settingsMetadata: Record<string, { updatedAt: Date; updatedBy: { name: string | null } | null }> = {};
+
+    for (const setting of settings) {
+      settingsObject[setting.key] = JSON.parse(setting.value);
+      settingsMetadata[setting.key] = {
+        updatedAt: setting.updatedAt,
+        updatedBy: setting.updatedBy
+      };
+    }
+
+    console.log(`[DB] SELECT from settings - found ${settings.length} records`);
+    res.json({ settings: settingsObject, metadata: settingsMetadata });
+  } catch (error) {
+    console.error('Failed to fetch settings:', error);
+    res.status(500).json({ error: 'Failed to fetch settings' });
+  }
+});
+
+// PUT /api/settings - Update settings (admin only)
+app.put('/api/settings', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { settings } = req.body;
+
+    if (!settings || typeof settings !== 'object') {
+      return res.status(400).json({ error: 'Settings object is required' });
+    }
+
+    // Valid settings keys that can be updated
+    const validKeys = ['court_name', 'court_subtitle', 'timezone', 'default_theme'];
+
+    // Update each setting
+    const updatedSettings: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(settings)) {
+      if (!validKeys.includes(key)) {
+        continue; // Skip invalid keys
+      }
+
+      await prisma.setting.upsert({
+        where: { key },
+        update: {
+          value: JSON.stringify(value),
+          updatedById: req.user?.userId || null
+        },
+        create: {
+          key,
+          value: JSON.stringify(value),
+          updatedById: req.user?.userId || null
+        }
+      });
+      updatedSettings[key] = value;
+    }
+
+    console.log(`[DB] UPDATE settings - updated ${Object.keys(updatedSettings).length} records`);
+
+    // Create audit log for settings change
+    await createAuditLog('update', 'settings', null, req.user?.userId || null, updatedSettings);
+
+    // Emit WebSocket event for real-time updates (displays may need to refresh)
+    io.emit('settings:update', { settings: updatedSettings });
+
+    res.json({
+      message: 'Settings updated successfully',
+      settings: updatedSettings
+    });
+  } catch (error) {
+    console.error('Failed to update settings:', error);
+    res.status(500).json({ error: 'Failed to update settings' });
+  }
+});
+
+// POST /api/settings/logo - Upload court logo (admin only)
+app.post('/api/settings/logo', authenticateToken, requireAdmin, upload.single('logo'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const logoPath = `/uploads/${req.file.filename}`;
+
+    // Delete old logo if exists
+    const existingLogo = await prisma.setting.findUnique({
+      where: { key: 'court_logo' }
+    });
+
+    if (existingLogo) {
+      try {
+        const oldPath = JSON.parse(existingLogo.value);
+        const oldFilePath = path.join(__dirname, '../..', oldPath);
+        if (fs.existsSync(oldFilePath)) {
+          fs.unlinkSync(oldFilePath);
+        }
+      } catch (e) {
+        console.warn('Could not delete old logo:', e);
+      }
+    }
+
+    // Save new logo path to settings
+    await prisma.setting.upsert({
+      where: { key: 'court_logo' },
+      update: {
+        value: JSON.stringify(logoPath),
+        updatedById: req.user?.userId || null
+      },
+      create: {
+        key: 'court_logo',
+        value: JSON.stringify(logoPath),
+        updatedById: req.user?.userId || null
+      }
+    });
+
+    console.log(`[DB] UPSERT setting court_logo = ${logoPath}`);
+
+    // Create audit log
+    await createAuditLog('upload', 'settings', null, req.user?.userId || null, { court_logo: logoPath });
+
+    // Emit WebSocket event
+    io.emit('settings:update', { court_logo: logoPath });
+
+    res.json({
+      message: 'Logo uploaded successfully',
+      logo: logoPath,
+      filename: req.file.filename
+    });
+  } catch (error) {
+    console.error('Failed to upload logo:', error);
+    // Clean up uploaded file on error
+    if (req.file) {
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (e) {
+        console.warn('Could not delete failed upload:', e);
+      }
+    }
+    res.status(500).json({ error: 'Failed to upload logo' });
+  }
+});
+
+// DELETE /api/settings/logo - Remove court logo (admin only)
+app.delete('/api/settings/logo', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const existingLogo = await prisma.setting.findUnique({
+      where: { key: 'court_logo' }
+    });
+
+    if (existingLogo) {
+      // Delete file from disk
+      try {
+        const logoPath = JSON.parse(existingLogo.value);
+        const filePath = path.join(__dirname, '../..', logoPath);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      } catch (e) {
+        console.warn('Could not delete logo file:', e);
+      }
+
+      // Remove from database
+      await prisma.setting.delete({
+        where: { key: 'court_logo' }
+      });
+
+      console.log('[DB] DELETE setting court_logo');
+
+      // Create audit log
+      await createAuditLog('delete', 'settings', null, req.user?.userId || null, { court_logo: 'removed' });
+
+      // Emit WebSocket event
+      io.emit('settings:update', { court_logo: null });
+    }
+
+    res.json({ message: 'Logo removed successfully' });
+  } catch (error) {
+    console.error('Failed to remove logo:', error);
+    res.status(500).json({ error: 'Failed to remove logo' });
+  }
+});
+
+// Serve uploaded files
+app.use('/uploads', express.static(UPLOADS_DIR));
 
 // Socket.io connection handling
 io.on('connection', (socket) => {
