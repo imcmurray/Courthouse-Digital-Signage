@@ -1480,3 +1480,33 @@
 
 ### Git Commits This Session:
 - df0241b: feat: Verify WebSocket auto-reconnect after server restart (Feature #151)
+
+## Session: 2026-02-05 (Agent Feature #150)
+
+### Completed Features This Session:
+
+- **Feature #150: Display configuration filter filters docket entries** ✅ PASSING
+  - Created test docket entries: 2 for Judge Smith, 2 for Judge Jones
+  - Fixed timezone bug in display docket API: changed date comparison from local time to UTC
+  - Tested judge filter with display-f150-judge-test (judgeFilter="Smith"):
+    - API returned only 2 Smith entries, Jones entries correctly filtered out
+    - Verified in display client UI - only Smith entries shown
+  - Tested courtroom filter with display-321-main (courtroomFilter="321"):
+    - API returned only entries with courtroom="321"
+    - Verified in display client UI - only Courtroom 321 entries shown
+  - Screenshots taken for both filters showing correct filtering
+  - Zero console errors during testing
+  - No mock data patterns found in codebase
+
+### Technical Notes:
+- Fixed bug: Date comparison used local timezone, but database stores dates in UTC
+- Changed from `new Date().setHours(0,0,0,0)` (local) to `Date.UTC()` (UTC)
+- Display filters (judgeFilter, courtroomFilter, chapterFilter) applied in backend
+- Filters work correctly for both API calls and display client rendering
+
+### Current Status:
+- 152/155 features passing (98.1%)
+- Feature #150 (Display configuration filter filters docket entries) complete
+
+### Git Commits This Session:
+- f4a6a70: feat: Fix timezone handling in display docket filter and verify display filters work (Feature #150)
