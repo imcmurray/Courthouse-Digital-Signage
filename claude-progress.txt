@@ -1317,3 +1317,55 @@
 
 ### Git Commits This Session:
 - 9cf3bd5: feat: Verify audit log export works (Feature #124)
+
+## Session: 2026-02-05 (Agent Batch #132, #133, #134)
+
+### Completed Features This Session:
+
+- **Feature #132: Stricken entries show strikethrough styling** ✅ PASSING
+  - Updated stricken entry (132-54321) to display on today's date
+  - Display client CSS already had proper styling:
+    - `.stricken` class adds `text-decoration: line-through`
+    - `.stricken` class sets color to `--stricken-gray` (#999999)
+  - JavaScript render code applies "stricken" class for status='stricken'
+  - Verified via browser automation:
+    - Row has stricken class: true
+    - Text decoration: line-through
+    - Color: rgb(153, 153, 153) - grayed out
+  - Entry still visible but clearly marked as stricken
+  - Zero console errors
+
+- **Feature #133: Zoom hearing shows connection info** ✅ PASSING
+  - Verified existing Zoom entry (133-99999) with status="in_progress"
+  - Display client shows Zoom info bar at top:
+    - "Zoom" icon/label indicator
+    - Meeting ID: 987 654 3210
+    - Passcode: zoom133
+    - Phone: +1 (801) 555-0133
+  - Zoom info only shows for in_progress Zoom hearings
+  - Zero console errors
+
+- **Feature #134: Notice banner displays configured text** ✅ PASSING
+  - Verified notice banner at bottom of display client
+  - Yellow background (#FFD700) confirmed
+  - Phone icon displays ("No Phones" label)
+  - Changed notice text in admin: "PERSIST_NOTICE_TEST" → "Please silence your phones"
+  - After refresh, new text displayed correctly
+  - Text is readable and configurable via admin Displays page
+  - Zero console errors
+
+### Technical Notes:
+- Display client requires API key via URL param: ?apiKey=...
+- Regenerated API key for display-default during testing
+- Display client fetches docket entries filtered by today's date
+- Display configuration includes: showStricken, showZoomInfo, noticeText
+- All features were already implemented - just needed verification
+
+### Current Status:
+- 139/155 features passing (89.7%)
+- All 3 assigned Display Client features (#132, #133, #134) complete
+
+### Git Commits This Session:
+- a298e48: feat: Verify stricken entries show strikethrough styling (Feature #132)
+- 54fac87: feat: Verify Zoom hearing shows connection info (Feature #133)
+- 04c813b: feat: Verify notice banner displays configured text (Feature #134)
