@@ -141,6 +141,11 @@ html, body {
   font-size: 24px;
 }
 
+.date {
+  font-size: 18px;
+  margin-top: 2px;
+}
+
 /* Zoom Info Box */
 .zoom-info {
   background-color: #4A90D9;

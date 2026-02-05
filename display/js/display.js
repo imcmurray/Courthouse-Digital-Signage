@@ -68,6 +68,7 @@
     const now = new Date();
     const timeEl = document.getElementById('time');
     const dayEl = document.getElementById('day');
+    const dateEl = document.getElementById('date');
 
     if (timeEl) {
       timeEl.textContent = now.toLocaleTimeString('en-US', {
@@ -80,6 +81,14 @@
     if (dayEl) {
       dayEl.textContent = now.toLocaleDateString('en-US', {
         weekday: 'long',
+      });
+    }
+
+    if (dateEl) {
+      dateEl.textContent = now.toLocaleDateString('en-US', {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
       });
     }
   }
