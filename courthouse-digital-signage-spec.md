@@ -2,9 +2,28 @@
 ## Product Specification for the Frank E. Moss U.S. Courthouse
 ### U.S. Bankruptcy Court for the District of Utah
 
-**Version:** 1.0  
-**Date:** February 3, 2026  
+**Version:** 1.0
+**Date:** February 3, 2026
 **Author:** IT Department
+
+---
+
+## About This Document
+
+This specification was collaboratively developed through a conversation with Claude AI. The original discussion that produced this document can be viewed here:
+
+**Initial Claude Conversation:** [https://claude.ai/share/293bda45-ac1c-4525-9828-efbfa2c98d3c](https://claude.ai/share/293bda45-ac1c-4525-9828-efbfa2c98d3c)
+
+### How This Spec Was Used
+
+This specification document was fed into [AutoForge](https://github.com/AutoForgeAI/autoforge) (formerly known as AutoCoder), an autonomous AI coding agent. AutoForge used this detailed spec to automatically generate the complete codebase for the courthouse digital signage system, including:
+
+- The Node.js/Express backend API with Prisma ORM
+- The React-based admin portal for content management
+- The HTML5 display client for courtroom signage
+- Database schema, authentication, and real-time WebSocket updates
+
+The combination of a comprehensive spec document and autonomous code generation enabled rapid development of a fully functional application.
 
 ---
 
