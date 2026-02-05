@@ -65,3 +65,7 @@ features.db
 
 # Playwright MCP screenshots
 .playwright-mcp/
+
+# Development screenshots
+dev_screenshots/
+/*.png
