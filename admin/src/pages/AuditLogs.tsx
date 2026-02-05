@@ -7,6 +7,48 @@ export default function AuditLogs() {
     limit: 50,
     offset: 0,
   });
+  const [isExporting, setIsExporting] = useState(false);
+
+  // Export audit logs
+  const handleExport = async (format: 'csv' | 'json') => {
+    setIsExporting(true);
+    try {
+      const token = localStorage.getItem('auth_token');
+      const params = new URLSearchParams();
+      params.set('format', format);
+      if (filters.action) params.set('action', filters.action);
+      if (filters.entityType) params.set('entityType', filters.entityType);
+      if (filters.startDate) params.set('startDate', filters.startDate);
+      if (filters.endDate) params.set('endDate', filters.endDate);
+
+      // Use fetch to download the file
+      const response = await fetch(`http://localhost:3000/api/audit-logs/export?${params.toString()}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Export failed');
+      }
+
+      // Get the blob and download it
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `audit-logs-export.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('Export failed:', error);
+      alert('Failed to export audit logs');
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   // Fetch audit logs
   const { data, isLoading, error } = useQuery({
@@ -88,6 +130,28 @@ export default function AuditLogs() {
           <p className="mt-1 text-sm text-gray-500">
             View all system activity and changes.
           </p>
+        </div>
+        <div className="flex space-x-2">
+          <button
+            onClick={() => handleExport('csv')}
+            disabled={isExporting}
+            className="flex items-center px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 disabled:opacity-50 transition-colors"
+          >
+            <svg className="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            {isExporting ? 'Exporting...' : 'Export CSV'}
+          </button>
+          <button
+            onClick={() => handleExport('json')}
+            disabled={isExporting}
+            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+          >
+            <svg className="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            {isExporting ? 'Exporting...' : 'Export JSON'}
+          </button>
         </div>
       </div>
 

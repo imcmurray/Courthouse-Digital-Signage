@@ -1911,6 +1911,75 @@ app.get('/api/audit-logs', authenticateToken, requireAdmin, async (req: Authenti
   }
 });
 
+// GET /api/audit-logs/export - Export audit logs as CSV or JSON
+app.get('/api/audit-logs/export', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { action, entityType, userId, startDate, endDate, format = 'csv' } = req.query;
+
+    // Build filter conditions (same as listing)
+    const where: Record<string, unknown> = {};
+    if (action) where.action = action;
+    if (entityType) where.entityType = entityType;
+    if (userId) where.userId = userId;
+    if (startDate || endDate) {
+      where.createdAt = {};
+      if (startDate) {
+        (where.createdAt as Record<string, unknown>).gte = new Date(startDate as string);
+      }
+      if (endDate) {
+        (where.createdAt as Record<string, unknown>).lte = new Date(endDate as string);
+      }
+    }
+
+    // Fetch all matching logs (up to 10000 for export)
+    const logs = await prisma.auditLog.findMany({
+      where,
+      include: {
+        user: {
+          select: { id: true, name: true, email: true }
+        }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 10000
+    });
+
+    console.log(`[DB] SELECT from audit_logs for export - found ${logs.length} records`);
+
+    if (format === 'json') {
+      // Export as JSON
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', 'attachment; filename="audit-logs-export.json"');
+      res.json(logs.map(log => ({
+        id: log.id,
+        timestamp: log.createdAt,
+        action: log.action,
+        entityType: log.entityType,
+        entityId: log.entityId,
+        user: log.user?.name || log.user?.email || 'System',
+        userId: log.userId,
+        changes: log.changes ? JSON.parse(log.changes) : null,
+        ipAddress: log.ipAddress
+      })));
+    } else {
+      // Export as CSV (default)
+      const csvHeader = 'Timestamp,Action,Entity Type,Entity ID,User,User ID,Changes,IP Address';
+      const csvRows = logs.map(log => {
+        const timestamp = new Date(log.createdAt).toISOString();
+        const changesStr = log.changes ? log.changes.replace(/"/g, '""') : '';
+        return `"${timestamp}","${log.action}","${log.entityType}","${log.entityId || ''}","${log.user?.name || log.user?.email || 'System'}","${log.userId || ''}","${changesStr}","${log.ipAddress || ''}"`;
+      });
+      const csvContent = [csvHeader, ...csvRows].join('\n');
+
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename="audit-logs-export.csv"');
+      res.send(csvContent);
+    }
+  } catch (error) {
+    console.error('Failed to export audit logs:', error);
+    res.status(500).json({ error: 'Failed to export audit logs' });
+  }
+});
+
 // Socket.io connection handling
 io.on('connection', (socket) => {
   console.log(`Client connected: ${socket.id}`);
