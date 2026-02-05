@@ -1168,3 +1168,36 @@
 - 912ba89: feat: Ensure all form labels properly associated with inputs (Feature #108)
 - 3f85f00: feat: Improve color contrast to meet WCAG AA standards (Feature #109)
 - a102c3b: feat: Add ARIA labels to all icon-only buttons (Feature #110)
+
+## Session: 2026-02-05 (Agent Batch #111)
+
+### Completed Features This Session:
+
+- **Feature #111: Screen reader announces important changes** ✅ PASSING
+  - Added `role="alert"` to all form validation error messages across the codebase:
+    - DocketForm.tsx: 7 validation fields (caseNumber, caseTitle, caseChapter, hearingDate, hearingTime, hearingJudge, hearingMatter)
+    - Login.tsx: 2 validation fields (email, password)
+    - UserForm.tsx: 4 validation fields (name, email, password, role)
+    - SessionExpiredModal.tsx: 2 validation fields (email, password)
+  - Updated Toaster configuration in App.tsx with ariaProps:
+    - Success toasts: role="status", aria-live="polite"
+    - Error toasts: role="alert", aria-live="assertive"
+  - Verified with browser automation:
+    - Form validation errors appear as `alert` in accessibility tree
+    - Success toasts appear as `status` in accessibility tree
+    - All dynamic updates will be announced by screen readers
+  - Zero console errors during testing
+  - No mock data patterns found
+
+### Technical Notes:
+- `role="alert"` causes screen readers to immediately announce content when it appears
+- `role="status"` with `aria-live="polite"` announces content at next convenient moment
+- react-hot-toast library has built-in ARIA live region support
+- Form validation uses react-hook-form with Zod resolver
+
+### Current Status:
+- 117/155 features passing (75.5%)
+- Accessibility feature #111 complete
+
+### Git Commits This Session:
+- 19d5e05: feat: Add ARIA live regions for screen reader announcement (Feature #111)
