@@ -9,6 +9,7 @@ import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import multer from 'multer';
+import rateLimit from 'express-rate-limit';
 
 const app = express();
 const httpServer = createServer(app);
@@ -96,6 +97,62 @@ app.use(cors({
   credentials: true
 }));
 app.use(express.json());
+
+// =========================================
+// Rate Limiting Configuration
+// =========================================
+
+// General API rate limiter - 1000 requests per minute for admin portal
+const generalLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 1000, // 1000 requests per minute
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  message: {
+    error: 'Too many requests, please try again later.',
+    retryAfter: 60
+  },
+  keyGenerator: (req) => {
+    // Use IP address for rate limiting
+    return req.ip || req.socket.remoteAddress || 'unknown';
+  }
+});
+
+// Strict rate limiter for display clients - 60 requests per minute
+const displayLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 60, // 60 requests per minute
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: 'Too many requests from this display, please try again later.',
+    retryAfter: 60
+  },
+  keyGenerator: (req) => {
+    // Use API key or IP for display rate limiting
+    const apiKey = req.headers['x-api-key'] as string;
+    return apiKey || req.ip || req.socket.remoteAddress || 'unknown';
+  }
+});
+
+// API key rate limiter - 300 requests per minute
+const apiKeyLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 300, // 300 requests per minute
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: 'API key rate limit exceeded, please try again later.',
+    retryAfter: 60
+  },
+  keyGenerator: (req) => {
+    const apiKey = req.headers['x-api-key'] as string;
+    return apiKey || req.ip || req.socket.remoteAddress || 'unknown';
+  }
+});
+
+// Apply general rate limiter to all API routes
+app.use('/api', generalLimiter);
 
 // Serve display client static files
 app.use('/display', express.static(path.join(__dirname, '../../display')));
@@ -1089,7 +1146,7 @@ app.delete('/api/docket/:id', authenticateToken, async (req: AuthenticatedReques
 // =========================================
 
 // GET /api/displays/:id/config - Get display configuration (requires API key)
-app.get('/api/displays/:id/config', authenticateApiKey, async (req: ApiKeyRequest, res: Response) => {
+app.get('/api/displays/:id/config', displayLimiter, authenticateApiKey, async (req: ApiKeyRequest, res: Response) => {
   try {
     const display = await prisma.display.findUnique({
       where: { id: req.params.id }
@@ -1140,7 +1197,7 @@ app.get('/api/displays/:id/config', authenticateApiKey, async (req: ApiKeyReques
 });
 
 // GET /api/displays/:id/docket - Get docket entries for a specific display (requires API key)
-app.get('/api/displays/:id/docket', authenticateApiKey, async (req: ApiKeyRequest, res: Response) => {
+app.get('/api/displays/:id/docket', displayLimiter, authenticateApiKey, async (req: ApiKeyRequest, res: Response) => {
   try {
     const display = await prisma.display.findUnique({
       where: { id: req.params.id }
