@@ -1,7 +1,32 @@
 import { useAuth } from '../context/AuthContext';
+import { useQuery } from '@tanstack/react-query';
+import api from '../api/client';
+
+interface DashboardStats {
+  todaysHearings: number;
+  activeDisplays: number;
+  totalDisplays: number;
+  activeAnnouncements: number;
+  activeUsers: number;
+}
 
 export default function Dashboard() {
   const { user } = useAuth();
+
+  const { data: stats, isLoading: statsLoading } = useQuery<DashboardStats>({
+    queryKey: ['dashboardStats'],
+    queryFn: async () => {
+      const response = await api.get('/api/stats');
+      return response.data;
+    },
+    refetchInterval: 30000, // Refresh every 30 seconds
+  });
+
+  const formatStat = (value: number | undefined, loading: boolean) => {
+    if (loading) return '...';
+    if (value === undefined) return '--';
+    return value.toString();
+  };
 
   return (
     <div className="space-y-6">
@@ -15,7 +40,7 @@ export default function Dashboard() {
         </p>
       </div>
 
-      {/* Stats cards - Placeholder */}
+      {/* Stats cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white rounded-lg shadow-sm p-6">
           <div className="flex items-center">
@@ -26,7 +51,9 @@ export default function Dashboard() {
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-500">Today's Hearings</p>
-              <p className="text-2xl font-semibold text-gray-900">--</p>
+              <p className="text-2xl font-semibold text-gray-900" data-testid="todays-hearings">
+                {formatStat(stats?.todaysHearings, statsLoading)}
+              </p>
             </div>
           </div>
         </div>
@@ -40,7 +67,14 @@ export default function Dashboard() {
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-500">Active Displays</p>
-              <p className="text-2xl font-semibold text-gray-900">--</p>
+              <p className="text-2xl font-semibold text-gray-900" data-testid="active-displays">
+                {formatStat(stats?.activeDisplays, statsLoading)}
+                {stats && stats.totalDisplays > 0 && (
+                  <span className="text-sm font-normal text-gray-400 ml-1">
+                    / {stats.totalDisplays}
+                  </span>
+                )}
+              </p>
             </div>
           </div>
         </div>
@@ -54,7 +88,9 @@ export default function Dashboard() {
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-500">Announcements</p>
-              <p className="text-2xl font-semibold text-gray-900">--</p>
+              <p className="text-2xl font-semibold text-gray-900" data-testid="active-announcements">
+                {formatStat(stats?.activeAnnouncements, statsLoading)}
+              </p>
             </div>
           </div>
         </div>
@@ -68,7 +104,9 @@ export default function Dashboard() {
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-500">Active Users</p>
-              <p className="text-2xl font-semibold text-gray-900">--</p>
+              <p className="text-2xl font-semibold text-gray-900" data-testid="active-users">
+                {formatStat(stats?.activeUsers, statsLoading)}
+              </p>
             </div>
           </div>
         </div>

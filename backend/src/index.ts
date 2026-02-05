@@ -463,6 +463,74 @@ app.get('/api/schema-check', async (req, res) => {
 });
 
 // =========================================
+// Dashboard Stats Endpoint
+// =========================================
+
+// GET /api/stats - Get dashboard statistics
+app.get('/api/stats', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    // Get today's date range for querying DateTime fields
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+
+    // Count today's hearings
+    const todaysHearings = await prisma.docketEntry.count({
+      where: {
+        hearingDate: {
+          gte: todayStart,
+          lte: todayEnd,
+        },
+      },
+    });
+
+    // Count active displays (those that have sent a heartbeat in the last 5 minutes)
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    const activeDisplays = await prisma.display.count({
+      where: {
+        lastHeartbeat: {
+          gte: fiveMinutesAgo,
+        },
+      },
+    });
+
+    // Count total displays for comparison
+    const totalDisplays = await prisma.display.count();
+
+    // Count active announcements (enabled and not expired)
+    const now = new Date();
+    const activeAnnouncements = await prisma.announcement.count({
+      where: {
+        enabled: true,
+        OR: [
+          { expiresAt: null },
+          { expiresAt: { gte: now } },
+        ],
+      },
+    });
+
+    // Count active users
+    const activeUsers = await prisma.user.count({
+      where: {
+        isActive: true,
+      },
+    });
+
+    res.json({
+      todaysHearings,
+      activeDisplays,
+      totalDisplays,
+      activeAnnouncements,
+      activeUsers,
+    });
+  } catch (error) {
+    console.error('Error fetching stats:', error);
+    res.status(500).json({ error: 'Failed to fetch stats' });
+  }
+});
+
+// =========================================
 // Docket Endpoints
 // =========================================
 
