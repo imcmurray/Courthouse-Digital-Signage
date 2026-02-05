@@ -530,6 +530,39 @@ app.get('/api/stats', authenticateToken, async (req: AuthenticatedRequest, res: 
   }
 });
 
+// GET /api/recent-activity - Get recent activity for dashboard
+app.get('/api/recent-activity', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const limit = parseInt(req.query.limit as string) || 10;
+
+    const recentActivity = await prisma.auditLog.findMany({
+      take: limit,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        user: {
+          select: { name: true, email: true }
+        }
+      }
+    });
+
+    // Format activity for frontend
+    const formattedActivity = recentActivity.map(log => ({
+      id: log.id,
+      action: log.action,
+      entityType: log.entityType,
+      entityId: log.entityId,
+      user: log.user ? log.user.name : 'System',
+      timestamp: log.createdAt,
+      changes: log.changes ? JSON.parse(log.changes) : null
+    }));
+
+    res.json(formattedActivity);
+  } catch (error) {
+    console.error('Error fetching recent activity:', error);
+    res.status(500).json({ error: 'Failed to fetch recent activity' });
+  }
+});
+
 // =========================================
 // Docket Endpoints
 // =========================================

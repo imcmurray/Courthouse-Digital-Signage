@@ -10,6 +10,16 @@ interface DashboardStats {
   activeUsers: number;
 }
 
+interface ActivityItem {
+  id: string;
+  action: string;
+  entityType: string;
+  entityId: string | null;
+  user: string;
+  timestamp: string;
+  changes: Record<string, unknown> | null;
+}
+
 export default function Dashboard() {
   const { user } = useAuth();
 
@@ -22,10 +32,94 @@ export default function Dashboard() {
     refetchInterval: 30000, // Refresh every 30 seconds
   });
 
+  const { data: recentActivity, isLoading: activityLoading } = useQuery<ActivityItem[]>({
+    queryKey: ['recentActivity'],
+    queryFn: async () => {
+      const response = await api.get('/api/recent-activity?limit=10');
+      return response.data;
+    },
+    refetchInterval: 30000, // Refresh every 30 seconds
+  });
+
   const formatStat = (value: number | undefined, loading: boolean) => {
     if (loading) return '...';
     if (value === undefined) return '--';
     return value.toString();
+  };
+
+  const formatActivityDescription = (activity: ActivityItem) => {
+    const actionVerb = {
+      create: 'created',
+      update: 'updated',
+      delete: 'deleted',
+      login: 'logged in',
+      logout: 'logged out',
+    }[activity.action] || activity.action;
+
+    const entityName = {
+      docket_entry: 'docket entry',
+      announcement: 'announcement',
+      display: 'display',
+      user: 'user',
+      api_key: 'API key',
+      setting: 'setting',
+    }[activity.entityType] || activity.entityType;
+
+    if (activity.action === 'login' || activity.action === 'logout') {
+      return actionVerb;
+    }
+
+    return `${actionVerb} ${entityName}`;
+  };
+
+  const formatTimestamp = (timestamp: string) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins} min${diffMins > 1 ? 's' : ''} ago`;
+    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  };
+
+  const getActivityIcon = (action: string) => {
+    switch (action) {
+      case 'create':
+        return (
+          <svg className="h-4 w-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+          </svg>
+        );
+      case 'update':
+        return (
+          <svg className="h-4 w-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+          </svg>
+        );
+      case 'delete':
+        return (
+          <svg className="h-4 w-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+        );
+      default:
+        return (
+          <svg className="h-4 w-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        );
+    }
   };
 
   return (
@@ -160,6 +254,38 @@ export default function Dashboard() {
             </span>
           </div>
         </div>
+      </div>
+
+      {/* Recent Activity */}
+      <div className="bg-white rounded-lg shadow-sm p-6">
+        <h3 className="text-lg font-medium text-gray-900 mb-4">Recent Activity</h3>
+        {activityLoading ? (
+          <div className="text-gray-500 text-sm">Loading activity...</div>
+        ) : recentActivity && recentActivity.length > 0 ? (
+          <div className="space-y-4">
+            {recentActivity.map((activity) => (
+              <div key={activity.id} className="flex items-start space-x-3">
+                <div className="flex-shrink-0 mt-0.5">
+                  {getActivityIcon(activity.action)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-gray-900">
+                    <span className="font-medium">{activity.user}</span>{' '}
+                    {formatActivityDescription(activity)}
+                    {activity.entityId && (
+                      <span className="text-gray-500"> #{activity.entityId.slice(0, 8)}</span>
+                    )}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {formatTimestamp(activity.timestamp)}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-gray-500 text-sm">No recent activity</div>
+        )}
       </div>
     </div>
   );
