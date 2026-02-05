@@ -13,6 +13,7 @@ import Announcements from './pages/Announcements';
 import Displays from './pages/Displays';
 import ApiKeys from './pages/ApiKeys';
 import AuditLogs from './pages/AuditLogs';
+import Settings from './pages/Settings';
 
 const queryClient = new QueryClient();
 
@@ -164,10 +165,7 @@ const router = createBrowserRouter([
         element: (
           <ProtectedRoute allowedRoles={['admin']}>
             <AdminLayout>
-              <div className="bg-white p-6 rounded-lg shadow">
-                <h2 className="text-xl font-semibold">System Settings</h2>
-                <p className="mt-2 text-gray-600">System settings will be implemented here.</p>
-              </div>
+              <Settings />
             </AdminLayout>
           </ProtectedRoute>
         ),

@@ -118,6 +118,26 @@
 
   // Apply display configuration
   function applyDisplayConfig() {
+    // Apply court name and subtitle from global settings
+    if (displayConfig.courtName) {
+      const courtTitleEl = document.getElementById('court-title');
+      if (courtTitleEl) courtTitleEl.textContent = displayConfig.courtName;
+    }
+
+    if (displayConfig.courtSubtitle) {
+      const courtSubtitleEl = document.getElementById('court-subtitle');
+      if (courtSubtitleEl) courtSubtitleEl.textContent = displayConfig.courtSubtitle;
+    }
+
+    // Apply custom court logo if available
+    if (displayConfig.courtLogo) {
+      const courtSealEl = document.getElementById('court-seal');
+      if (courtSealEl) {
+        courtSealEl.src = `${CONFIG.apiBaseUrl}${displayConfig.courtLogo}`;
+        courtSealEl.alt = 'Court Logo';
+      }
+    }
+
     if (displayConfig.noticeText) {
       const noticeEl = document.getElementById('notice-text');
       if (noticeEl) noticeEl.textContent = displayConfig.noticeText;
