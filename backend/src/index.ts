@@ -788,6 +788,34 @@ app.put('/api/docket/:id', authenticateToken, async (req: AuthenticatedRequest, 
       }
     }
 
+    // Optimistic concurrency control: check updatedAt if provided
+    const expectedUpdatedAt = req.body.updatedAt;
+    if (expectedUpdatedAt) {
+      const existingEntry = await prisma.docketEntry.findUnique({
+        where: { id: req.params.id },
+        select: { updatedAt: true, caseTitle: true, hearingTime: true }
+      });
+
+      if (!existingEntry) {
+        return res.status(404).json({ error: 'Docket entry not found' });
+      }
+
+      // Compare timestamps - convert to ISO strings for reliable comparison
+      const existingTimestamp = existingEntry.updatedAt.toISOString();
+      const expectedTimestamp = new Date(expectedUpdatedAt).toISOString();
+
+      if (existingTimestamp !== expectedTimestamp) {
+        console.log(`[CONFLICT] Docket entry ${req.params.id} was modified by another user`);
+        console.log(`  Expected: ${expectedTimestamp}, Actual: ${existingTimestamp}`);
+        return res.status(409).json({
+          error: 'Conflict: This entry was modified by another user',
+          code: 'CONFLICT',
+          currentUpdatedAt: existingEntry.updatedAt,
+          message: 'This entry has been modified since you started editing. Please refresh and try again.'
+        });
+      }
+    }
+
     const entry = await prisma.docketEntry.update({
       where: { id: req.params.id },
       data: updateData

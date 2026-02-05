@@ -208,7 +208,18 @@ export default function Docket() {
       }
     },
     onError: (error: unknown) => {
-      toast.error(getErrorMessage(error, 'Failed to update docket entry'));
+      // Check for conflict error (409) - concurrent edit detected
+      const axiosError = error as { response?: { status?: number; data?: { code?: string; message?: string } } };
+      if (axiosError.response?.status === 409 || axiosError.response?.data?.code === 'CONFLICT') {
+        toast.error(
+          'Conflict: This entry was modified by another user. Please close and reopen the form to get the latest data.',
+          { duration: 6000 }
+        );
+        // Refresh the docket list to get latest data
+        queryClient.invalidateQueries({ queryKey: ['docket'] });
+      } else {
+        toast.error(getErrorMessage(error, 'Failed to update docket entry'));
+      }
     },
   });
 
@@ -271,7 +282,12 @@ export default function Docket() {
 
   const handleUpdate = (data: UpdateDocketEntryInput) => {
     if (editingEntry) {
-      updateMutation.mutate({ id: editingEntry.id, data });
+      // Include updatedAt for optimistic concurrency control
+      const dataWithVersion = {
+        ...data,
+        updatedAt: editingEntry.updatedAt,
+      };
+      updateMutation.mutate({ id: editingEntry.id, data: dataWithVersion });
     }
   };
 

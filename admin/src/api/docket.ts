@@ -49,7 +49,9 @@ export interface CreateDocketEntryInput {
   comment?: string;
 }
 
-export interface UpdateDocketEntryInput extends Partial<CreateDocketEntryInput> {}
+export interface UpdateDocketEntryInput extends Partial<CreateDocketEntryInput> {
+  updatedAt?: string; // For optimistic concurrency control
+}
 
 export interface DocketResponse {
   entries: DocketEntry[];
