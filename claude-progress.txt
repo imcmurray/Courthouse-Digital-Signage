@@ -1369,3 +1369,50 @@
 - a298e48: feat: Verify stricken entries show strikethrough styling (Feature #132)
 - 54fac87: feat: Verify Zoom hearing shows connection info (Feature #133)
 - 04c813b: feat: Verify notice banner displays configured text (Feature #134)
+
+
+## Session: 2026-02-05 (Agent Batch #144, #145)
+
+### Completed Features This Session:
+
+- **Feature #144: Health endpoint returns database status** ✅ PASSING
+  - Called GET /api/health without authentication
+  - Verified 200 OK response
+  - Response includes:
+    - status: 'ok' ✅
+    - database: 'connected' ✅
+    - timestamp: ISO 8601 format ✅
+    - uptime: server uptime in seconds (bonus)
+  - Error handling returns 503 with status: 'degraded' and database: 'disconnected' on DB failure
+  - Verified via browser automation and curl
+
+- **Feature #145: Rate limiting enforced on API** ✅ PASSING
+  - Implemented express-rate-limit middleware
+  - Rate limits per app_spec.txt:
+    - Admin Portal: 1000 requests/minute (general limiter)
+    - Display Clients: 60 requests/minute (displayLimiter)
+    - API Keys: 300 requests/minute (apiKeyLimiter)
+  - Tested with 60 rapid requests (lowered limit to 50 for testing):
+    - First 49 requests succeeded (200 OK)
+    - Requests 50-60 received 429 Too Many Requests
+  - Response includes RateLimit headers:
+    - RateLimit-Limit: 1000
+    - RateLimit-Remaining: (decrements)
+    - RateLimit-Reset: seconds until reset
+    - retry-after header on 429 responses
+  - Error message: 'Too many requests, please try again later.'
+
+### Technical Notes:
+- express-rate-limit package already in package.json, just needed implementation
+- Rate limiters use IP address as key for general, API key or IP for display/API routes
+- Display-specific routes (/api/displays/:id/config, /api/displays/:id/docket) use displayLimiter
+- All API routes (/api/*) use generalLimiter
+
+### Current Status:
+- 150/155 features passing (96.8%)
+- Both assigned API features (#144, #145) complete
+
+### Git Commits This Session:
+- 71fb351: feat: Verify health endpoint returns database status (Feature #144)
+- 0071fb9: feat: Implement API rate limiting (Feature #145)
+
