@@ -1244,3 +1244,39 @@
 - 5e47b71: feat: Add warning for past dates in docket form (Feature #113)
 - 4bc952e: feat: Verify real-time clock updates every second on display (Feature #114)
 
+
+
+## Session: 2026-02-05 (Agent Batch #115, #116)
+
+### Completed Features This Session:
+
+- **Feature #115: Display shows correct current date** ✅ PASSING
+  - Added date element to display client HTML
+  - Updated updateClock() function in display.js to show full date (e.g., 'February 4, 2026')
+  - Date displays in format: Month Day, Year
+  - Date updates automatically every second via setInterval
+  - Added CSS styling for date (18px font, centered below day of week)
+  - Verified: Time shows 05:14 PM, Day shows Wednesday, Date shows February 4, 2026
+
+- **Feature #116: Docket entries sort by hearing time** ✅ PASSING
+  - Created test entries at 9:00 AM, 11:00 AM, 10:00 AM (intentionally out of order)
+  - Admin portal correctly shows entries sorted: 9:00 AM → 10:00 AM → 11:00 AM → 2:30 PM
+  - Verified backend code uses orderBy: { hearingTime: 'asc' } in both:
+    - Admin docket API (lines 517-520 in index.ts)
+    - Display client docket API (lines 1003-1006 in index.ts)
+  - Secondary sort by caseTitle for entries at same time
+  - No mock data patterns found in codebase
+
+### Technical Notes:
+- Display client shows date from JavaScript Date object using toLocaleDateString()
+- Both admin and display APIs use Prisma orderBy for consistent sorting
+- Sorting is case-insensitive for caseTitle (secondary sort)
+
+### Current Status:
+- 122/155 features passing (78.7%)
+- Both assigned Temporal & Timezone features (#115, #116) complete
+
+### Git Commits This Session:
+- b6a408b: feat: Add current date display to display client (Feature #115)
+- 4d3cfe8: feat: Verify docket entries sort by hearing time (Feature #116)
+
