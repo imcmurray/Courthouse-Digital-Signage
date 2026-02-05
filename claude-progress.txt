@@ -1201,3 +1201,46 @@
 
 ### Git Commits This Session:
 - 19d5e05: feat: Add ARIA live regions for screen reader announcement (Feature #111)
+
+## Session: 2026-02-05 (Agent Batch #112, #113, #114)
+
+### Completed Features This Session:
+
+- **Feature #112: Times display in correct timezone** ✅ PASSING
+  - Verified timezone setting is America/Denver (in database seed data)
+  - Created docket entry with 10:00 AM hearing time
+  - Admin portal displays time as "10:00 AM" correctly
+  - Display client shows time in 12-hour format with AM/PM
+  - Audit log timestamps match system clock in Mountain Time
+  - All times consistent throughout system, no timezone confusion
+
+- **Feature #113: Date picker prevents past dates for new hearings** ✅ PASSING
+  - Added isPastDate() function to DocketForm.tsx
+  - Past dates show warning: "⚠️ Warning: This date is in the past" in amber color
+  - Today's date: No warning shown (accepted)
+  - Future dates: No warning shown (accepted)
+  - Warning uses role="status" for screen reader accessibility
+  - Form still allows submission (warning only, not blocking)
+
+- **Feature #114: Real-time clock on display updates every second** ✅ PASSING
+  - Display client code confirms clockInterval: 1000ms (1 second)
+  - setInterval(updateClock, CONFIG.clockInterval) runs every second
+  - Clock uses 12-hour format (05:11 PM) with day of week (Wednesday)
+  - JavaScript evaluation confirmed displayedTime matches systemTime exactly
+  - Day of week updates via toLocaleDateString with weekday: "long"
+  - Verified time changed from 05:10 PM to 05:11 PM during testing
+
+### Technical Notes:
+- DocketForm.tsx: Added isPastDate() function using watch("hearingDate")
+- Display client uses toLocaleTimeString with hour12: true for 12-hour format
+- All times consistent with America/Denver timezone setting
+
+### Current Status:
+- 120/155 features passing (77.4%)
+- All assigned Temporal & Timezone features (#112, #113, #114) complete
+
+### Git Commits This Session:
+- e9d0622: feat: Verify times display in correct timezone America/Denver (Feature #112)
+- 5e47b71: feat: Add warning for past dates in docket form (Feature #113)
+- 4bc952e: feat: Verify real-time clock updates every second on display (Feature #114)
+
