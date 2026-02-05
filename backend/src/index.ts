@@ -1212,14 +1212,14 @@ app.get('/api/displays/:id/docket', displayLimiter, authenticateApiKey, async (r
     // Build filter based on display configuration
     const where: Record<string, unknown> = {};
 
-    // Default to today's entries
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    // Default to today's entries (use UTC date to match database storage)
+    const now = new Date();
+    const todayUTC = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0));
+    const tomorrowUTC = new Date(todayUTC);
+    tomorrowUTC.setUTCDate(tomorrowUTC.getUTCDate() + 1);
     where.hearingDate = {
-      gte: today,
-      lt: tomorrow
+      gte: todayUTC,
+      lt: tomorrowUTC
     };
 
     // Apply display filters
