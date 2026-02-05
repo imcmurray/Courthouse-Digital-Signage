@@ -28,6 +28,7 @@ export default function Docket() {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [importPreview, setImportPreview] = useState<CreateDocketEntryInput[]>([]);
   const [importError, setImportError] = useState<string | null>(null);
+  const [importRowErrors, setImportRowErrors] = useState<Map<number, string[]>>(new Map());
 
   // Restore filters from sessionStorage on mount if URL has no filters
   useEffect(() => {
@@ -309,12 +310,53 @@ export default function Docket() {
     }
   };
 
+  // Validate date format (YYYY-MM-DD)
+  const isValidDateFormat = (dateStr: string | undefined): boolean => {
+    if (!dateStr) return false;
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(dateStr)) return false;
+    const date = new Date(dateStr);
+    return !isNaN(date.getTime());
+  };
+
+  // Validate time format (HH:MM or HH:MM:SS)
+  const isValidTimeFormat = (timeStr: string | undefined): boolean => {
+    if (!timeStr) return false;
+    const timeRegex = /^([01]?\d|2[0-3]):([0-5]\d)(:[0-5]\d)?$/;
+    return timeRegex.test(timeStr);
+  };
+
+  // Validate a single row and return array of error messages
+  const validateImportRow = (entry: Record<string, string | boolean | undefined>, rowNum: number): string[] => {
+    const errors: string[] = [];
+    const requiredFields = ['caseNumber', 'caseTitle', 'caseChapter', 'hearingDate', 'hearingTime', 'hearingMatter', 'hearingJudge'];
+
+    // Check required fields
+    const missingFields = requiredFields.filter(field => !entry[field]);
+    if (missingFields.length > 0) {
+      errors.push(`Missing: ${missingFields.join(', ')}`);
+    }
+
+    // Check date format
+    if (entry.hearingDate && !isValidDateFormat(entry.hearingDate as string)) {
+      errors.push('Invalid date format (use YYYY-MM-DD)');
+    }
+
+    // Check time format
+    if (entry.hearingTime && !isValidTimeFormat(entry.hearingTime as string)) {
+      errors.push('Invalid time format (use HH:MM)');
+    }
+
+    return errors;
+  };
+
   // Parse CSV file
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     setImportError(null);
+    setImportRowErrors(new Map());
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
@@ -338,6 +380,8 @@ export default function Docket() {
 
         // Parse data rows
         const entries: CreateDocketEntryInput[] = [];
+        const rowErrors = new Map<number, string[]>();
+
         for (let i = 1; i < lines.length; i++) {
           const values = parseCSVLine(lines[i]);
           if (values.length !== headers.length) {
@@ -355,10 +399,23 @@ export default function Docket() {
             }
           });
 
+          // Validate this row
+          const errors = validateImportRow(entry, i);
+          if (errors.length > 0) {
+            rowErrors.set(i - 1, errors); // 0-indexed for the entries array
+          }
+
           entries.push(entry as unknown as CreateDocketEntryInput);
         }
 
         setImportPreview(entries);
+        setImportRowErrors(rowErrors);
+
+        // Show summary error if there are invalid rows
+        if (rowErrors.size > 0) {
+          const invalidRowNums = Array.from(rowErrors.keys()).map(i => i + 1).join(', ');
+          setImportError(`${rowErrors.size} row(s) have validation errors (rows: ${invalidRowNums}). Fix the issues below or only valid rows will be imported.`);
+        }
       } catch (err) {
         setImportError('Failed to parse CSV file');
       }
@@ -989,12 +1046,18 @@ export default function Docket() {
                 <div>
                   <h4 className="text-sm font-medium text-gray-700 mb-2">
                     Preview ({importPreview.length} entries)
+                    {importRowErrors.size > 0 && (
+                      <span className="ml-2 text-red-600">
+                        - {importRowErrors.size} row(s) with errors
+                      </span>
+                    )}
                   </h4>
                   <div className="overflow-x-auto border rounded-lg max-h-64">
                     <table className="min-w-full divide-y divide-gray-200 text-sm">
                       <thead className="bg-gray-50">
                         <tr>
                           <th className="px-3 py-2 text-left font-medium text-gray-500">#</th>
+                          <th className="px-3 py-2 text-left font-medium text-gray-500">Status</th>
                           <th className="px-3 py-2 text-left font-medium text-gray-500">Case #</th>
                           <th className="px-3 py-2 text-left font-medium text-gray-500">Title</th>
                           <th className="px-3 py-2 text-left font-medium text-gray-500">Ch.</th>
@@ -1004,20 +1067,60 @@ export default function Docket() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200">
-                        {importPreview.map((entry, index) => (
-                          <tr key={index}>
-                            <td className="px-3 py-2 text-gray-500">{index + 1}</td>
-                            <td className="px-3 py-2">{entry.caseNumber}</td>
-                            <td className="px-3 py-2 max-w-xs truncate">{entry.caseTitle}</td>
-                            <td className="px-3 py-2">{entry.caseChapter}</td>
-                            <td className="px-3 py-2">{entry.hearingDate}</td>
-                            <td className="px-3 py-2">{entry.hearingTime}</td>
-                            <td className="px-3 py-2">{entry.hearingJudge}</td>
-                          </tr>
-                        ))}
+                        {importPreview.map((entry, index) => {
+                          const rowError = importRowErrors.get(index);
+                          const hasError = !!rowError;
+                          return (
+                            <tr key={index} className={hasError ? 'bg-red-50' : ''}>
+                              <td className="px-3 py-2 text-gray-500">{index + 1}</td>
+                              <td className="px-3 py-2">
+                                {hasError ? (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800" title={rowError.join('; ')}>
+                                    Error
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                                    Valid
+                                  </span>
+                                )}
+                              </td>
+                              <td className={`px-3 py-2 ${!entry.caseNumber ? 'text-red-600 font-medium' : ''}`}>
+                                {entry.caseNumber || '(missing)'}
+                              </td>
+                              <td className={`px-3 py-2 max-w-xs truncate ${!entry.caseTitle ? 'text-red-600 font-medium' : ''}`}>
+                                {entry.caseTitle || '(missing)'}
+                              </td>
+                              <td className={`px-3 py-2 ${!entry.caseChapter ? 'text-red-600 font-medium' : ''}`}>
+                                {entry.caseChapter || '(missing)'}
+                              </td>
+                              <td className={`px-3 py-2 ${!entry.hearingDate || !isValidDateFormat(entry.hearingDate) ? 'text-red-600 font-medium' : ''}`}>
+                                {entry.hearingDate || '(missing)'}
+                              </td>
+                              <td className={`px-3 py-2 ${!entry.hearingTime || !isValidTimeFormat(entry.hearingTime) ? 'text-red-600 font-medium' : ''}`}>
+                                {entry.hearingTime || '(missing)'}
+                              </td>
+                              <td className={`px-3 py-2 ${!entry.hearingJudge ? 'text-red-600 font-medium' : ''}`}>
+                                {entry.hearingJudge || '(missing)'}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
+                  {/* Row-level error details */}
+                  {importRowErrors.size > 0 && (
+                    <div className="mt-2 text-sm">
+                      <p className="font-medium text-gray-700">Error details:</p>
+                      <ul className="list-disc list-inside text-red-600 mt-1 max-h-24 overflow-y-auto">
+                        {Array.from(importRowErrors.entries()).map(([rowIndex, errors]) => (
+                          <li key={rowIndex}>
+                            Row {rowIndex + 1}: {errors.join('; ')}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1028,6 +1131,7 @@ export default function Docket() {
                   setIsImportModalOpen(false);
                   setImportPreview([]);
                   setImportError(null);
+                  setImportRowErrors(new Map());
                 }}
                 className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
               >
