@@ -930,6 +930,88 @@ app.post('/api/docket/bulk', authenticateToken, async (req: AuthenticatedRequest
   }
 });
 
+// GET /api/docket/judges - Get distinct judge names for autocomplete
+app.get('/api/docket/judges', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const results: { hearing_judge: string }[] = await prisma.$queryRaw`
+      SELECT DISTINCT hearing_judge FROM docket_entries ORDER BY hearing_judge ASC
+    `;
+    const judges = results.map(r => r.hearing_judge);
+    res.json({ judges });
+  } catch (error) {
+    console.error('Failed to fetch judges:', error);
+    res.status(500).json({ error: 'Failed to fetch judges' });
+  }
+});
+
+// GET /api/docket/courtrooms - Get distinct courtroom values for autocomplete
+app.get('/api/docket/courtrooms', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const results: { courtroom: string }[] = await prisma.$queryRaw`
+      SELECT DISTINCT courtroom FROM docket_entries WHERE courtroom IS NOT NULL AND courtroom != '' ORDER BY courtroom ASC
+    `;
+    const courtrooms = results.map(r => r.courtroom);
+    res.json({ courtrooms });
+  } catch (error) {
+    console.error('Failed to fetch courtrooms:', error);
+    res.status(500).json({ error: 'Failed to fetch courtrooms' });
+  }
+});
+
+// GET /api/docket/trustees - Get distinct trustee values for autocomplete
+app.get('/api/docket/trustees', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const results: { trustee: string }[] = await prisma.$queryRaw`
+      SELECT DISTINCT trustee FROM docket_entries WHERE trustee IS NOT NULL AND trustee != '' ORDER BY trustee ASC
+    `;
+    const trustees = results.map(r => r.trustee);
+    res.json({ trustees });
+  } catch (error) {
+    console.error('Failed to fetch trustees:', error);
+    res.status(500).json({ error: 'Failed to fetch trustees' });
+  }
+});
+
+// GET /api/docket/judge-zoom - Get Zoom defaults from a judge's most recent Zoom hearing
+app.get('/api/docket/judge-zoom', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const judge = req.query.judge as string;
+
+    if (!judge || typeof judge !== 'string' || judge.trim().length === 0) {
+      return res.status(400).json({ error: 'Judge name is required' });
+    }
+
+    const entry = await prisma.docketEntry.findFirst({
+      where: {
+        hearingJudge: judge.trim(),
+        isZoom: true,
+        zoomMeetingId: { not: null },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        zoomMeetingId: true,
+        zoomPasscode: true,
+        zoomPhone: true,
+      },
+    });
+
+    if (!entry) {
+      return res.json({ defaults: null });
+    }
+
+    res.json({
+      defaults: {
+        zoomMeetingId: entry.zoomMeetingId,
+        zoomPasscode: entry.zoomPasscode,
+        zoomPhone: entry.zoomPhone,
+      },
+    });
+  } catch (error) {
+    console.error('Failed to fetch judge zoom defaults:', error);
+    res.status(500).json({ error: 'Failed to fetch judge zoom defaults' });
+  }
+});
+
 // GET /api/docket/template - Download CSV template
 app.get('/api/docket/template', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   const csvHeader = 'caseNumber,caseTitle,caseChapter,hearingDate,hearingTime,hearingMatter,hearingJudge,courtroom,isZoom,zoomMeetingId,zoomPasscode,zoomPhone,status,adversaryNumber,adversaryTitle,movingParty,opposingParty,trustee,statusNote,comment';

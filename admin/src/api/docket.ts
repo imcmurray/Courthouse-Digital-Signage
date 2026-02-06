@@ -74,6 +74,12 @@ export interface DocketFilters {
   sortOrder?: 'asc' | 'desc';
 }
 
+export interface JudgeZoomDefaults {
+  zoomMeetingId: string;
+  zoomPasscode: string;
+  zoomPhone: string;
+}
+
 export const docketApi = {
   getAll: async (filters?: DocketFilters): Promise<DocketResponse> => {
     const params = new URLSearchParams();
@@ -127,6 +133,28 @@ export const docketApi = {
 
   downloadTemplate: (): string => {
     return '/api/docket/template';
+  },
+
+  getJudges: async (): Promise<string[]> => {
+    const response = await apiClient.get<{ judges: string[] }>('/api/docket/judges');
+    return response.data.judges;
+  },
+
+  getCourtrooms: async (): Promise<string[]> => {
+    const response = await apiClient.get<{ courtrooms: string[] }>('/api/docket/courtrooms');
+    return response.data.courtrooms;
+  },
+
+  getTrustees: async (): Promise<string[]> => {
+    const response = await apiClient.get<{ trustees: string[] }>('/api/docket/trustees');
+    return response.data.trustees;
+  },
+
+  getJudgeZoomDefaults: async (judge: string): Promise<JudgeZoomDefaults | null> => {
+    const response = await apiClient.get<{ defaults: JudgeZoomDefaults | null }>(
+      `/api/docket/judge-zoom?judge=${encodeURIComponent(judge)}`
+    );
+    return response.data.defaults;
   },
 };
 

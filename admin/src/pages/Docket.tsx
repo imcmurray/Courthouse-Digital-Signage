@@ -135,6 +135,9 @@ export default function Docket() {
     mutationFn: docketApi.create,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['docket'] });
+      queryClient.invalidateQueries({ queryKey: ['docket-judges'] });
+      queryClient.invalidateQueries({ queryKey: ['docket-courtrooms'] });
+      queryClient.invalidateQueries({ queryKey: ['docket-trustees'] });
       toast.success('Docket entry created successfully');
       setIsFormOpen(false);
     },
@@ -148,6 +151,9 @@ export default function Docket() {
     mutationFn: ({ id, data }: { id: string; data: UpdateDocketEntryInput }) => docketApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['docket'] });
+      queryClient.invalidateQueries({ queryKey: ['docket-judges'] });
+      queryClient.invalidateQueries({ queryKey: ['docket-courtrooms'] });
+      queryClient.invalidateQueries({ queryKey: ['docket-trustees'] });
       toast.success('Docket entry updated successfully');
       setEditingEntry(null);
       // If we came from a direct URL, navigate back to docket list

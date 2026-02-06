@@ -1,12 +1,13 @@
-import { useState, useCallback, useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useQuery } from '@tanstack/react-query';
 import { useBlocker } from 'react-router-dom';
-import { DocketEntry, CreateDocketEntryInput, UpdateDocketEntryInput } from '../api/docket';
+import { DocketEntry, CreateDocketEntryInput, UpdateDocketEntryInput, docketApi } from '../api/docket';
 import { displaysApi, Display } from '../api/displays';
 import UnsavedChangesDialog from './UnsavedChangesDialog';
+import AutocompleteInput from './AutocompleteInput';
 
 const caseNumberRegex = /^(\d{2,4}-\d{1,6}|\d{4,})$/;
 
@@ -95,21 +96,49 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
     handleSubmit,
     watch,
     setValue,
+    getValues,
     reset,
+    control,
     formState: { errors, isDirty },
   } = useForm<DocketFormData>({
     resolver: zodResolver(docketSchema),
     defaultValues: getDefaultValues(),
   });
 
+  // Fetch judge and courtroom names for autocomplete
+  const { data: judges = [] } = useQuery({
+    queryKey: ['docket-judges'],
+    queryFn: docketApi.getJudges,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: courtrooms = [] } = useQuery({
+    queryKey: ['docket-courtrooms'],
+    queryFn: docketApi.getCourtrooms,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: trustees = [] } = useQuery({
+    queryKey: ['docket-trustees'],
+    queryFn: docketApi.getTrustees,
+    staleTime: 5 * 60 * 1000,
+  });
+
   // Handle form reset to defaults
   const handleReset = () => {
     reset(getDefaultValues());
+    setZoomAutoFilled(false);
   };
+
+  // Zoom auto-fill state and refs
+  const [zoomAutoFilled, setZoomAutoFilled] = useState(false);
+  const suppressAutoFill = useRef(isEditing);
+  const previousJudge = useRef(entry?.hearingJudge || '');
 
   const isZoom = watch('isZoom');
   const selectedDisplayIds = watch('displayIds') || [];
   const hearingDate = watch('hearingDate');
+  const hearingJudge = watch('hearingJudge');
 
   // Check if hearing date is in the past
   const isPastDate = () => {
@@ -119,6 +148,48 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
     today.setHours(0, 0, 0, 0);
     return selected < today;
   };
+
+  // Auto-fill Zoom fields when a known judge is selected
+  useEffect(() => {
+    // Skip initial edit load
+    if (suppressAutoFill.current) {
+      suppressAutoFill.current = false;
+      return;
+    }
+
+    // Skip if judge didn't change
+    if (hearingJudge === previousJudge.current) {
+      return;
+    }
+    previousJudge.current = hearingJudge;
+    setZoomAutoFilled(false);
+
+    // Only proceed on exact autocomplete match
+    if (!hearingJudge || !judges.includes(hearingJudge)) {
+      return;
+    }
+
+    // Skip if zoom fields already have data
+    const current = getValues();
+    if (current.zoomMeetingId || current.zoomPasscode || current.zoomPhone) {
+      return;
+    }
+
+    let cancelled = false;
+
+    docketApi.getJudgeZoomDefaults(hearingJudge).then((defaults) => {
+      if (cancelled || !defaults) return;
+      setValue('isZoom', true, { shouldDirty: true });
+      if (defaults.zoomMeetingId) setValue('zoomMeetingId', defaults.zoomMeetingId, { shouldDirty: true });
+      if (defaults.zoomPasscode) setValue('zoomPasscode', defaults.zoomPasscode, { shouldDirty: true });
+      if (defaults.zoomPhone) setValue('zoomPhone', defaults.zoomPhone, { shouldDirty: true });
+      setZoomAutoFilled(true);
+    }).catch(() => {
+      // Silent fail — user can type manually
+    });
+
+    return () => { cancelled = true; };
+  }, [hearingJudge, judges, setValue, getValues]);
 
   // Block navigation when form is dirty
   const blocker = useBlocker(
@@ -332,12 +403,20 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
                 <label htmlFor="hearingJudge" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                   Judge <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="text"
-                  id="hearingJudge"
-                  {...register('hearingJudge')}
-                  placeholder="e.g., Judge Anderson"
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                <Controller
+                  name="hearingJudge"
+                  control={control}
+                  render={({ field }) => (
+                    <AutocompleteInput
+                      id="hearingJudge"
+                      suggestions={judges}
+                      value={field.value}
+                      onChange={field.onChange}
+                      onBlur={field.onBlur}
+                      placeholder="e.g., Judge Anderson"
+                      inputClassName="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                    />
+                  )}
                 />
                 {errors.hearingJudge && (
                   <p className="mt-1 text-sm text-red-600" role="alert">{errors.hearingJudge.message}</p>
@@ -348,12 +427,20 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
                 <label htmlFor="courtroom" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                   Courtroom
                 </label>
-                <input
-                  type="text"
-                  id="courtroom"
-                  {...register('courtroom')}
-                  placeholder="e.g., 321"
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                <Controller
+                  name="courtroom"
+                  control={control}
+                  render={({ field }) => (
+                    <AutocompleteInput
+                      id="courtroom"
+                      suggestions={courtrooms}
+                      value={field.value || ''}
+                      onChange={field.onChange}
+                      onBlur={field.onBlur}
+                      placeholder="e.g., 321"
+                      inputClassName="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                    />
+                  )}
                 />
               </div>
             </div>
@@ -407,12 +494,20 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
                 <label htmlFor="trustee" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                   Trustee
                 </label>
-                <input
-                  type="text"
-                  id="trustee"
-                  {...register('trustee')}
-                  placeholder="e.g., Jane Doe, Trustee"
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                <Controller
+                  name="trustee"
+                  control={control}
+                  render={({ field }) => (
+                    <AutocompleteInput
+                      id="trustee"
+                      suggestions={trustees}
+                      value={field.value || ''}
+                      onChange={field.onChange}
+                      onBlur={field.onBlur}
+                      placeholder="e.g., Jane Doe, Trustee"
+                      inputClassName="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                    />
+                  )}
                 />
               </div>
             </div>
@@ -434,44 +529,54 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
             </div>
 
             {isZoom && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pl-6 border-l-2 border-blue-200 dark:border-blue-700">
-                <div>
-                  <label htmlFor="zoomMeetingId" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                    Meeting ID
-                  </label>
-                  <input
-                    type="text"
-                    id="zoomMeetingId"
-                    {...register('zoomMeetingId')}
-                    placeholder="e.g., 123 456 7890"
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
-                  />
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pl-6 border-l-2 border-blue-200 dark:border-blue-700">
+                  <div>
+                    <label htmlFor="zoomMeetingId" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+                      Meeting ID
+                    </label>
+                    <input
+                      type="text"
+                      id="zoomMeetingId"
+                      {...register('zoomMeetingId')}
+                      placeholder="e.g., 123 456 7890"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="zoomPasscode" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+                      Passcode
+                    </label>
+                    <input
+                      type="text"
+                      id="zoomPasscode"
+                      {...register('zoomPasscode')}
+                      placeholder="e.g., abc123"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="zoomPhone" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+                      Dial-in Number
+                    </label>
+                    <input
+                      type="text"
+                      id="zoomPhone"
+                      {...register('zoomPhone')}
+                      placeholder="e.g., +1 (123) 456-7890"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label htmlFor="zoomPasscode" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                    Passcode
-                  </label>
-                  <input
-                    type="text"
-                    id="zoomPasscode"
-                    {...register('zoomPasscode')}
-                    placeholder="e.g., abc123"
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="zoomPhone" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                    Dial-in Number
-                  </label>
-                  <input
-                    type="text"
-                    id="zoomPhone"
-                    {...register('zoomPhone')}
-                    placeholder="e.g., +1 (123) 456-7890"
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
-                  />
-                </div>
-              </div>
+                {zoomAutoFilled && (
+                  <p className="mt-2 pl-6 text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                    <svg className="h-3.5 w-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                    </svg>
+                    Auto-filled from last hearing — you can edit these values
+                  </p>
+                )}
+              </>
             )}
           </div>
 

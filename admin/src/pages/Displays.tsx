@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { displaysApi, Display, CreateDisplayInput, UpdateDisplayInput } from '../api/displays';
+import { docketApi } from '../api/docket';
+import AutocompleteInput from '../components/AutocompleteInput';
 
 export default function Displays() {
   const queryClient = useQueryClient();
@@ -34,6 +36,19 @@ export default function Displays() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['displays'],
     queryFn: () => displaysApi.getAll(),
+  });
+
+  // Fetch judge and courtroom names for autocomplete
+  const { data: judges = [] } = useQuery({
+    queryKey: ['docket-judges'],
+    queryFn: docketApi.getJudges,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: courtrooms = [] } = useQuery({
+    queryKey: ['docket-courtrooms'],
+    queryFn: docketApi.getCourtrooms,
+    staleTime: 5 * 60 * 1000,
   });
 
   // Create display mutation
@@ -373,12 +388,12 @@ export default function Displays() {
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                     Courtroom Filter
                   </label>
-                  <input
-                    type="text"
+                  <AutocompleteInput
+                    suggestions={courtrooms}
                     value={formData.courtroomFilter || ''}
-                    onChange={(e) => setFormData({ ...formData, courtroomFilter: e.target.value || null })}
+                    onChange={(val) => setFormData({ ...formData, courtroomFilter: val || null })}
                     placeholder="e.g., 321"
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                    inputClassName="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                   />
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     Only show entries for this courtroom
@@ -388,12 +403,12 @@ export default function Displays() {
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                     Judge Filter
                   </label>
-                  <input
-                    type="text"
+                  <AutocompleteInput
+                    suggestions={judges}
                     value={formData.judgeFilter || ''}
-                    onChange={(e) => setFormData({ ...formData, judgeFilter: e.target.value || null })}
+                    onChange={(val) => setFormData({ ...formData, judgeFilter: val || null })}
                     placeholder="e.g., Smith"
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                    inputClassName="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                   />
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     Only show entries for this judge
