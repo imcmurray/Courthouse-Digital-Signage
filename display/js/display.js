@@ -252,7 +252,7 @@
     if (docketData.length === 0) {
       tbody.innerHTML = `
         <tr class="placeholder-row">
-          <td colspan="6">No hearings scheduled for today</td>
+          <td colspan="7">No hearings scheduled for today</td>
         </tr>
       `;
       return;
@@ -275,6 +275,7 @@
           <td>${escapeHtml(entry.caseNumber)}</td>
           <td>${escapeHtml(truncateText(entry.hearingMatter, 80))}</td>
           <td>${entry.isZoom && !entry.courtroom ? 'Zoom' : escapeHtml(entry.courtroom || '--')}</td>
+          <td>${escapeHtml(entry.hearingJudge ? entry.hearingJudge.split(' ').pop() : '--')}</td>
         </tr>
       `;
     }).join('');
