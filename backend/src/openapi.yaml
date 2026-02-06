@@ -1,0 +1,2803 @@
+openapi: 3.0.3
+info:
+  title: Courthouse Digital Signage API
+  description: |
+    REST API for the Courthouse Digital Signage System.
+    Manages docket entries, display clients, announcements, users, and system settings
+    for U.S. Bankruptcy Court digital signage displays.
+  version: 1.0.0
+  contact:
+    name: Court IT
+
+servers:
+  - url: http://localhost:3000
+    description: Local development
+
+tags:
+  - name: Auth
+    description: Authentication and session management
+  - name: Health
+    description: System health and schema verification
+  - name: Dashboard
+    description: Dashboard statistics and recent activity
+  - name: Docket
+    description: Docket entry CRUD and related lookups
+  - name: Displays
+    description: Display client management and configuration
+  - name: Announcements
+    description: Ticker announcements
+  - name: Users
+    description: User account management (admin only)
+  - name: API Keys
+    description: API key management for display clients
+  - name: Audit Logs
+    description: Audit log viewing and export (admin only)
+  - name: Settings
+    description: System settings and logo management
+  - name: Calendar Import
+    description: Court calendar PDF import
+  - name: System
+    description: Data export, import, and clearing
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT access token from /api/auth/login
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: Display client API key
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
+
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+      required: [email, password]
+
+    LoginResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        user:
+          $ref: '#/components/schemas/UserSummary'
+
+    RefreshRequest:
+      type: object
+      properties:
+        refreshToken:
+          type: string
+      required: [refreshToken]
+
+    RefreshResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        user:
+          $ref: '#/components/schemas/UserSummary'
+
+    UserSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        role:
+          type: string
+          enum: [admin, editor, viewer]
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        role:
+          type: string
+          enum: [admin, editor, viewer]
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateUserRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        name:
+          type: string
+        role:
+          type: string
+          enum: [admin, editor, viewer]
+      required: [email, password, name]
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        role:
+          type: string
+          enum: [admin, editor, viewer]
+        isActive:
+          type: boolean
+        password:
+          type: string
+          minLength: 8
+
+    DocketEntry:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        caseNumber:
+          type: string
+        caseTitle:
+          type: string
+        caseChapter:
+          type: string
+          description: Bankruptcy chapter (7, 11, 13)
+        adversaryNumber:
+          type: string
+          nullable: true
+        adversaryTitle:
+          type: string
+          nullable: true
+        hearingDate:
+          type: string
+          format: date-time
+        hearingTime:
+          type: string
+          description: 24hr format HH:MM
+        hearingMatter:
+          type: string
+        hearingJudge:
+          type: string
+        courtroom:
+          type: string
+          nullable: true
+        movingParty:
+          type: string
+          nullable: true
+        opposingParty:
+          type: string
+          nullable: true
+        trustee:
+          type: string
+          nullable: true
+        isZoom:
+          type: boolean
+        zoomMeetingId:
+          type: string
+          nullable: true
+        zoomPasscode:
+          type: string
+          nullable: true
+        zoomPhone:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [scheduled, in_progress, completed, cancelled, continued, stricken, reserved]
+        statusNote:
+          type: string
+          nullable: true
+        comment:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        createdById:
+          type: string
+          nullable: true
+
+    CreateDocketEntryRequest:
+      type: object
+      properties:
+        caseNumber:
+          type: string
+        caseTitle:
+          type: string
+        caseChapter:
+          type: string
+        adversaryNumber:
+          type: string
+        adversaryTitle:
+          type: string
+        hearingDate:
+          type: string
+          format: date
+        hearingTime:
+          type: string
+          description: 24hr format HH:MM
+        hearingMatter:
+          type: string
+        hearingJudge:
+          type: string
+        courtroom:
+          type: string
+        movingParty:
+          type: string
+        opposingParty:
+          type: string
+        trustee:
+          type: string
+        isZoom:
+          type: boolean
+        zoomMeetingId:
+          type: string
+        zoomPasscode:
+          type: string
+        zoomPhone:
+          type: string
+        status:
+          type: string
+          enum: [scheduled, in_progress, completed, cancelled, continued, stricken, reserved]
+        statusNote:
+          type: string
+        comment:
+          type: string
+        displayIds:
+          type: array
+          items:
+            type: string
+          description: Display IDs to associate with this entry
+      required: [caseNumber, caseTitle, caseChapter, hearingDate, hearingTime, hearingMatter, hearingJudge]
+
+    DocketListResponse:
+      type: object
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/DocketEntry'
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+        totalPages:
+          type: integer
+
+    BulkImportRequest:
+      type: object
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/CreateDocketEntryRequest'
+          maxItems: 500
+      required: [entries]
+
+    BulkImportResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        count:
+          type: integer
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/DocketEntry'
+
+    Display:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        location:
+          type: string
+        judgeFilter:
+          type: string
+          nullable: true
+        courtroomFilter:
+          type: string
+          nullable: true
+        chapterFilter:
+          type: string
+          nullable: true
+          description: JSON array as string
+        showStricken:
+          type: boolean
+        showZoomInfo:
+          type: boolean
+        highlightCurrent:
+          type: boolean
+        theme:
+          type: string
+        columns:
+          type: string
+          description: JSON array of column names
+        showWeather:
+          type: boolean
+        weatherLocation:
+          type: string
+          nullable: true
+        noticeText:
+          type: string
+        tickerEnabled:
+          type: boolean
+        tickerSpeed:
+          type: string
+          enum: [slow, medium, fast]
+        status:
+          type: string
+          enum: [online, offline, unknown]
+        lastHeartbeat:
+          type: string
+          format: date-time
+          nullable: true
+        ipAddress:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateDisplayRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Custom display ID (e.g. "display-321-main")
+        name:
+          type: string
+        location:
+          type: string
+        judgeFilter:
+          type: string
+        courtroomFilter:
+          type: string
+        chapterFilter:
+          type: string
+        showStricken:
+          type: boolean
+        showZoomInfo:
+          type: boolean
+        highlightCurrent:
+          type: boolean
+        theme:
+          type: string
+        columns:
+          type: string
+        showWeather:
+          type: boolean
+        weatherLocation:
+          type: string
+        noticeText:
+          type: string
+        tickerEnabled:
+          type: boolean
+        tickerSpeed:
+          type: string
+          enum: [slow, medium, fast]
+      required: [id, name, location]
+
+    CreateDisplayResponse:
+      type: object
+      properties:
+        display:
+          $ref: '#/components/schemas/Display'
+        apiKey:
+          type: string
+          description: Plain-text API key (only shown once at creation)
+
+    Announcement:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        text:
+          type: string
+          maxLength: 500
+        priority:
+          type: integer
+          description: Lower number = higher priority
+        enabled:
+          type: boolean
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        createdById:
+          type: string
+          nullable: true
+
+    CreateAnnouncementRequest:
+      type: object
+      properties:
+        text:
+          type: string
+          maxLength: 500
+        priority:
+          type: integer
+        enabled:
+          type: boolean
+        expiresAt:
+          type: string
+          format: date-time
+      required: [text]
+
+    ApiKey:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        keyPrefix:
+          type: string
+          description: First 8 chars of the key
+        permissions:
+          type: string
+          description: JSON array of permission strings
+        displayId:
+          type: string
+          nullable: true
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        lastUsedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateApiKeyRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        permissions:
+          type: array
+          items:
+            type: string
+        displayId:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+      required: [name]
+
+    CreateApiKeyResponse:
+      type: object
+      properties:
+        apiKey:
+          $ref: '#/components/schemas/ApiKey'
+        key:
+          type: string
+          description: Plain-text API key (only shown once)
+
+    AuditLog:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        action:
+          type: string
+        entityType:
+          type: string
+        entityId:
+          type: string
+          nullable: true
+        userId:
+          type: string
+          nullable: true
+        apiKeyId:
+          type: string
+          nullable: true
+        changes:
+          type: string
+          nullable: true
+          description: JSON string of changes
+        ipAddress:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    Setting:
+      type: object
+      properties:
+        key:
+          type: string
+        value:
+          type: string
+          description: JSON-encoded value
+        updatedAt:
+          type: string
+          format: date-time
+        updatedById:
+          type: string
+          nullable: true
+
+    ImportLog:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        source:
+          type: string
+          enum: [pdf-auto, csv-manual]
+        judgeName:
+          type: string
+          nullable: true
+        judgeCode:
+          type: string
+          nullable: true
+        sourceUrl:
+          type: string
+          nullable: true
+        filename:
+          type: string
+          nullable: true
+        entriesFound:
+          type: integer
+        entriesCreated:
+          type: integer
+        entriesUpdated:
+          type: integer
+        entriesSkipped:
+          type: integer
+        status:
+          type: string
+          enum: [running, success, partial, failed]
+        errorMessage:
+          type: string
+          nullable: true
+        durationMs:
+          type: integer
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+        database:
+          type: string
+          enum: [connected, disconnected]
+        timestamp:
+          type: string
+          format: date-time
+        uptime:
+          type: number
+          description: Server uptime in seconds
+
+    StatsResponse:
+      type: object
+      properties:
+        todaysHearings:
+          type: integer
+        activeDisplays:
+          type: integer
+        totalDisplays:
+          type: integer
+        activeAnnouncements:
+          type: integer
+        activeUsers:
+          type: integer
+
+    ActivityEntry:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        action:
+          type: string
+        entityType:
+          type: string
+        entityId:
+          type: string
+          nullable: true
+        user:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        changes:
+          type: object
+          nullable: true
+
+paths:
+  # ── Auth ──────────────────────────────────────────
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Log in with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: Missing email or password
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Invalid credentials or deactivated account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Log out (invalidate session client-side)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh access token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: New access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefreshResponse'
+        '400':
+          description: Missing refresh token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Invalid or expired refresh token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/auth/me:
+    get:
+      tags: [Auth]
+      summary: Get current user info
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current user details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ── Health ────────────────────────────────────────
+  /api/health:
+    get:
+      tags: [Health]
+      summary: Health check with database connectivity
+      responses:
+        '200':
+          description: System healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          description: System degraded (database unreachable)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /api/schema-check:
+    get:
+      tags: [Health]
+      summary: Verify database schema has all required tables
+      responses:
+        '200':
+          description: Schema verification result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [ok, warning, error]
+                  tables:
+                    type: array
+                    items:
+                      type: string
+                  missingTables:
+                    type: array
+                    items:
+                      type: string
+                  extraTables:
+                    type: array
+                    items:
+                      type: string
+
+  # ── Dashboard ─────────────────────────────────────
+  /api/stats:
+    get:
+      tags: [Dashboard]
+      summary: Get dashboard statistics
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Dashboard stats
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatsResponse'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/recent-activity:
+    get:
+      tags: [Dashboard]
+      summary: Get recent audit activity for dashboard
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+          description: Number of entries to return
+      responses:
+        '200':
+          description: Recent activity entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ActivityEntry'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ── Docket ────────────────────────────────────────
+  /api/docket:
+    get:
+      tags: [Docket]
+      summary: List docket entries with filtering and pagination
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: date
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Filter by hearing date (YYYY-MM-DD)
+        - name: courtroom
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [scheduled, in_progress, completed, cancelled, continued, stricken, reserved]
+        - name: judge
+          in: query
+          schema:
+            type: string
+        - name: chapter
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Search across case number, title, matter, and judge
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            maximum: 100
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            enum: [hearingTime, hearingDate, caseNumber, caseTitle, status, courtroom, hearingJudge, caseChapter]
+        - name: sortOrder
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+      responses:
+        '200':
+          description: Paginated docket entries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocketListResponse'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      tags: [Docket]
+      summary: Create a single docket entry
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDocketEntryRequest'
+      responses:
+        '201':
+          description: Created docket entry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocketEntry'
+        '400':
+          description: Missing required fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Duplicate entry (case number + date + time)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/docket/bulk:
+    post:
+      tags: [Docket]
+      summary: Bulk import docket entries (max 500)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkImportRequest'
+      responses:
+        '201':
+          description: Entries created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkImportResponse'
+        '400':
+          description: Validation errors
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  details:
+                    type: array
+                    items:
+                      type: string
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Duplicate entry found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/docket/judges:
+    get:
+      tags: [Docket]
+      summary: Get distinct judge names for autocomplete
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of judge names
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  judges:
+                    type: array
+                    items:
+                      type: string
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/docket/courtrooms:
+    get:
+      tags: [Docket]
+      summary: Get distinct courtroom values for autocomplete
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of courtrooms
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  courtrooms:
+                    type: array
+                    items:
+                      type: string
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/docket/trustees:
+    get:
+      tags: [Docket]
+      summary: Get distinct trustee names for autocomplete
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of trustees
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  trustees:
+                    type: array
+                    items:
+                      type: string
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/docket/judge-zoom:
+    get:
+      tags: [Docket]
+      summary: Get Zoom info for a judge's calendar
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: judge
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: date
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Zoom meeting info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  isZoom:
+                    type: boolean
+                  zoomMeetingId:
+                    type: string
+                    nullable: true
+                  zoomPasscode:
+                    type: string
+                    nullable: true
+                  zoomPhone:
+                    type: string
+                    nullable: true
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/docket/template:
+    get:
+      tags: [Docket]
+      summary: Get CSV template for docket import
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: CSV template file
+          content:
+            text/csv:
+              schema:
+                type: string
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/docket/{id}:
+    get:
+      tags: [Docket]
+      summary: Get a single docket entry by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Docket entry details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocketEntry'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Entry not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      tags: [Docket]
+      summary: Update a docket entry
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDocketEntryRequest'
+      responses:
+        '200':
+          description: Updated docket entry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocketEntry'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Entry not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Duplicate entry conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags: [Docket]
+      summary: Delete a docket entry
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Entry deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Entry not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/docket/clear:
+    delete:
+      tags: [Docket]
+      summary: Clear docket entries by date range or all
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: date
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Clear entries for a specific date
+        - name: before
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Clear entries before this date
+      responses:
+        '200':
+          description: Entries cleared
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  count:
+                    type: integer
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ── Displays ──────────────────────────────────────
+  /api/displays:
+    get:
+      tags: [Displays]
+      summary: List all displays
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of displays
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Display'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      tags: [Displays]
+      summary: Create a new display and generate its API key
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDisplayRequest'
+      responses:
+        '201':
+          description: Display created with API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateDisplayResponse'
+        '400':
+          description: Missing required fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Display ID already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/displays/{id}:
+    put:
+      tags: [Displays]
+      summary: Update a display's configuration
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDisplayRequest'
+      responses:
+        '200':
+          description: Updated display
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Display'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Display not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags: [Displays]
+      summary: Delete a display
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Display deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Display not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/displays/{id}/regenerate-key:
+    post:
+      tags: [Displays]
+      summary: Regenerate API key for a display
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: New API key generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  apiKey:
+                    type: string
+                    description: New plain-text API key (shown once)
+                  message:
+                    type: string
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Display not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/displays/{id}/config:
+    get:
+      tags: [Displays]
+      summary: Get display configuration (for display clients)
+      description: Used by display clients to fetch their configuration. Authenticated via API key.
+      security:
+        - apiKeyAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Display configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Display'
+        '401':
+          description: Invalid or missing API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Display not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/displays/{id}/docket:
+    get:
+      tags: [Displays]
+      summary: Get docket entries for a specific display
+      description: Returns docket entries filtered by the display's configuration. Authenticated via API key.
+      security:
+        - apiKeyAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: date
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Docket entries for the display
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entries:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DocketEntry'
+                  display:
+                    $ref: '#/components/schemas/Display'
+        '401':
+          description: Invalid or missing API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Display not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/displays/refresh:
+    post:
+      tags: [Displays]
+      summary: Trigger all displays to refresh via WebSocket
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Refresh signal sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/display-docket-entries:
+    get:
+      tags: [Displays]
+      summary: Get display-to-docket entry associations
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: displayId
+          in: query
+          schema:
+            type: string
+        - name: docketEntryId
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Association list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    displayId:
+                      type: string
+                    docketEntryId:
+                      type: string
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ── Announcements ─────────────────────────────────
+  /api/announcements:
+    get:
+      tags: [Announcements]
+      summary: List announcements
+      description: Public endpoint — returns active announcements. With JWT, returns all.
+      parameters:
+        - name: active
+          in: query
+          schema:
+            type: boolean
+          description: If true, only return enabled and non-expired announcements
+      responses:
+        '200':
+          description: List of announcements
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Announcement'
+    post:
+      tags: [Announcements]
+      summary: Create an announcement
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAnnouncementRequest'
+      responses:
+        '201':
+          description: Created announcement
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Announcement'
+        '400':
+          description: Missing required text
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/announcements/{id}:
+    get:
+      tags: [Announcements]
+      summary: Get an announcement by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Announcement details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Announcement'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Announcement not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      tags: [Announcements]
+      summary: Update an announcement
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAnnouncementRequest'
+      responses:
+        '200':
+          description: Updated announcement
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Announcement'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Announcement not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags: [Announcements]
+      summary: Delete an announcement
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Announcement deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Announcement not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ── Users ─────────────────────────────────────────
+  /api/users:
+    get:
+      tags: [Users]
+      summary: List all users (admin only)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      tags: [Users]
+      summary: Create a new user (admin only)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+      responses:
+        '201':
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Missing required fields or invalid data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Email already in use
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/users/{id}:
+    get:
+      tags: [Users]
+      summary: Get user by ID (admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: User details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      tags: [Users]
+      summary: Update user (admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        '200':
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Email already in use
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags: [Users]
+      summary: Delete user (admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: User deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '400':
+          description: Cannot delete your own account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ── API Keys ──────────────────────────────────────
+  /api/api-keys:
+    get:
+      tags: [API Keys]
+      summary: List all API keys (admin only)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of API keys
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ApiKey'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      tags: [API Keys]
+      summary: Create an API key (admin only)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateApiKeyRequest'
+      responses:
+        '201':
+          description: API key created (plain-text key shown once)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateApiKeyResponse'
+        '400':
+          description: Missing required name
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/api-keys/validate:
+    get:
+      tags: [API Keys]
+      summary: Validate an API key
+      security:
+        - apiKeyAuth: []
+      responses:
+        '200':
+          description: API key is valid
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  valid:
+                    type: boolean
+                  displayId:
+                    type: string
+                    nullable: true
+                  permissions:
+                    type: array
+                    items:
+                      type: string
+        '401':
+          description: Invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/api-keys/{id}:
+    get:
+      tags: [API Keys]
+      summary: Get API key by ID (admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: API key details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKey'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: API key not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      tags: [API Keys]
+      summary: Update an API key (admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateApiKeyRequest'
+      responses:
+        '200':
+          description: API key updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKey'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: API key not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags: [API Keys]
+      summary: Delete an API key (admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: API key deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: API key not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ── Audit Logs ────────────────────────────────────
+  /api/audit-logs:
+    get:
+      tags: [Audit Logs]
+      summary: List audit logs with filtering (admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: action
+          in: query
+          schema:
+            type: string
+        - name: entityType
+          in: query
+          schema:
+            type: string
+        - name: userId
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+      responses:
+        '200':
+          description: Paginated audit logs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  logs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AuditLog'
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  limit:
+                    type: integer
+                  totalPages:
+                    type: integer
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/audit-logs/export:
+    get:
+      tags: [Audit Logs]
+      summary: Export audit logs as CSV (admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: action
+          in: query
+          schema:
+            type: string
+        - name: entityType
+          in: query
+          schema:
+            type: string
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: CSV file download
+          content:
+            text/csv:
+              schema:
+                type: string
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ── Settings ──────────────────────────────────────
+  /api/settings/public:
+    get:
+      tags: [Settings]
+      summary: Get public settings (no auth required)
+      description: Returns settings safe for display clients (courtName, logoUrl, etc.)
+      responses:
+        '200':
+          description: Public settings
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+
+  /api/settings:
+    get:
+      tags: [Settings]
+      summary: Get all settings (admin only)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: All settings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Setting'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      tags: [Settings]
+      summary: Update settings (admin only)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              description: Key-value pairs to update
+      responses:
+        '200':
+          description: Settings updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  settings:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Setting'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/settings/logo:
+    post:
+      tags: [Settings]
+      summary: Upload court logo (PNG or SVG, max 5MB)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                logo:
+                  type: string
+                  format: binary
+              required: [logo]
+      responses:
+        '200':
+          description: Logo uploaded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  logoUrl:
+                    type: string
+        '400':
+          description: No file uploaded or invalid file type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags: [Settings]
+      summary: Delete court logo
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Logo deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ── Calendar Import ───────────────────────────────
+  /api/calendar-import/status:
+    get:
+      tags: [Calendar Import]
+      summary: Get current import status
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Import status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  isRunning:
+                    type: boolean
+                  lastRun:
+                    $ref: '#/components/schemas/ImportLog'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/calendar-import/run:
+    post:
+      tags: [Calendar Import]
+      summary: Trigger a calendar import from court PDFs
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Import started or completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ImportLog'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Import already running
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/calendar-import/history:
+    get:
+      tags: [Calendar Import]
+      summary: Get import history
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Import history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ImportLog'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/calendar-import/history/{id}:
+    get:
+      tags: [Calendar Import]
+      summary: Get details of a specific import run
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Import details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportLog'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Import not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/calendar-import/config:
+    get:
+      tags: [Calendar Import]
+      summary: Get calendar import configuration
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Import configuration
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enabled:
+                    type: boolean
+                  judges:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        code:
+                          type: string
+                        name:
+                          type: string
+                        courtroom:
+                          type: string
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      tags: [Calendar Import]
+      summary: Update calendar import configuration
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled:
+                  type: boolean
+                judges:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                      name:
+                        type: string
+                      courtroom:
+                        type: string
+      responses:
+        '200':
+          description: Configuration updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ── System ────────────────────────────────────────
+  /api/export:
+    get:
+      tags: [System]
+      summary: Export all data as JSON (admin only)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: JSON data export
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  exportedAt:
+                    type: string
+                    format: date-time
+                  data:
+                    type: object
+                    properties:
+                      users:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/User'
+                      docketEntries:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/DocketEntry'
+                      displays:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Display'
+                      announcements:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Announcement'
+                      settings:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Setting'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/clear:
+    delete:
+      tags: [System]
+      summary: Clear all data except users (admin only)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Data cleared
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  cleared:
+                    type: object
+                    properties:
+                      docketEntries:
+                        type: integer
+                      announcements:
+                        type: integer
+                      auditLogs:
+                        type: integer
+                      displayDocketEntries:
+                        type: integer
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/import:
+    post:
+      tags: [System]
+      summary: Import data from JSON export (admin only)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                data:
+                  type: object
+                  description: Data object matching export format
+      responses:
+        '200':
+          description: Data imported
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  imported:
+                    type: object
+        '400':
+          description: Invalid import data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'

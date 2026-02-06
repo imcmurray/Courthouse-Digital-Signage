@@ -10,6 +10,8 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import multer from 'multer';
 import rateLimit from 'express-rate-limit';
+import swaggerUi from 'swagger-ui-express';
+import YAML from 'yaml';
 import * as calendarImportService from './services/calendarImportService';
 
 const app = express();
@@ -157,6 +159,14 @@ app.use('/api', generalLimiter);
 
 // Serve display client static files
 app.use('/display', express.static(path.join(__dirname, '../../display')));
+
+// Swagger UI - interactive API documentation
+const openapiSpec = YAML.parse(
+  fs.readFileSync(path.join(__dirname, 'openapi.yaml'), 'utf8')
+);
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(openapiSpec, {
+  customSiteTitle: 'Courthouse Signage API',
+}));
 
 // Request logging
 app.use((req, res, next) => {
