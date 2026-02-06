@@ -2359,6 +2359,33 @@ app.get('/api/audit-logs/export', authenticateToken, requireAdmin, async (req: A
 // Settings Endpoints
 // =========================================
 
+// GET /api/settings/public - Public court branding info (no auth required)
+app.get('/api/settings/public', async (req: Request, res: Response) => {
+  try {
+    const settings = await prisma.setting.findMany({
+      where: {
+        key: { in: ['court_name', 'court_subtitle', 'chief_judge', 'clerk_of_court', 'court_logo'] }
+      }
+    });
+
+    const settingsMap: Record<string, string> = {};
+    for (const setting of settings) {
+      settingsMap[setting.key] = JSON.parse(setting.value);
+    }
+
+    res.json({
+      courtName: settingsMap.court_name || 'U.S. Bankruptcy Court',
+      courtSubtitle: settingsMap.court_subtitle || 'District of Utah',
+      chiefJudge: settingsMap.chief_judge || '',
+      clerkOfCourt: settingsMap.clerk_of_court || '',
+      courtLogo: settingsMap.court_logo || null
+    });
+  } catch (error) {
+    console.error('Failed to fetch public settings:', error);
+    res.status(500).json({ error: 'Failed to fetch public settings' });
+  }
+});
+
 // GET /api/settings - Get all settings
 app.get('/api/settings', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {

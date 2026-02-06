@@ -45,6 +45,7 @@
     setInterval(updateClock, CONFIG.clockInterval);
 
     // Fetch initial data
+    fetchCourtBranding();
     fetchDisplayConfig();
     fetchDocket();
     fetchAnnouncements();
@@ -90,6 +91,40 @@
         day: 'numeric',
         year: 'numeric',
       });
+    }
+  }
+
+  // Fetch public court branding (no API key needed)
+  async function fetchCourtBranding() {
+    try {
+      const response = await fetch(`${CONFIG.apiBaseUrl}/api/settings/public`);
+      if (response.ok) {
+        const data = await response.json();
+
+        const courtTitleEl = document.getElementById('court-title');
+        if (courtTitleEl && data.courtName) courtTitleEl.textContent = data.courtName;
+
+        const courtSubtitleEl = document.getElementById('court-subtitle');
+        if (courtSubtitleEl && data.courtSubtitle) courtSubtitleEl.textContent = data.courtSubtitle;
+
+        const officialsEl = document.getElementById('court-officials');
+        if (officialsEl) {
+          const parts = [];
+          if (data.chiefJudge) parts.push(data.chiefJudge + ', Chief Judge');
+          if (data.clerkOfCourt) parts.push(data.clerkOfCourt + ', Clerk of Court');
+          officialsEl.textContent = parts.join(' \u2022 ');
+        }
+
+        if (data.courtLogo) {
+          const courtSealEl = document.getElementById('court-seal');
+          if (courtSealEl) {
+            courtSealEl.src = `${CONFIG.apiBaseUrl}${data.courtLogo}`;
+            courtSealEl.alt = 'Court Logo';
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch court branding:', error);
     }
   }
 
