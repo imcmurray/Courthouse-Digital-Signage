@@ -460,7 +460,10 @@ export default function Docket() {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString();
+    // Parse as UTC and format in UTC to avoid timezone shift
+    // (hearingDate is stored as midnight UTC, e.g. 2026-02-06T00:00:00.000Z)
+    const d = new Date(dateString);
+    return `${d.getUTCMonth() + 1}/${d.getUTCDate()}/${d.getUTCFullYear()}`;
   };
 
   const formatTime = (timeString: string) => {

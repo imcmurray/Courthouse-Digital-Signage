@@ -188,3 +188,22 @@ model CalendarMetadata {
   @@unique([judgeCode, calendarDate])
   @@map("calendar_metadata")
 }
+
+model ImportLog {
+  id             String   @id @default(uuid())
+  source         String   // "pdf-auto" or "csv-manual"
+  judgeName      String?  @map("judge_name")
+  judgeCode      String?  @map("judge_code")
+  sourceUrl      String?  @map("source_url")
+  filename       String?
+  entriesFound   Int      @default(0) @map("entries_found")
+  entriesCreated Int      @default(0) @map("entries_created")
+  entriesUpdated Int      @default(0) @map("entries_updated")
+  entriesSkipped Int      @default(0) @map("entries_skipped")
+  status         String   @default("running") // running, success, partial, failed
+  errorMessage   String?  @map("error_message")
+  durationMs     Int?     @map("duration_ms")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@map("import_logs")
+}

@@ -10,6 +10,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import multer from 'multer';
 import rateLimit from 'express-rate-limit';
+import * as calendarImportService from './services/calendarImportService';
 
 const app = express();
 const httpServer = createServer(app);
@@ -1311,7 +1312,10 @@ app.get('/api/displays/:id/docket', displayLimiter, authenticateApiKey, async (r
       where.hearingJudge = display.judgeFilter;
     }
     if (display.courtroomFilter) {
-      where.courtroom = display.courtroomFilter;
+      where.OR = [
+        { courtroom: display.courtroomFilter },
+        { courtroom: null }
+      ];
     }
     if (display.chapterFilter) {
       const chapters = JSON.parse(display.chapterFilter);
@@ -2577,6 +2581,95 @@ app.delete('/api/settings/logo', authenticateToken, requireAdmin, async (req: Au
 });
 
 // =========================================
+// Calendar Import Endpoints (Admin Only)
+// =========================================
+
+// GET /api/calendar-import/status - Current import state
+app.get('/api/calendar-import/status', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const status = await calendarImportService.getImportStatus();
+    res.json(status);
+  } catch (error) {
+    console.error('Failed to get import status:', error);
+    res.status(500).json({ error: 'Failed to get import status' });
+  }
+});
+
+// POST /api/calendar-import/run - Trigger manual import (returns immediately, runs async)
+app.post('/api/calendar-import/run', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const status = await calendarImportService.getImportStatus();
+    if (status.isRunning) {
+      return res.status(409).json({ error: 'Import is already running' });
+    }
+
+    // Start import in background
+    calendarImportService.runImport(io).catch(err => {
+      console.error('Background import failed:', err);
+    });
+
+    res.json({ message: 'Import started' });
+  } catch (error) {
+    console.error('Failed to start import:', error);
+    res.status(500).json({ error: 'Failed to start import' });
+  }
+});
+
+// GET /api/calendar-import/history - List import logs (paginated)
+app.get('/api/calendar-import/history', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
+    const history = await calendarImportService.getImportHistory(page, limit);
+    res.json(history);
+  } catch (error) {
+    console.error('Failed to get import history:', error);
+    res.status(500).json({ error: 'Failed to get import history' });
+  }
+});
+
+// GET /api/calendar-import/history/:id - Single import log detail
+app.get('/api/calendar-import/history/:id', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const log = await calendarImportService.getImportLogById(req.params.id);
+    if (!log) {
+      return res.status(404).json({ error: 'Import log not found' });
+    }
+    res.json(log);
+  } catch (error) {
+    console.error('Failed to get import log:', error);
+    res.status(500).json({ error: 'Failed to get import log' });
+  }
+});
+
+// GET /api/calendar-import/config - Get import configuration
+app.get('/api/calendar-import/config', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const config = await calendarImportService.getImportConfig();
+    res.json(config);
+  } catch (error) {
+    console.error('Failed to get import config:', error);
+    res.status(500).json({ error: 'Failed to get import config' });
+  }
+});
+
+// PUT /api/calendar-import/config - Update import configuration
+app.put('/api/calendar-import/config', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { enabled, intervalMinutes, sourceUrl } = req.body;
+    await calendarImportService.updateImportConfig(
+      { enabled, intervalMinutes, sourceUrl },
+      req.user?.userId
+    );
+    const config = await calendarImportService.getImportConfig();
+    res.json(config);
+  } catch (error) {
+    console.error('Failed to update import config:', error);
+    res.status(500).json({ error: 'Failed to update import config' });
+  }
+});
+
+// =========================================
 // Data Management Endpoints (Admin Only)
 // =========================================
 
@@ -2850,13 +2943,20 @@ process.on('SIGTERM', async () => {
 });
 
 // Start server
-httpServer.listen(PORT, () => {
+httpServer.listen(PORT, async () => {
   console.log('============================================');
   console.log('  Courthouse Digital Signage - Backend API');
   console.log('============================================');
   console.log(`Server running on http://localhost:${PORT}`);
   console.log(`Health check: http://localhost:${PORT}/api/health`);
   console.log('============================================');
+
+  // Start auto-import polling if enabled in settings
+  try {
+    await calendarImportService.syncPollingTimer(io);
+  } catch (err) {
+    console.error('Failed to initialize calendar import polling:', err);
+  }
 });
 
 export { app, io, prisma };

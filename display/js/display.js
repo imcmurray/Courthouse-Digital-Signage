@@ -274,7 +274,7 @@
           <td>${formatTime(entry.hearingTime)}</td>
           <td>${escapeHtml(entry.caseNumber)}</td>
           <td>${escapeHtml(truncateText(entry.hearingMatter, 80))}</td>
-          <td>${escapeHtml(entry.courtroom || '--')}</td>
+          <td>${entry.isZoom && !entry.courtroom ? 'Zoom' : escapeHtml(entry.courtroom || '--')}</td>
         </tr>
       `;
     }).join('');
@@ -287,10 +287,22 @@
       container.classList.remove('scrolling');
     }
 
-    // Show Zoom info if current hearing has Zoom
-    const currentEntry = docketData.find(e => e.status === 'in_progress');
-    if (currentEntry && currentEntry.isZoom) {
-      showZoomInfo(currentEntry);
+    // Show Zoom info for in-progress or upcoming (within 15 min) Zoom hearings
+    const now = new Date();
+    const zoomEntry = docketData.find(e => {
+      if (!e.isZoom) return false;
+      if (e.status === 'in_progress') return true;
+      if (e.status !== 'scheduled') return false;
+      // Check if hearing is within 15 minutes
+      const [h, m] = (e.hearingTime || '').split(':').map(Number);
+      if (isNaN(h) || isNaN(m)) return false;
+      const hearingTime = new Date(now);
+      hearingTime.setHours(h, m, 0, 0);
+      const minutesUntil = (hearingTime - now) / 60000;
+      return minutesUntil <= 15 && minutesUntil >= -60;
+    });
+    if (zoomEntry) {
+      showZoomInfo(zoomEntry);
     } else {
       hideZoomInfo();
     }

@@ -15,6 +15,7 @@ import Displays from './pages/Displays';
 import ApiKeys from './pages/ApiKeys';
 import AuditLogs from './pages/AuditLogs';
 import Settings from './pages/Settings';
+import CalendarImport from './pages/CalendarImport';
 
 const queryClient = new QueryClient();
 
@@ -133,6 +134,16 @@ const router = createBrowserRouter([
         ),
       },
       // Admin-only routes
+      {
+        path: '/admin/calendar-import',
+        element: (
+          <ProtectedRoute allowedRoles={['admin']}>
+            <AdminLayout>
+              <CalendarImport />
+            </AdminLayout>
+          </ProtectedRoute>
+        ),
+      },
       {
         path: '/admin/users',
         element: (
