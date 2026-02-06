@@ -42,6 +42,25 @@ interface AuthenticatedRequest extends Request<RouteParams> {
 const PORT = process.env.PORT || 3000;
 const CORS_ORIGIN = process.env.CORS_ORIGIN?.split(',') || ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:5176', 'http://localhost:5177', 'http://localhost:5178', 'http://localhost:5179', 'http://localhost:5180', 'http://localhost:5181', 'http://localhost:5182', 'http://localhost:5183', 'http://localhost:5184', 'http://localhost:5185', 'http://localhost:8080', 'http://127.0.0.1:5173', 'http://127.0.0.1:5174', 'http://127.0.0.1:5175', 'http://127.0.0.1:5176', 'http://127.0.0.1:5177', 'http://127.0.0.1:5178', 'http://127.0.0.1:5179', 'http://127.0.0.1:5180', 'http://127.0.0.1:8080'];
 
+// Preview token store (in-memory, ephemeral)
+interface PreviewTokenEntry {
+  displayId: string;
+  expiresAt: number;
+}
+const previewTokens = new Map<string, PreviewTokenEntry>();
+const PREVIEW_TOKEN_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+// Clean up expired preview tokens every 60 seconds
+const previewTokenCleanupInterval = setInterval(() => {
+  const now = Date.now();
+  for (const [token, entry] of previewTokens) {
+    if (entry.expiresAt <= now) {
+      previewTokens.delete(token);
+    }
+  }
+}, 60_000);
+previewTokenCleanupInterval.unref();
+
 // Uploads directory setup
 const UPLOADS_DIR = path.join(__dirname, '../../uploads');
 if (!fs.existsSync(UPLOADS_DIR)) {
@@ -232,6 +251,18 @@ const authenticateApiKey = async (req: ApiKeyRequest, res: Response, next: NextF
   try {
     // The display ID is in the URL params
     const displayId = req.params.id;
+
+    // Check preview tokens first (O(1) Map lookup, no bcrypt)
+    const previewEntry = previewTokens.get(apiKey);
+    if (previewEntry && previewEntry.displayId === displayId && previewEntry.expiresAt > Date.now()) {
+      const display = await prisma.display.findUnique({ where: { id: displayId } });
+      if (!display) {
+        return res.status(404).json({ error: 'Display not found' });
+      }
+      req.display = { id: display.id, name: display.name };
+      // Do NOT update lastHeartbeat/status for preview sessions
+      return next();
+    }
 
     // Find the display
     const display = await prisma.display.findUnique({
@@ -1840,6 +1871,33 @@ app.post('/api/displays/:id/regenerate-key', authenticateToken, requireAdmin, as
   }
 });
 
+// POST /api/displays/:id/preview-token - Generate ephemeral preview token for a display
+app.post('/api/displays/:id/preview-token', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const display = await prisma.display.findUnique({ where: { id } });
+    if (!display) {
+      return res.status(404).json({ error: 'Display not found' });
+    }
+
+    const previewToken = crypto.randomBytes(32).toString('hex');
+    previewTokens.set(previewToken, {
+      displayId: id,
+      expiresAt: Date.now() + PREVIEW_TOKEN_TTL_MS,
+    });
+
+    res.json({
+      previewToken,
+      displayId: id,
+      expiresIn: 300,
+    });
+  } catch (error) {
+    console.error('Failed to generate preview token:', error);
+    res.status(500).json({ error: 'Failed to generate preview token' });
+  }
+});
+
 // POST /api/displays/refresh - Force all displays to refresh
 app.post('/api/displays/refresh', authenticateToken, requireAdmin, async (_req: AuthenticatedRequest, res: Response) => {
   try {
@@ -3074,6 +3132,8 @@ app.use((req, res) => {
 // Graceful shutdown
 process.on('SIGTERM', async () => {
   console.log('SIGTERM received, shutting down gracefully');
+  clearInterval(previewTokenCleanupInterval);
+  previewTokens.clear();
   await prisma.$disconnect();
   process.exit(0);
 });

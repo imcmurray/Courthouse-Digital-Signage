@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { displaysApi, Display, CreateDisplayInput, UpdateDisplayInput } from '../api/displays';
+import { displaysApi, Display, CreateDisplayInput, UpdateDisplayInput, PreviewTokenResponse } from '../api/displays';
+import { API_BASE_URL } from '../api/client';
 import { docketApi } from '../api/docket';
 import AutocompleteInput from '../components/AutocompleteInput';
 
@@ -13,6 +14,8 @@ export default function Displays() {
   const [regenerateConfirmDisplay, setRegenerateConfirmDisplay] = useState<Display | null>(null);
   const [newApiKey, setNewApiKey] = useState<string | null>(null);
   const [regeneratedApiKey, setRegeneratedApiKey] = useState<string | null>(null);
+  const [previewDisplay, setPreviewDisplay] = useState<Display | null>(null);
+  const [previewToken, setPreviewToken] = useState<PreviewTokenResponse | null>(null);
 
   // Form state
   const [formData, setFormData] = useState<CreateDisplayInput>({
@@ -110,6 +113,29 @@ export default function Displays() {
       toast.error(error.response?.data?.error || 'Failed to regenerate API key');
     },
   });
+
+  // Preview token mutation
+  const previewTokenMutation = useMutation({
+    mutationFn: displaysApi.getPreviewToken,
+    onSuccess: (data) => {
+      setPreviewToken(data);
+    },
+    onError: (error: { response?: { data?: { error?: string } } }) => {
+      toast.error(error.response?.data?.error || 'Failed to generate preview token');
+      setPreviewDisplay(null);
+    },
+  });
+
+  const handlePreview = (display: Display) => {
+    setPreviewDisplay(display);
+    setPreviewToken(null);
+    previewTokenMutation.mutate(display.id);
+  };
+
+  const closePreview = () => {
+    setPreviewDisplay(null);
+    setPreviewToken(null);
+  };
 
   const handleRegenerateKey = () => {
     if (regenerateConfirmDisplay) {
@@ -298,6 +324,14 @@ export default function Displays() {
                     : 'Never'}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                  {display.status === 'online' && (
+                    <button
+                      onClick={() => handlePreview(display)}
+                      className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 mr-3"
+                    >
+                      Preview
+                    </button>
+                  )}
                   <button
                     onClick={() => openEditModal(display)}
                     className="text-primary dark:text-primary-light hover:text-primary/80 dark:hover:text-primary-light/80 mr-3"
@@ -731,6 +765,79 @@ export default function Displays() {
                 className="px-4 py-2 text-white bg-primary rounded-lg hover:bg-primary/90"
               >
                 Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Display Preview Modal */}
+      {previewDisplay && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+          <div className="bg-gray-900 rounded-lg max-w-[1060px] w-full mx-4 flex flex-col max-h-[90vh]">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700">
+              <div>
+                <h3 className="text-lg font-semibold text-white">{previewDisplay.name}</h3>
+                <p className="text-sm text-gray-400">{previewDisplay.location}</p>
+              </div>
+              <div className="flex items-center space-x-3">
+                {previewToken && (
+                  <a
+                    href={`${API_BASE_URL}/display/index.html?displayId=${previewDisplay.id}&apiKey=${previewToken.previewToken}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-indigo-400 hover:text-indigo-300 transition-colors"
+                  >
+                    Open Full Size
+                  </a>
+                )}
+                <button
+                  onClick={closePreview}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Iframe Container */}
+            <div className="flex-1 flex items-center justify-center p-4 overflow-hidden">
+              {previewTokenMutation.isPending ? (
+                <div className="flex flex-col items-center space-y-3">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-400"></div>
+                  <p className="text-sm text-gray-400">Generating preview token...</p>
+                </div>
+              ) : previewToken ? (
+                <div
+                  className="bg-black rounded overflow-hidden"
+                  style={{ width: 960, height: 540 }}
+                >
+                  <iframe
+                    src={`${API_BASE_URL}/display/index.html?displayId=${previewDisplay.id}&apiKey=${previewToken.previewToken}`}
+                    title={`Preview: ${previewDisplay.name}`}
+                    style={{
+                      width: 1920,
+                      height: 1080,
+                      transform: 'scale(0.5)',
+                      transformOrigin: 'top left',
+                      border: 'none',
+                    }}
+                  />
+                </div>
+              ) : null}
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-3 border-t border-gray-700 flex items-center justify-between">
+              <p className="text-xs text-gray-500">Preview token expires in 5 minutes</p>
+              <button
+                onClick={closePreview}
+                className="px-4 py-2 text-sm text-gray-300 bg-gray-700 rounded-lg hover:bg-gray-600 transition-colors"
+              >
+                Close
               </button>
             </div>
           </div>

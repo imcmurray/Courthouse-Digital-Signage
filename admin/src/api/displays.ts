@@ -49,6 +49,12 @@ export interface DisplaysResponse {
   total: number;
 }
 
+export interface PreviewTokenResponse {
+  previewToken: string;
+  displayId: string;
+  expiresIn: number;
+}
+
 export const displaysApi = {
   getAll: async (): Promise<DisplaysResponse> => {
     const response = await apiClient.get<DisplaysResponse>('/api/displays');
@@ -76,6 +82,11 @@ export const displaysApi = {
 
   regenerateKey: async (id: string): Promise<{ apiKey: string; displayId: string }> => {
     const response = await apiClient.post<{ success: boolean; message: string; apiKey: string; displayId: string }>(`/api/displays/${id}/regenerate-key`);
+    return response.data;
+  },
+
+  getPreviewToken: async (id: string): Promise<PreviewTokenResponse> => {
+    const response = await apiClient.post<PreviewTokenResponse>(`/api/displays/${id}/preview-token`);
     return response.data;
   },
 
