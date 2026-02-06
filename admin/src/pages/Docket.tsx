@@ -1,17 +1,13 @@
 import { useState, useCallback, useEffect } from 'react';
-import { useSearchParams, useParams, useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { docketApi, DocketEntry, CreateDocketEntryInput, UpdateDocketEntryInput, DocketFilters } from '../api/docket';
 import DocketForm from '../components/DocketForm';
 import { getErrorMessage } from '../utils/errorHandling';
 
-// Session storage key for persisting filters
-const DOCKET_FILTERS_KEY = 'docket-filters';
-
 export default function Docket() {
   const queryClient = useQueryClient();
-  const [searchParams, setSearchParams] = useSearchParams();
   const { id: editIdFromUrl } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -21,7 +17,6 @@ export default function Docket() {
   const [clearDate, setClearDate] = useState('');
   const [archiveOnClear, setArchiveOnClear] = useState(false);
   const [clearCount, setClearCount] = useState<number | null>(null);
-  const [filtersRestored, setFiltersRestored] = useState(false);
   const [editIdLoaded, setEditIdLoaded] = useState(false);
 
   // Import CSV state
@@ -30,77 +25,38 @@ export default function Docket() {
   const [importError, setImportError] = useState<string | null>(null);
   const [importRowErrors, setImportRowErrors] = useState<Map<number, string[]>>(new Map());
 
-  // Restore filters from sessionStorage on mount if URL has no filters
+  // Filter state (local, not URL-based)
+  const [filterState, setFilterState] = useState({
+    date: '',
+    status: '',
+    courtroom: '',
+    judge: '',
+    search: '',
+    page: 1,
+    sortBy: '',
+    sortOrder: 'asc' as 'asc' | 'desc',
+  });
+
+  // Debounced search for API calls only (input stays instant)
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
   useEffect(() => {
-    if (filtersRestored) return;
+    const timer = setTimeout(() => {
+      setDebouncedSearch(filterState.search);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [filterState.search]);
 
-    // Check if URL already has filters
-    const hasUrlFilters = searchParams.has('date') || searchParams.has('status') ||
-                          searchParams.has('courtroom') || searchParams.has('judge') ||
-                          searchParams.has('search') || searchParams.has('page') || searchParams.has('sortBy');
-
-    if (!hasUrlFilters) {
-      // Try to restore from sessionStorage
-      const savedFilters = sessionStorage.getItem(DOCKET_FILTERS_KEY);
-      if (savedFilters) {
-        try {
-          const filters = JSON.parse(savedFilters);
-          const newParams = new URLSearchParams();
-
-          if (filters.date) newParams.set('date', filters.date);
-          if (filters.status) newParams.set('status', filters.status);
-          if (filters.courtroom) newParams.set('courtroom', filters.courtroom);
-          if (filters.judge) newParams.set('judge', filters.judge);
-          if (filters.search) newParams.set('search', filters.search);
-          if (filters.page && filters.page !== '1') newParams.set('page', filters.page);
-          if (filters.sortBy) newParams.set('sortBy', filters.sortBy);
-          if (filters.sortOrder) newParams.set('sortOrder', filters.sortOrder);
-
-          // Only update if we have filters to restore
-          if (newParams.toString()) {
-            setSearchParams(newParams, { replace: true });
-          }
-        } catch {
-          // Invalid JSON, ignore
-        }
-      }
-    }
-
-    setFiltersRestored(true);
-  }, [searchParams, setSearchParams, filtersRestored]);
-
-  // Get filters from URL params
-  const dateFilter = searchParams.get('date') || '';
-  const courtroomFilter = searchParams.get('courtroom') || '';
-  const statusFilter = searchParams.get('status') || '';
-  const judgeFilter = searchParams.get('judge') || '';
-  const searchFilter = searchParams.get('search') || '';
-  const pageParam = searchParams.get('page') || '1';
-  const currentPage = Math.max(parseInt(pageParam, 10) || 1, 1);
-  const pageSize = 10; // Default 10 entries per page
-  const sortBy = searchParams.get('sortBy') || '';
-  const sortOrder = (searchParams.get('sortOrder') as 'asc' | 'desc') || 'asc';
-
-  // Save filters to sessionStorage whenever they change
-  useEffect(() => {
-    if (!filtersRestored) return; // Don't save until we've restored
-
-    const filters: Record<string, string> = {};
-    if (dateFilter) filters.date = dateFilter;
-    if (statusFilter) filters.status = statusFilter;
-    if (courtroomFilter) filters.courtroom = courtroomFilter;
-    if (judgeFilter) filters.judge = judgeFilter;
-    if (searchFilter) filters.search = searchFilter;
-    if (pageParam && pageParam !== '1') filters.page = pageParam;
-    if (sortBy) filters.sortBy = sortBy;
-    if (sortOrder && sortBy) filters.sortOrder = sortOrder;
-
-    if (Object.keys(filters).length > 0) {
-      sessionStorage.setItem(DOCKET_FILTERS_KEY, JSON.stringify(filters));
-    } else {
-      sessionStorage.removeItem(DOCKET_FILTERS_KEY);
-    }
-  }, [dateFilter, statusFilter, courtroomFilter, judgeFilter, searchFilter, pageParam, sortBy, sortOrder, filtersRestored]);
+  // Convenience aliases for JSX
+  const dateFilter = filterState.date;
+  const courtroomFilter = filterState.courtroom;
+  const statusFilter = filterState.status;
+  const judgeFilter = filterState.judge;
+  const searchFilter = filterState.search;
+  const currentPage = filterState.page;
+  const pageSize = 10;
+  const sortBy = filterState.sortBy;
+  const sortOrder = filterState.sortOrder;
 
   // Handle direct URL access to edit a specific entry by ID
   useEffect(() => {
@@ -122,41 +78,29 @@ export default function Docket() {
     fetchEntryById();
   }, [editIdFromUrl, editIdLoaded, navigate]);
 
-  // Update URL params when filters change
+  // Update a single filter field, reset page to 1 for non-page changes
   const updateFilter = useCallback((key: string, value: string) => {
-    const newParams = new URLSearchParams(searchParams);
-    if (value) {
-      newParams.set(key, value);
-    } else {
-      newParams.delete(key);
-    }
-    // Reset to page 1 when filters change
-    if (key !== 'page') {
-      newParams.delete('page');
-    }
-    setSearchParams(newParams, { replace: true });
-  }, [searchParams, setSearchParams]);
+    setFilterState(prev => ({
+      ...prev,
+      [key]: value,
+      ...(key !== 'page' ? { page: 1 } : {}),
+    }));
+  }, []);
 
   // Navigate to a specific page
   const goToPage = useCallback((page: number) => {
-    updateFilter('page', page > 1 ? page.toString() : '');
-  }, [updateFilter]);
+    setFilterState(prev => ({ ...prev, page: Math.max(1, page) }));
+  }, []);
 
   // Handle column header click for sorting
   const handleSort = useCallback((column: string) => {
-    const newParams = new URLSearchParams(searchParams);
-    if (sortBy === column) {
-      // Toggle sort order
-      newParams.set('sortOrder', sortOrder === 'asc' ? 'desc' : 'asc');
-    } else {
-      // New column, default to ascending
-      newParams.set('sortBy', column);
-      newParams.set('sortOrder', 'asc');
-    }
-    // Reset to page 1 when sorting changes
-    newParams.delete('page');
-    setSearchParams(newParams, { replace: true });
-  }, [searchParams, setSearchParams, sortBy, sortOrder]);
+    setFilterState(prev => ({
+      ...prev,
+      sortBy: column,
+      sortOrder: prev.sortBy === column && prev.sortOrder === 'asc' ? 'desc' : 'asc',
+      page: 1,
+    }));
+  }, []);
 
   // Get sort indicator for column
   const getSortIndicator = (column: string) => {
@@ -164,23 +108,26 @@ export default function Docket() {
     return sortOrder === 'asc' ? ' ▲' : ' ▼';
   };
 
-  // Build filters object for API
-  const filters: DocketFilters = {
+  // Build filters object for API (uses debounced search to avoid excessive requests)
+  const apiFilters: DocketFilters = {
     page: currentPage,
     limit: pageSize
   };
-  if (dateFilter) filters.date = dateFilter;
-  if (courtroomFilter) filters.courtroom = courtroomFilter;
-  if (statusFilter) filters.status = statusFilter;
-  if (judgeFilter) filters.judge = judgeFilter;
-  if (searchFilter) filters.search = searchFilter;
-  if (sortBy) filters.sortBy = sortBy;
-  if (sortBy) filters.sortOrder = sortOrder;
+  if (dateFilter) apiFilters.date = dateFilter;
+  if (courtroomFilter) apiFilters.courtroom = courtroomFilter;
+  if (statusFilter) apiFilters.status = statusFilter;
+  if (judgeFilter) apiFilters.judge = judgeFilter;
+  if (debouncedSearch) apiFilters.search = debouncedSearch;
+  if (sortBy) apiFilters.sortBy = sortBy;
+  if (sortBy) apiFilters.sortOrder = sortOrder;
 
   // Fetch docket entries with filters
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['docket', filters],
-    queryFn: () => docketApi.getAll(Object.keys(filters).length > 0 ? filters : undefined),
+  // placeholderData keeps previous results visible while fetching with new filters,
+  // preventing the full-page spinner from unmounting the search input on every keystroke.
+  const { data, isLoading, isFetching, error } = useQuery({
+    queryKey: ['docket', apiFilters],
+    queryFn: () => docketApi.getAll(Object.keys(apiFilters).length > 0 ? apiFilters : undefined),
+    placeholderData: keepPreviousData,
   });
 
   // Create entry mutation
@@ -488,21 +435,21 @@ export default function Docket() {
   const getStatusBadgeColor = (status: string) => {
     switch (status) {
       case 'scheduled':
-        return 'bg-blue-100 text-blue-800';
+        return 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300';
       case 'in_progress':
-        return 'bg-yellow-100 text-yellow-800';
+        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300';
       case 'completed':
-        return 'bg-green-100 text-green-800';
+        return 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300';
       case 'cancelled':
-        return 'bg-red-100 text-red-800';
+        return 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300';
       case 'continued':
-        return 'bg-purple-100 text-purple-800';
+        return 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300';
       case 'stricken':
-        return 'bg-gray-100 text-gray-800 line-through';
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300 line-through';
       case 'reserved':
-        return 'bg-orange-100 text-orange-800';
+        return 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
     }
   };
 
@@ -518,7 +465,8 @@ export default function Docket() {
     return `${hour12}:${minutes} ${ampm}`;
   };
 
-  if (isLoading) {
+  // Only show full-page spinner on the very first load (no cached data yet)
+  if (isLoading && !data) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -526,9 +474,9 @@ export default function Docket() {
     );
   }
 
-  if (error) {
+  if (error && !data) {
     return (
-      <div className="bg-red-50 text-red-600 p-4 rounded-lg">
+      <div className="bg-red-50 dark:bg-red-900/30 text-red-600 p-4 rounded-lg">
         Failed to load docket entries. Please try again.
       </div>
     );
@@ -541,8 +489,8 @@ export default function Docket() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Docket Management</h1>
-          <p className="mt-1 text-sm text-gray-600">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Docket Management</h1>
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
             Manage hearing calendar entries for court displays.
           </p>
         </div>
@@ -578,21 +526,21 @@ export default function Docket() {
       </div>
 
       {/* Filters */}
-      <div className="bg-white shadow-sm rounded-lg p-4">
+      <div className="bg-white dark:bg-gray-800 shadow-sm dark:shadow-gray-900/50 rounded-lg p-4">
         <div className="flex flex-wrap gap-4 items-end">
           {/* Search Input */}
           <div className="flex-1 min-w-[200px] max-w-[400px]">
-            <label htmlFor="search-filter" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="search-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
               Search
             </label>
             <div className="relative">
               <input
                 type="text"
                 id="search-filter"
-                value={searchFilter}
+                value={filterState.search}
                 onChange={(e) => updateFilter('search', e.target.value)}
                 placeholder="Search case #, party, matter, judge..."
-                className="w-full px-3 py-2 pl-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                className="w-full px-3 py-2 pl-10 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
               />
               <svg
                 className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400"
@@ -607,7 +555,7 @@ export default function Docket() {
 
           {/* Date Filter */}
           <div>
-            <label htmlFor="date-filter" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="date-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
               Hearing Date
             </label>
             <input
@@ -615,20 +563,20 @@ export default function Docket() {
               id="date-filter"
               value={dateFilter}
               onChange={(e) => updateFilter('date', e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
             />
           </div>
 
           {/* Status Filter */}
           <div>
-            <label htmlFor="status-filter" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="status-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
               Status
             </label>
             <select
               id="status-filter"
               value={statusFilter}
               onChange={(e) => updateFilter('status', e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
             >
               <option value="">All Statuses</option>
               <option value="scheduled">Scheduled</option>
@@ -643,7 +591,7 @@ export default function Docket() {
 
           {/* Courtroom Filter */}
           <div>
-            <label htmlFor="courtroom-filter" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="courtroom-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
               Courtroom
             </label>
             <input
@@ -652,79 +600,82 @@ export default function Docket() {
               value={courtroomFilter}
               onChange={(e) => updateFilter('courtroom', e.target.value)}
               placeholder="e.g., 321"
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary w-32"
+              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white w-32"
             />
           </div>
 
           {/* Clear Filters Button */}
           {(dateFilter || statusFilter || courtroomFilter || judgeFilter || searchFilter) && (
             <button
-              onClick={() => setSearchParams({})}
-              className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+              onClick={() => setFilterState({ date: '', status: '', courtroom: '', judge: '', search: '', page: 1, sortBy: '', sortOrder: 'asc' })}
+              className="px-3 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
             >
               Clear Filters
             </button>
           )}
 
           {/* Filter Status Indicator */}
-          {(dateFilter || statusFilter || courtroomFilter || searchFilter) && (
-            <div className="text-sm text-gray-500 ml-auto">
-              Showing {entries.length} filtered {entries.length === 1 ? 'entry' : 'entries'}
-            </div>
-          )}
+          <div className="text-sm text-gray-500 dark:text-gray-400 ml-auto flex items-center gap-2">
+            {isFetching && (
+              <div className="animate-spin rounded-full h-4 w-4 border-2 border-gray-300 border-t-primary"></div>
+            )}
+            {(dateFilter || statusFilter || courtroomFilter || searchFilter) && (
+              <span>Showing {entries.length} filtered {entries.length === 1 ? 'entry' : 'entries'}</span>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Docket Table */}
-      <div className="bg-white shadow-sm rounded-lg overflow-hidden">
+      <div className="bg-white dark:bg-gray-800 shadow-sm dark:shadow-gray-900/50 rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <thead className="bg-gray-50 dark:bg-gray-700">
               <tr>
                 <th
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 select-none"
                   onClick={() => handleSort('hearingTime')}
                 >
                   Time{getSortIndicator('hearingTime')}
                 </th>
                 <th
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 select-none"
                   onClick={() => handleSort('caseNumber')}
                 >
                   Case{getSortIndicator('caseNumber')}
                 </th>
                 <th
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 select-none"
                   onClick={() => handleSort('caseTitle')}
                 >
                   Party{getSortIndicator('caseTitle')}
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Matter
                 </th>
                 <th
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 select-none"
                   onClick={() => handleSort('status')}
                 >
                   Status{getSortIndicator('status')}
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
               {entries.map((entry) => (
-                <tr key={entry.id} className={entry.status === 'stricken' ? 'bg-gray-50' : ''}>
+                <tr key={entry.id} className={entry.status === 'stricken' ? 'bg-gray-50 dark:bg-gray-900' : ''}>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">
+                    <div className="text-sm font-medium text-gray-900 dark:text-white">
                       {formatTime(entry.hearingTime)}
                     </div>
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
                       {formatDate(entry.hearingDate)}
                     </div>
                     {entry.isZoom && (
-                      <span className="inline-flex items-center px-2 py-0.5 mt-1 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                      <span className="inline-flex items-center px-2 py-0.5 mt-1 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">
                         <svg className="w-3 h-3 mr-1" viewBox="0 0 24 24" fill="currentColor">
                           <path d="M4 4h10v10H4zM14 8h6l-6 6z" />
                         </svg>
@@ -733,34 +684,34 @@ export default function Docket() {
                     )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">
+                    <div className="text-sm font-medium text-gray-900 dark:text-white">
                       {entry.caseNumber}
                     </div>
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
                       Ch. {entry.caseChapter} | {entry.courtroom || 'TBD'}
                     </div>
                   </td>
                   <td className="px-6 py-4 max-w-[200px]">
                     <div
-                      className={`text-sm truncate ${entry.status === 'stricken' ? 'line-through text-gray-400' : 'text-gray-900'}`}
+                      className={`text-sm truncate ${entry.status === 'stricken' ? 'line-through text-gray-400' : 'text-gray-900 dark:text-white'}`}
                       title={entry.caseTitle}
                     >
                       {entry.caseTitle}
                     </div>
                     {entry.adversaryNumber && (
-                      <div className="text-xs text-gray-500 truncate" title={entry.adversaryNumber}>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 truncate" title={entry.adversaryNumber}>
                         Adv: {entry.adversaryNumber}
                       </div>
                     )}
                   </td>
                   <td className="px-6 py-4 max-w-[300px]">
                     <div
-                      className={`text-sm truncate ${entry.status === 'stricken' ? 'line-through text-gray-400' : 'text-gray-700'}`}
+                      className={`text-sm truncate ${entry.status === 'stricken' ? 'line-through text-gray-400' : 'text-gray-700 dark:text-gray-200'}`}
                       title={entry.hearingMatter}
                     >
                       {entry.hearingMatter}
                     </div>
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
                       {entry.hearingJudge}
                     </div>
                   </td>
@@ -794,10 +745,10 @@ export default function Docket() {
         </div>
 
         {entries.length === 0 && (
-          <div className="text-center py-12 text-gray-500">
+          <div className="text-center py-12 text-gray-500 dark:text-gray-400">
             {(searchFilter || dateFilter || statusFilter || courtroomFilter || judgeFilter) ? (
               <>
-                <p className="text-lg font-medium text-gray-600 mb-2">No results found</p>
+                <p className="text-lg font-medium text-gray-600 dark:text-gray-300 mb-2">No results found</p>
                 <p className="text-sm">Try different search terms or adjust your filters.</p>
               </>
             ) : (
@@ -808,8 +759,8 @@ export default function Docket() {
 
         {/* Pagination */}
         {data && data.totalPages > 1 && (
-          <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
-            <div className="text-sm text-gray-600">
+          <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
+            <div className="text-sm text-gray-600 dark:text-gray-300">
               Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, data.total)} of {data.total} entries
             </div>
             <div className="flex items-center space-x-2">
@@ -817,7 +768,7 @@ export default function Docket() {
               <button
                 onClick={() => goToPage(currentPage - 1)}
                 disabled={currentPage <= 1}
-                className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed dark:text-gray-200"
               >
                 Previous
               </button>
@@ -850,7 +801,7 @@ export default function Docket() {
                       className={`px-3 py-1 text-sm border rounded ${
                         currentPage === item
                           ? 'bg-primary text-white border-primary'
-                          : 'border-gray-300 hover:bg-gray-50'
+                          : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 dark:text-gray-200'
                       }`}
                     >
                       {item}
@@ -862,7 +813,7 @@ export default function Docket() {
               <button
                 onClick={() => goToPage(currentPage + 1)}
                 disabled={currentPage >= data.totalPages}
-                className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed dark:text-gray-200"
               >
                 Next
               </button>
@@ -899,16 +850,16 @@ export default function Docket() {
       {/* Delete Confirmation Modal */}
       {deleteConfirmEntry && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold text-gray-900">Confirm Deletion</h3>
-            <p className="mt-2 text-gray-600">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Confirm Deletion</h3>
+            <p className="mt-2 text-gray-600 dark:text-gray-300">
               Are you sure you want to delete the docket entry for{' '}
               <strong>{deleteConfirmEntry.caseTitle}</strong> (Case #{deleteConfirmEntry.caseNumber})?
             </p>
             <div className="mt-4 flex justify-end space-x-3">
               <button
                 onClick={() => setDeleteConfirmEntry(null)}
-                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+                className="px-4 py-2 text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
               >
                 Cancel
               </button>
@@ -927,16 +878,16 @@ export default function Docket() {
       {/* Clear Docket Modal */}
       {isClearModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold text-gray-900">Clear Docket Entries</h3>
-            <p className="mt-2 text-gray-600">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Clear Docket Entries</h3>
+            <p className="mt-2 text-gray-600 dark:text-gray-300">
               Select the date to clear all docket entries for that day.
             </p>
 
             <div className="mt-4 space-y-4">
               {/* Date Selection */}
               <div>
-                <label htmlFor="clear-date" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="clear-date" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                   Date to Clear
                 </label>
                 <input
@@ -944,7 +895,7 @@ export default function Docket() {
                   id="clear-date"
                   value={clearDate}
                   onChange={(e) => handleClearDateChange(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                 />
               </div>
 
@@ -955,16 +906,16 @@ export default function Docket() {
                   id="archive-option"
                   checked={archiveOnClear}
                   onChange={(e) => setArchiveOnClear(e.target.checked)}
-                  className="h-4 w-4 text-primary border-gray-300 rounded focus:ring-primary"
+                  className="h-4 w-4 text-primary border-gray-300 dark:border-gray-600 rounded focus:ring-primary"
                 />
-                <label htmlFor="archive-option" className="ml-2 block text-sm text-gray-700">
+                <label htmlFor="archive-option" className="ml-2 block text-sm text-gray-700 dark:text-gray-200">
                   Archive entries instead of deleting
                 </label>
               </div>
 
               {/* Count Display */}
               {clearCount !== null && (
-                <div className={`p-3 rounded-lg ${clearCount > 0 ? 'bg-amber-50 text-amber-800' : 'bg-gray-50 text-gray-600'}`}>
+                <div className={`p-3 rounded-lg ${clearCount > 0 ? 'bg-amber-50 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300' : 'bg-gray-50 dark:bg-gray-900 text-gray-600 dark:text-gray-300'}`}>
                   <strong>{clearCount}</strong> {clearCount === 1 ? 'entry' : 'entries'} will be {archiveOnClear ? 'archived' : 'deleted'}
                 </div>
               )}
@@ -978,7 +929,7 @@ export default function Docket() {
                   setArchiveOnClear(false);
                   setClearCount(null);
                 }}
-                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+                className="px-4 py-2 text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
               >
                 Cancel
               </button>
@@ -997,9 +948,9 @@ export default function Docket() {
       {/* Import CSV Modal */}
       {isImportModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-lg font-semibold text-gray-900">Import Docket Entries from CSV</h3>
-            <p className="mt-2 text-gray-600">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Import Docket Entries from CSV</h3>
+            <p className="mt-2 text-gray-600 dark:text-gray-300">
               Upload a CSV file with docket entries. Download the template first to see the required format.
             </p>
 
@@ -1015,14 +966,14 @@ export default function Docket() {
                   </svg>
                   Download CSV Template
                 </button>
-                <span className="text-sm text-gray-500">
+                <span className="text-sm text-gray-500 dark:text-gray-400">
                   Required columns: caseNumber, caseTitle, caseChapter, hearingDate, hearingTime, hearingMatter, hearingJudge
                 </span>
               </div>
 
               {/* File Upload */}
               <div>
-                <label htmlFor="csv-file" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="csv-file" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                   Upload CSV File
                 </label>
                 <input
@@ -1030,13 +981,13 @@ export default function Docket() {
                   id="csv-file"
                   accept=".csv"
                   onChange={handleFileUpload}
-                  className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary/90"
+                  className="block w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary/90"
                 />
               </div>
 
               {/* Error Message */}
               {importError && (
-                <div className="p-3 bg-red-50 text-red-600 rounded-lg text-sm">
+                <div className="p-3 bg-red-50 dark:bg-red-900/30 text-red-600 rounded-lg text-sm">
                   {importError}
                 </div>
               )}
@@ -1044,7 +995,7 @@ export default function Docket() {
               {/* Preview Table */}
               {importPreview.length > 0 && (
                 <div>
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">
+                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
                     Preview ({importPreview.length} entries)
                     {importRowErrors.size > 0 && (
                       <span className="ml-2 text-red-600">
@@ -1052,34 +1003,34 @@ export default function Docket() {
                       </span>
                     )}
                   </h4>
-                  <div className="overflow-x-auto border rounded-lg max-h-64">
-                    <table className="min-w-full divide-y divide-gray-200 text-sm">
-                      <thead className="bg-gray-50">
+                  <div className="overflow-x-auto border dark:border-gray-700 rounded-lg max-h-64">
+                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
+                      <thead className="bg-gray-50 dark:bg-gray-700">
                         <tr>
-                          <th className="px-3 py-2 text-left font-medium text-gray-500">#</th>
-                          <th className="px-3 py-2 text-left font-medium text-gray-500">Status</th>
-                          <th className="px-3 py-2 text-left font-medium text-gray-500">Case #</th>
-                          <th className="px-3 py-2 text-left font-medium text-gray-500">Title</th>
-                          <th className="px-3 py-2 text-left font-medium text-gray-500">Ch.</th>
-                          <th className="px-3 py-2 text-left font-medium text-gray-500">Date</th>
-                          <th className="px-3 py-2 text-left font-medium text-gray-500">Time</th>
-                          <th className="px-3 py-2 text-left font-medium text-gray-500">Judge</th>
+                          <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-gray-400">#</th>
+                          <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-gray-400">Status</th>
+                          <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-gray-400">Case #</th>
+                          <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-gray-400">Title</th>
+                          <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-gray-400">Ch.</th>
+                          <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-gray-400">Date</th>
+                          <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-gray-400">Time</th>
+                          <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-gray-400">Judge</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-200">
+                      <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                         {importPreview.map((entry, index) => {
                           const rowError = importRowErrors.get(index);
                           const hasError = !!rowError;
                           return (
-                            <tr key={index} className={hasError ? 'bg-red-50' : ''}>
-                              <td className="px-3 py-2 text-gray-500">{index + 1}</td>
+                            <tr key={index} className={hasError ? 'bg-red-50 dark:bg-red-900/30' : ''}>
+                              <td className="px-3 py-2 text-gray-500 dark:text-gray-400">{index + 1}</td>
                               <td className="px-3 py-2">
                                 {hasError ? (
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800" title={rowError.join('; ')}>
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300" title={rowError.join('; ')}>
                                     Error
                                   </span>
                                 ) : (
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300">
                                     Valid
                                   </span>
                                 )}
@@ -1111,7 +1062,7 @@ export default function Docket() {
                   {/* Row-level error details */}
                   {importRowErrors.size > 0 && (
                     <div className="mt-2 text-sm">
-                      <p className="font-medium text-gray-700">Error details:</p>
+                      <p className="font-medium text-gray-700 dark:text-gray-200">Error details:</p>
                       <ul className="list-disc list-inside text-red-600 mt-1 max-h-24 overflow-y-auto">
                         {Array.from(importRowErrors.entries()).map(([rowIndex, errors]) => (
                           <li key={rowIndex}>
@@ -1133,7 +1084,7 @@ export default function Docket() {
                   setImportError(null);
                   setImportRowErrors(new Map());
                 }}
-                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+                className="px-4 py-2 text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
               >
                 Cancel
               </button>
