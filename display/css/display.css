@@ -43,6 +43,7 @@ html, body {
   font-family: var(--font-family);
   overflow: hidden;
   background-color: var(--navy-dark);
+  padding-bottom: calc(var(--notice-height) + var(--ticker-height));
 }
 
 /* Header Section */
@@ -289,20 +290,33 @@ html, body {
   font-style: italic;
 }
 
+/* Bottom Bar */
+.bottom-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  z-index: 100;
+}
+
 /* Notice Banner */
 .notice-banner {
   height: var(--notice-height);
-  background-color: var(--primary-yellow);
+  background-color: var(--navy-mid);
+  color: var(--white);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 20px;
-  font-size: 28px;
-  font-weight: bold;
+  gap: 16px;
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  border-top: 2px solid var(--navy-light);
 }
 
 .notice-icon {
-  font-size: 32px;
+  font-size: 28px;
+  color: var(--primary-yellow);
 }
 
 .notice-text {
@@ -312,10 +326,10 @@ html, body {
 /* Announcement Ticker */
 .ticker-container {
   height: var(--ticker-height);
-  background-color: var(--primary-yellow);
+  background-color: var(--navy-dark);
   overflow: hidden;
   position: relative;
-  border-top: 2px solid var(--navy-dark);
+  border-top: 1px solid var(--navy-mid);
 }
 
 .ticker-content {
@@ -330,6 +344,7 @@ html, body {
   font-size: var(--ticker-size);
   padding: 0 100px;
   font-weight: bold;
+  color: var(--gray-light);
 }
 
 @keyframes ticker-scroll {
