@@ -672,7 +672,7 @@ export default function Docket() {
             </thead>
             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
               {entries.map((entry) => (
-                <tr key={entry.id} className={entry.status === 'stricken' ? 'bg-gray-50 dark:bg-gray-900' : ''}>
+                <tr key={entry.id} className={`hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${entry.status === 'stricken' ? 'bg-gray-50 dark:bg-gray-900' : ''}`}>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-medium text-gray-900 dark:text-white">
                       {formatTime(entry.hearingTime)}
@@ -690,9 +690,12 @@ export default function Docket() {
                     )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900 dark:text-white">
+                    <button
+                      onClick={() => setEditingEntry(entry)}
+                      className="text-sm font-medium text-gray-900 dark:text-white text-left hover:text-primary dark:hover:text-primary-light transition-colors"
+                    >
                       {entry.caseNumber}
-                    </div>
+                    </button>
                     <div className="text-xs text-gray-500 dark:text-gray-400">
                       Ch. {entry.caseChapter} | {entry.courtroom || 'TBD'}
                     </div>

@@ -268,11 +268,14 @@ export default function Displays() {
           </thead>
           <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
             {displays.map((display) => (
-              <tr key={display.id}>
+              <tr key={display.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                 <td className="px-6 py-4">
-                  <div className="text-sm font-medium text-gray-900 dark:text-white">
+                  <button
+                    onClick={() => openEditModal(display)}
+                    className="text-sm font-medium text-gray-900 dark:text-white text-left hover:text-primary dark:hover:text-primary-light transition-colors"
+                  >
                     {display.name}
-                  </div>
+                  </button>
                   <div className="text-xs text-gray-500 dark:text-gray-400 font-mono">
                     {display.id}
                   </div>

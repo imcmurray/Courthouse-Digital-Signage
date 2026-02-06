@@ -8,6 +8,7 @@ export default function AuditLogs() {
     offset: 0,
   });
   const [isExporting, setIsExporting] = useState(false);
+  const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
 
   // Export audit logs
   const handleExport = async (format: 'csv' | 'json') => {
@@ -69,6 +70,8 @@ export default function AuditLogs() {
         return <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 rounded-full">Update</span>;
       case 'delete':
         return <span className="px-2 py-1 text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300 rounded-full">Delete</span>;
+      case 'upload':
+        return <span className="px-2 py-1 text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300 rounded-full">Upload</span>;
       default:
         return <span className="px-2 py-1 text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300 rounded-full">{action}</span>;
     }
@@ -169,6 +172,7 @@ export default function AuditLogs() {
               <option value="create">Create</option>
               <option value="update">Update</option>
               <option value="delete">Delete</option>
+              <option value="upload">Upload</option>
             </select>
           </div>
           <div>
@@ -184,6 +188,7 @@ export default function AuditLogs() {
               <option value="display">Display</option>
               <option value="user">User</option>
               <option value="api_key">API Key</option>
+              <option value="settings">Settings</option>
             </select>
           </div>
           <div>
@@ -212,8 +217,12 @@ export default function AuditLogs() {
         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
           <thead className="bg-gray-50 dark:bg-gray-700">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                Timestamp
+              <th
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 select-none"
+                onClick={() => setFilters({ ...filters, sortOrder: filters.sortOrder === 'asc' ? 'desc' : 'asc', offset: 0 })}
+              >
+                Timestamp{' '}
+                {filters.sortOrder === 'asc' ? '▲' : '▼'}
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Action
@@ -251,8 +260,17 @@ export default function AuditLogs() {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                     {log.user?.name || log.user?.email || 'System'}
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400 max-w-xs truncate">
-                    {renderChanges(log)}
+                  <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400 max-w-xs">
+                    {parseChanges(log.changes) ? (
+                      <button
+                        onClick={() => setSelectedLog(log)}
+                        className="text-left truncate block max-w-full hover:text-primary dark:hover:text-primary-light transition-colors"
+                      >
+                        {renderChanges(log)}
+                      </button>
+                    ) : (
+                      <span className="text-gray-400 dark:text-gray-500">-</span>
+                    )}
                   </td>
                 </tr>
               ))
@@ -321,6 +339,68 @@ export default function AuditLogs() {
           </div>
         )}
       </div>
+
+      {/* Detail Modal */}
+      {selectedLog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl dark:shadow-gray-900/50 max-w-lg w-full max-h-[80vh] flex flex-col">
+            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Audit Log Details</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                  {formatAction(selectedLog.action)} {formatEntityType(selectedLog.entityType)} — {formatDate(selectedLog.createdAt)}
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedLog(null)}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                aria-label="Close"
+              >
+                <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="px-6 py-4 space-y-3 overflow-y-auto">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <span className="font-medium text-gray-700 dark:text-gray-300">User</span>
+                  <p className="text-gray-900 dark:text-white">{selectedLog.user?.name || selectedLog.user?.email || 'System'}</p>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-700 dark:text-gray-300">Entity ID</span>
+                  <p className="text-gray-900 dark:text-white font-mono text-xs break-all">{selectedLog.entityId || '-'}</p>
+                </div>
+              </div>
+              {parseChanges(selectedLog.changes) && (
+                <div>
+                  <span className="font-medium text-sm text-gray-700 dark:text-gray-300">Changes</span>
+                  <div className="mt-1 bg-gray-50 dark:bg-gray-900 rounded-lg p-3 overflow-x-auto">
+                    <table className="text-sm w-full">
+                      <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                        {Object.entries(parseChanges(selectedLog.changes)!).map(([key, value]) => (
+                          <tr key={key}>
+                            <td className="py-1.5 pr-4 font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap align-top">{key}</td>
+                            <td className="py-1.5 text-gray-900 dark:text-white break-all">{typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="px-6 py-3 border-t border-gray-200 dark:border-gray-700 flex justify-end">
+              <button
+                onClick={() => setSelectedLog(null)}
+                className="px-4 py-2 text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

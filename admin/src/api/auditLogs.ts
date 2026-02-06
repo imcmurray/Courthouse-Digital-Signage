@@ -32,6 +32,7 @@ export interface AuditLogFilters {
   endDate?: string;
   limit?: number;
   offset?: number;
+  sortOrder?: 'asc' | 'desc';
 }
 
 export const auditLogsApi = {
@@ -44,6 +45,7 @@ export const auditLogsApi = {
     if (filters?.endDate) params.append('endDate', filters.endDate);
     if (filters?.limit) params.append('limit', filters.limit.toString());
     if (filters?.offset) params.append('offset', filters.offset.toString());
+    if (filters?.sortOrder) params.append('sortOrder', filters.sortOrder);
 
     const queryString = params.toString();
     const url = queryString ? `/api/audit-logs?${queryString}` : '/api/audit-logs';

@@ -2176,7 +2176,7 @@ async function createAuditLog(
 // GET /api/audit-logs - List audit logs with optional filters
 app.get('/api/audit-logs', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { action, entityType, userId, startDate, endDate, limit = '100', offset = '0' } = req.query;
+    const { action, entityType, userId, startDate, endDate, limit = '100', offset = '0', sortOrder } = req.query;
 
     // Build filter conditions
     const where: Record<string, unknown> = {};
@@ -2203,7 +2203,7 @@ app.get('/api/audit-logs', authenticateToken, requireAdmin, async (req: Authenti
             select: { id: true, name: true, email: true }
           }
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: sortOrder === 'asc' ? 'asc' : 'desc' },
         take: Math.min(parseInt(limit as string, 10), 500),
         skip: parseInt(offset as string, 10)
       }),

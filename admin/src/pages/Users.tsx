@@ -159,14 +159,14 @@ export default function Users() {
           </thead>
           <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
             {users.map((user) => (
-              <tr key={user.id} className={!user.isActive ? 'bg-gray-50 dark:bg-gray-700' : ''}>
+              <tr key={user.id} className={`hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${!user.isActive ? 'bg-gray-50 dark:bg-gray-700' : ''}`}>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">
                     <div className="h-10 w-10 rounded-full bg-primary flex items-center justify-center text-white font-semibold">
                       {user.name.charAt(0).toUpperCase()}
                     </div>
                     <div className="ml-4">
-                      <div className="text-sm font-medium text-gray-900 dark:text-white">{user.name}</div>
+                      <button onClick={() => setEditingUser(user)} className="text-sm font-medium text-gray-900 dark:text-white text-left hover:text-primary dark:hover:text-primary-light transition-colors">{user.name}</button>
                       <div className="text-sm text-gray-500 dark:text-gray-400">{user.email}</div>
                     </div>
                   </div>
