@@ -1554,8 +1554,8 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/DocketEntry'
-                  display:
-                    $ref: '#/components/schemas/Display'
+                  total:
+                    type: integer
         '401':
           description: Invalid or missing API key
           content:
@@ -2603,15 +2603,31 @@ paths:
           schema:
             type: integer
             default: 20
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
       responses:
         '200':
-          description: Import history
+          description: Paginated import history
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ImportLog'
+                type: object
+                properties:
+                  logs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ImportLog'
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  limit:
+                    type: integer
+                  totalPages:
+                    type: integer
         '401':
           description: Not authenticated
           content:
@@ -2668,17 +2684,10 @@ paths:
                 properties:
                   enabled:
                     type: boolean
-                  judges:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        code:
-                          type: string
-                        name:
-                          type: string
-                        courtroom:
-                          type: string
+                  intervalMinutes:
+                    type: integer
+                  sourceUrl:
+                    type: string
         '401':
           description: Not authenticated
           content:
@@ -2699,17 +2708,10 @@ paths:
               properties:
                 enabled:
                   type: boolean
-                judges:
-                  type: array
-                  items:
-                    type: object
-                    properties:
-                      code:
-                        type: string
-                      name:
-                        type: string
-                      courtroom:
-                        type: string
+                intervalMinutes:
+                  type: integer
+                sourceUrl:
+                  type: string
       responses:
         '200':
           description: Configuration updated
