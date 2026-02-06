@@ -152,6 +152,11 @@ export const docketApi = {
     return response.data.trustees;
   },
 
+  getHearingDates: async (): Promise<string[]> => {
+    const response = await apiClient.get<{ dates: string[] }>('/api/docket/dates');
+    return response.data.dates;
+  },
+
   getJudgeZoomDefaults: async (judge: string): Promise<JudgeZoomDefaults | null> => {
     const response = await apiClient.get<{ defaults: JudgeZoomDefaults | null }>(
       `/api/docket/judge-zoom?judge=${encodeURIComponent(judge)}`

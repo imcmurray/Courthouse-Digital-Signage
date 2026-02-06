@@ -1018,6 +1018,21 @@ app.get('/api/docket/trustees', authenticateToken, async (req: AuthenticatedRequ
   }
 });
 
+// GET /api/docket/dates - Get distinct hearing dates for calendar highlights
+app.get('/api/docket/dates', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const results: { hearing_date: string }[] = await prisma.$queryRaw`
+      SELECT DISTINCT DATE(hearing_date / 1000, 'unixepoch') as hearing_date
+      FROM docket_entries WHERE hearing_date IS NOT NULL ORDER BY hearing_date ASC
+    `;
+    const dates = results.map(r => r.hearing_date);
+    res.json({ dates });
+  } catch (error) {
+    console.error('Failed to fetch hearing dates:', error);
+    res.status(500).json({ error: 'Failed to fetch hearing dates' });
+  }
+});
+
 // GET /api/docket/judge-zoom - Get Zoom defaults from a judge's most recent Zoom hearing
 app.get('/api/docket/judge-zoom', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {

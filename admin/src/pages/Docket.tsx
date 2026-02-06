@@ -1,7 +1,9 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
+import DatePicker from 'react-datepicker';
+import { parse, format } from 'date-fns';
 import { docketApi, DocketEntry, CreateDocketEntryInput, UpdateDocketEntryInput, DocketFilters } from '../api/docket';
 import DocketForm from '../components/DocketForm';
 import { getErrorMessage } from '../utils/errorHandling';
@@ -134,6 +136,30 @@ export default function Docket() {
     placeholderData: keepPreviousData,
   });
 
+  // Fetch distinct hearing dates for calendar highlights
+  const { data: hearingDatesData } = useQuery({
+    queryKey: ['docket-dates'],
+    queryFn: docketApi.getHearingDates,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const highlightedDates = useMemo(() => {
+    if (!hearingDatesData) return [];
+    return hearingDatesData
+      .filter((d): d is string => typeof d === 'string' && d.length > 0)
+      .map(d => parse(d, 'yyyy-MM-dd', new Date()));
+  }, [hearingDatesData]);
+
+  // Convert filter string to Date for DatePicker
+  const dateFilterAsDate = useMemo(() => {
+    if (!dateFilter) return null;
+    return parse(dateFilter, 'yyyy-MM-dd', new Date());
+  }, [dateFilter]);
+
+  const handleDateFilterChange = useCallback((date: Date | null) => {
+    updateFilter('date', date ? format(date, 'yyyy-MM-dd') : '');
+  }, [updateFilter]);
+
   // Create entry mutation
   const createMutation = useMutation({
     mutationFn: docketApi.create,
@@ -142,6 +168,7 @@ export default function Docket() {
       queryClient.invalidateQueries({ queryKey: ['docket-judges'] });
       queryClient.invalidateQueries({ queryKey: ['docket-courtrooms'] });
       queryClient.invalidateQueries({ queryKey: ['docket-trustees'] });
+      queryClient.invalidateQueries({ queryKey: ['docket-dates'] });
       toast.success('Docket entry created successfully');
       setIsFormOpen(false);
     },
@@ -158,6 +185,7 @@ export default function Docket() {
       queryClient.invalidateQueries({ queryKey: ['docket-judges'] });
       queryClient.invalidateQueries({ queryKey: ['docket-courtrooms'] });
       queryClient.invalidateQueries({ queryKey: ['docket-trustees'] });
+      queryClient.invalidateQueries({ queryKey: ['docket-dates'] });
       toast.success('Docket entry updated successfully');
       setEditingEntry(null);
       // If we came from a direct URL, navigate back to docket list
@@ -186,6 +214,7 @@ export default function Docket() {
     mutationFn: docketApi.delete,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['docket'] });
+      queryClient.invalidateQueries({ queryKey: ['docket-dates'] });
       toast.success('Docket entry deleted successfully');
       setDeleteConfirmEntry(null);
     },
@@ -200,6 +229,7 @@ export default function Docket() {
       docketApi.clearByDate(date, { archive }),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['docket'] });
+      queryClient.invalidateQueries({ queryKey: ['docket-dates'] });
       toast.success(result.message);
       setIsClearModalOpen(false);
       setClearDate('');
@@ -216,6 +246,7 @@ export default function Docket() {
     mutationFn: docketApi.bulkImport,
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['docket'] });
+      queryClient.invalidateQueries({ queryKey: ['docket-dates'] });
       toast.success(result.message);
       setIsImportModalOpen(false);
       setImportPreview([]);
@@ -583,11 +614,14 @@ export default function Docket() {
             <label htmlFor="date-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
               Hearing Date
             </label>
-            <input
-              type="date"
+            <DatePicker
               id="date-filter"
-              value={dateFilter}
-              onChange={(e) => updateFilter('date', e.target.value)}
+              selected={dateFilterAsDate}
+              onChange={handleDateFilterChange}
+              highlightDates={highlightedDates}
+              isClearable
+              placeholderText="Select date"
+              dateFormat="yyyy-MM-dd"
               className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
             />
           </div>
