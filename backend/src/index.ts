@@ -1500,7 +1500,15 @@ app.get('/api/displays', authenticateToken, async (req: AuthenticatedRequest, re
       orderBy: { name: 'asc' }
     });
     console.log(`[DB] SELECT from displays - found ${displays.length} records`);
-    res.json({ displays, total: displays.length });
+
+    // Compute status based on heartbeat freshness (2 minute threshold)
+    const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
+    const displaysWithStatus = displays.map(d => ({
+      ...d,
+      status: d.lastHeartbeat && d.lastHeartbeat >= twoMinutesAgo ? 'online' : 'offline'
+    }));
+
+    res.json({ displays: displaysWithStatus, total: displays.length });
   } catch (error) {
     console.error('Failed to fetch displays:', error);
     res.status(500).json({ error: 'Failed to fetch displays' });
@@ -2914,13 +2922,40 @@ app.use('/uploads', express.static(UPLOADS_DIR));
 io.on('connection', (socket) => {
   console.log(`Client connected: ${socket.id}`);
 
-  socket.on('disconnect', () => {
-    console.log(`Client disconnected: ${socket.id}`);
+  // Track which display this socket belongs to
+  socket.on('display:register', async (data) => {
+    if (data?.displayId) {
+      (socket as any).displayId = data.displayId;
+      console.log(`Display registered: ${data.displayId} (socket ${socket.id})`);
+      // Update heartbeat on registration
+      try {
+        await prisma.display.update({
+          where: { id: data.displayId },
+          data: { lastHeartbeat: new Date(), status: 'online' }
+        });
+      } catch (err) {
+        console.error(`Failed to update display on register: ${data.displayId}`, err);
+      }
+    }
   });
 
-  // Display heartbeat
-  socket.on('display:heartbeat', (data) => {
-    console.log(`Heartbeat from display: ${data.displayId}`);
+  socket.on('disconnect', () => {
+    const displayId = (socket as any).displayId;
+    console.log(`Client disconnected: ${socket.id}${displayId ? ` (display: ${displayId})` : ''}`);
+  });
+
+  // Display heartbeat - update DB
+  socket.on('display:heartbeat', async (data) => {
+    if (data?.displayId) {
+      try {
+        await prisma.display.update({
+          where: { id: data.displayId },
+          data: { lastHeartbeat: new Date(), status: 'online' }
+        });
+      } catch (err) {
+        console.error(`Failed to update heartbeat for display: ${data.displayId}`, err);
+      }
+    }
   });
 });
 
