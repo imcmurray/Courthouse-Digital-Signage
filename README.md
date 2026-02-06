@@ -184,6 +184,10 @@ npx prisma migrate deploy
 npx prisma studio
 ```
 
+## Deployment
+
+See [Display Deployment Guide](docs/display-deployment.md) for instructions on deploying the display client to Raspberry Pi devices running Chromium in kiosk mode.
+
 ## License
 
 Internal use only - U.S. Courts
