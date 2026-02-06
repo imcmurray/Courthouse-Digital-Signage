@@ -258,16 +258,25 @@
       return;
     }
 
+    const now = new Date();
+    let rowIndex = 0;
+
     tbody.innerHTML = docketData.map(entry => {
-      const classes = [];
+      const rowParity = rowIndex % 2 === 0 ? 'row-odd' : 'row-even';
+      rowIndex++;
+
+      const classes = [rowParity];
       if (entry.status === 'in_progress') classes.push('current');
       if (entry.status === 'stricken') classes.push('stricken');
+
+      const hasZoom = entry.isZoom && shouldShowZoom(entry, now);
+      if (hasZoom) classes.push('has-zoom-detail');
 
       const adversaryMarker = entry.adversaryNumber
         ? '<span class="adversary-marker">&#8224;</span>'
         : '';
 
-      return `
+      let html = `
         <tr class="${classes.join(' ')}">
           <td>${escapeHtml(entry.caseTitle)}${adversaryMarker}</td>
           <td>${escapeHtml(entry.caseChapter)}</td>
@@ -278,6 +287,26 @@
           <td>${escapeHtml(entry.hearingJudge ? entry.hearingJudge.split(' ').pop() : '--')}</td>
         </tr>
       `;
+
+      if (hasZoom) {
+        html += `
+          <tr class="zoom-detail-row ${rowParity}">
+            <td colspan="7">
+              <div class="zoom-inline">
+                <span class="zoom-badge">Zoom</span>
+                <span class="zoom-separator"></span>
+                <span><span class="zoom-field">Meeting ID</span> <span class="zoom-value">${escapeHtml(entry.zoomMeetingId || '---')}</span></span>
+                <span class="zoom-separator"></span>
+                <span><span class="zoom-field">Passcode</span> <span class="zoom-value">${escapeHtml(entry.zoomPasscode || '---')}</span></span>
+                <span class="zoom-separator"></span>
+                <span><span class="zoom-field">Phone</span> <span class="zoom-value">${escapeHtml(entry.zoomPhone || '---')}</span></span>
+              </div>
+            </td>
+          </tr>
+        `;
+      }
+
+      return html;
     }).join('');
 
     // Enable auto-scroll if needed
@@ -287,43 +316,18 @@
     } else if (container) {
       container.classList.remove('scrolling');
     }
-
-    // Show Zoom info for in-progress or upcoming (within 15 min) Zoom hearings
-    const now = new Date();
-    const zoomEntry = docketData.find(e => {
-      if (!e.isZoom) return false;
-      if (e.status === 'in_progress') return true;
-      if (e.status !== 'scheduled') return false;
-      // Check if hearing is within 15 minutes
-      const [h, m] = (e.hearingTime || '').split(':').map(Number);
-      if (isNaN(h) || isNaN(m)) return false;
-      const hearingTime = new Date(now);
-      hearingTime.setHours(h, m, 0, 0);
-      const minutesUntil = (hearingTime - now) / 60000;
-      return minutesUntil <= 15 && minutesUntil >= -60;
-    });
-    if (zoomEntry) {
-      showZoomInfo(zoomEntry);
-    } else {
-      hideZoomInfo();
-    }
   }
 
-  // Show Zoom information
-  function showZoomInfo(entry) {
-    const zoomEl = document.getElementById('zoom-info');
-    if (!zoomEl) return;
-
-    document.getElementById('zoom-meeting-id').textContent = entry.zoomMeetingId || '---';
-    document.getElementById('zoom-passcode').textContent = entry.zoomPasscode || '---';
-    document.getElementById('zoom-phone').textContent = entry.zoomPhone || '---';
-    zoomEl.style.display = 'flex';
-  }
-
-  // Hide Zoom information
-  function hideZoomInfo() {
-    const zoomEl = document.getElementById('zoom-info');
-    if (zoomEl) zoomEl.style.display = 'none';
+  // Determine if Zoom info should be shown for a hearing entry
+  function shouldShowZoom(entry, now) {
+    if (entry.status === 'in_progress') return true;
+    if (entry.status !== 'scheduled') return false;
+    const [h, m] = (entry.hearingTime || '').split(':').map(Number);
+    if (isNaN(h) || isNaN(m)) return false;
+    const hearingTime = new Date(now);
+    hearingTime.setHours(h, m, 0, 0);
+    const minutesUntil = (hearingTime - now) / 60000;
+    return minutesUntil <= 15 && minutesUntil >= -60;
   }
 
   // Fetch announcements

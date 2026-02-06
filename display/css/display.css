@@ -158,27 +158,56 @@ html, body {
   margin-top: 2px;
 }
 
-/* Zoom Info Box */
-.zoom-info {
-  background-color: #4A90D9;
-  color: var(--white);
-  padding: 15px 30px;
+/* Inline Zoom Info Row (shown beneath Zoom hearing entries) */
+/* Remove border between hearing row and its zoom row */
+.has-zoom-detail td {
+  border-bottom: none !important;
+}
+
+.zoom-detail-row {
+  height: auto !important;
+}
+
+.zoom-detail-row td {
+  padding: 0 10px 10px !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.zoom-detail-row .zoom-inline {
   display: flex;
   align-items: center;
-  gap: 30px;
-  font-size: 24px;
+  justify-content: flex-end;
+  gap: 24px;
+  font-size: 20px;
+  color: var(--white);
 }
 
-.zoom-icon {
+.zoom-detail-row .zoom-badge {
   background-color: #2D8CFF;
-  padding: 10px 20px;
-  border-radius: 5px;
+  padding: 3px 12px;
+  border-radius: 3px;
   font-weight: bold;
+  font-size: 16px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
 }
 
-.zoom-details {
-  display: flex;
-  gap: 40px;
+.zoom-detail-row .zoom-separator {
+  width: 1px;
+  height: 18px;
+  background-color: rgba(255, 255, 255, 0.3);
+}
+
+.zoom-detail-row .zoom-field {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 18px;
+}
+
+.zoom-detail-row .zoom-value {
+  color: var(--white);
+  font-weight: 600;
+  font-size: 20px;
+  letter-spacing: 0.3px;
 }
 
 /* Docket Table Section */
@@ -247,11 +276,11 @@ html, body {
   height: var(--row-height);
 }
 
-.docket-table tbody tr:nth-child(odd) {
+.docket-table tbody tr.row-odd {
   background: linear-gradient(90deg, var(--row-gradient-start), var(--row-gradient-end));
 }
 
-.docket-table tbody tr:nth-child(even) {
+.docket-table tbody tr.row-even {
   background: linear-gradient(90deg, var(--navy-mid), var(--navy-dark));
 }
 
