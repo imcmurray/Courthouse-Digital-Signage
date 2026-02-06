@@ -8,13 +8,19 @@
 
   // Configuration
   const CONFIG = {
-    apiBaseUrl: 'http://localhost:3000',
+    apiBaseUrl: getApiBaseUrl(),
     displayId: getDisplayId(),
     refreshInterval: 30000, // 30 seconds
     clockInterval: 1000, // 1 second
     weatherRefreshInterval: 900000, // 15 minutes
     tickerSpeed: 50, // pixels per second
   };
+
+  // Derive API base URL: ?apiBase= param, or same host on port 3000
+  function getApiBaseUrl() {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('apiBase') || `${window.location.protocol}//${window.location.hostname}:3000`;
+  }
 
   // State
   let isOnline = true;
