@@ -143,6 +143,13 @@ export default function Docket() {
     staleTime: 5 * 60 * 1000,
   });
 
+  // Fetch distinct courtrooms for filter dropdown
+  const { data: courtroomsData } = useQuery({
+    queryKey: ['docket-courtrooms'],
+    queryFn: docketApi.getCourtrooms,
+    staleTime: 5 * 60 * 1000,
+  });
+
   const highlightedDates = useMemo(() => {
     if (!hearingDatesData) return [];
     return hearingDatesData
@@ -653,14 +660,19 @@ export default function Docket() {
             <label htmlFor="courtroom-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
               Courtroom
             </label>
-            <input
-              type="text"
+            <select
               id="courtroom-filter"
               value={courtroomFilter}
               onChange={(e) => updateFilter('courtroom', e.target.value)}
-              placeholder="e.g., 321"
-              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white w-32"
-            />
+              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+            >
+              <option value="">All Courtrooms</option>
+              {courtroomsData?.map((courtroom) => (
+                <option key={courtroom} value={courtroom}>
+                  {courtroom}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Hide Past Toggle */}
