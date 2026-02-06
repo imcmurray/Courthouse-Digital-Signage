@@ -77,20 +77,23 @@ html, body {
   font-size: var(--header-size);
   font-weight: bold;
   color: var(--black);
+  line-height: 1.1;
 }
 
 .court-name h2 {
-  font-size: 32px;
+  font-size: 26px;
   font-weight: normal;
   color: var(--black);
+  line-height: 1.2;
 }
 
 .court-name h3 {
-  font-size: 20px;
+  font-size: 16px;
   font-weight: normal;
   color: var(--black);
-  opacity: 0.8;
-  margin-top: 2px;
+  opacity: 0.75;
+  line-height: 1.2;
+  margin-top: 1px;
 }
 
 /* Info Widget */
