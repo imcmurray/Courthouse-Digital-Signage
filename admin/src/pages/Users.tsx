@@ -67,8 +67,8 @@ export default function Users() {
     },
   });
 
-  const handleCreate = (data: CreateUserInput) => {
-    createMutation.mutate(data);
+  const handleCreate = (data: CreateUserInput | UpdateUserInput) => {
+    createMutation.mutate(data as CreateUserInput);
   };
 
   const handleUpdate = (data: UpdateUserInput) => {

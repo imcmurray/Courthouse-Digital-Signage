@@ -23,7 +23,7 @@ export interface LoginCredentials {
 export const authApi = {
   login: async (credentials: LoginCredentials): Promise<LoginResponse> => {
     const response = await apiClient.post<LoginResponse>('/api/auth/login', credentials);
-    const { accessToken, refreshToken, user } = response.data;
+    const { accessToken, refreshToken } = response.data;
 
     // Store tokens
     setStoredTokens(accessToken, refreshToken);

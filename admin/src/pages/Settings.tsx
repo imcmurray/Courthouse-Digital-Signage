@@ -385,7 +385,7 @@ export default function Settings() {
 
   return (
     <div className="space-y-6">
-      <Breadcrumb items={[{ label: 'Settings' }]} />
+      <Breadcrumb />
 
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50">
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">

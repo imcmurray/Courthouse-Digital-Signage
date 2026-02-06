@@ -20,7 +20,8 @@ export function getErrorMessage(error: unknown, fallbackMessage: string = 'An er
     // Server responded with an error
     if (error.response) {
       const status = error.response.status;
-      const serverMessage = error.response.data?.error || error.response.data?.message;
+      const data = error.response.data as { error?: string; message?: string } | undefined;
+      const serverMessage = data?.error || data?.message;
 
       // Return server-provided message if available
       if (serverMessage && typeof serverMessage === 'string') {

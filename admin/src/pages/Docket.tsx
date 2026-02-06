@@ -234,8 +234,8 @@ export default function Docket() {
     },
   });
 
-  const handleCreate = (data: CreateDocketEntryInput) => {
-    createMutation.mutate(data);
+  const handleCreate = (data: CreateDocketEntryInput | UpdateDocketEntryInput) => {
+    createMutation.mutate(data as CreateDocketEntryInput);
   };
 
   const handleUpdate = (data: UpdateDocketEntryInput) => {
@@ -284,7 +284,7 @@ export default function Docket() {
   };
 
   // Validate a single row and return array of error messages
-  const validateImportRow = (entry: Record<string, string | boolean | undefined>, rowNum: number): string[] => {
+  const validateImportRow = (entry: Record<string, string | boolean | undefined>, _rowNum: number): string[] => {
     const errors: string[] = [];
     const requiredFields = ['caseNumber', 'caseTitle', 'caseChapter', 'hearingDate', 'hearingTime', 'hearingMatter', 'hearingJudge'];
 
