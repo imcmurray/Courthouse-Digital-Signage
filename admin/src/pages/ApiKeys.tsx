@@ -426,7 +426,7 @@ export default function ApiKeys() {
                 </code>
                 <button
                   onClick={() => copyToClipboard(newApiKey)}
-                  className="ml-2 px-3 py-2 text-primary border border-primary rounded hover:bg-primary/10"
+                  className="ml-2 px-3 py-2 text-primary dark:text-primary-light border border-primary dark:border-primary-light rounded hover:bg-primary/10"
                 >
                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />

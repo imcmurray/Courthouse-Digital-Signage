@@ -85,7 +85,7 @@ export default function Breadcrumb() {
           ) : (
             <Link
               to={crumb.path}
-              className="text-primary hover:text-primary-light hover:underline transition-colors"
+              className="text-primary dark:text-primary-light hover:text-primary-light hover:underline transition-colors"
             >
               {crumb.displayName}
             </Link>

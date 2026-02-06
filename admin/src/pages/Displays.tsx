@@ -297,7 +297,7 @@ export default function Displays() {
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <button
                     onClick={() => openEditModal(display)}
-                    className="text-primary hover:text-primary/80 mr-3"
+                    className="text-primary dark:text-primary-light hover:text-primary/80 dark:hover:text-primary-light/80 mr-3"
                   >
                     Edit
                   </button>
@@ -582,7 +582,7 @@ export default function Displays() {
                 </code>
                 <button
                   onClick={() => copyToClipboard(newApiKey)}
-                  className="ml-2 px-3 py-2 text-primary border border-primary rounded hover:bg-primary/10"
+                  className="ml-2 px-3 py-2 text-primary dark:text-primary-light border border-primary dark:border-primary-light rounded hover:bg-primary/10"
                 >
                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -710,7 +710,7 @@ export default function Displays() {
                 </code>
                 <button
                   onClick={() => copyToClipboard(regeneratedApiKey)}
-                  className="ml-2 px-3 py-2 text-primary border border-primary rounded hover:bg-primary/10"
+                  className="ml-2 px-3 py-2 text-primary dark:text-primary-light border border-primary dark:border-primary-light rounded hover:bg-primary/10"
                 >
                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />

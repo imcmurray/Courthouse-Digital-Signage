@@ -197,7 +197,7 @@ export default function Users() {
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <button
                     onClick={() => setEditingUser(user)}
-                    className="text-primary hover:text-primary/80 mr-4"
+                    className="text-primary dark:text-primary-light hover:text-primary/80 dark:hover:text-primary-light/80 mr-4"
                   >
                     Edit
                   </button>
