@@ -54,6 +54,11 @@ export const announcementsApi = {
   delete: async (id: string): Promise<void> => {
     await apiClient.delete(`/api/announcements/${id}`);
   },
+
+  reorder: async (order: { id: string; priority: number }[]) => {
+    const response = await apiClient.patch('/api/announcements/reorder', { order });
+    return response.data;
+  },
 };
 
 export default announcementsApi;

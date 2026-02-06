@@ -446,7 +446,7 @@ components:
           maxLength: 500
         priority:
           type: integer
-          description: Lower number = higher priority
+          description: Higher number = higher priority (shown first on displays)
         enabled:
           type: boolean
         expiresAt:
@@ -1773,6 +1773,66 @@ paths:
                 $ref: '#/components/schemas/Error'
         '404':
           description: Announcement not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/announcements/reorder:
+    patch:
+      tags: [Announcements]
+      summary: Reorder announcements by updating priorities
+      description: |
+        Bulk-update announcement priorities via drag-and-drop reordering.
+        Accepts an array of { id, priority } pairs. Higher priority = shown first.
+        Emits a WebSocket event to refresh display tickers.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                order:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      priority:
+                        type: integer
+                    required: [id, priority]
+              required: [order]
+      responses:
+        '200':
+          description: Priorities updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  updated:
+                    type: integer
+        '400':
+          description: Invalid input (empty array or missing fields)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error during reorder
           content:
             application/json:
               schema:

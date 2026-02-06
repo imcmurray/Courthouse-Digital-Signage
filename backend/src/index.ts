@@ -1371,7 +1371,7 @@ app.get('/api/announcements', async (req, res) => {
           }
         : undefined,
       orderBy: [
-        { priority: 'asc' },
+        { priority: 'desc' },
         { createdAt: 'desc' }
       ],
     });
@@ -1500,6 +1500,42 @@ app.delete('/api/announcements/:id', authenticateToken, async (req: Authenticate
     }
     console.error('Failed to delete announcement:', error);
     res.status(500).json({ error: 'Failed to delete announcement' });
+  }
+});
+
+// PATCH /api/announcements/reorder - Bulk update announcement priorities
+app.patch('/api/announcements/reorder', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { order } = req.body;
+
+    if (!Array.isArray(order) || order.length === 0) {
+      return res.status(400).json({ error: 'order must be a non-empty array of { id, priority }' });
+    }
+
+    for (const item of order) {
+      if (!item.id || typeof item.priority !== 'number') {
+        return res.status(400).json({ error: 'Each item must have id (string) and priority (number)' });
+      }
+    }
+
+    const updates = await prisma.$transaction(
+      order.map((item: { id: string; priority: number }) =>
+        prisma.announcement.update({
+          where: { id: item.id },
+          data: { priority: item.priority },
+        })
+      )
+    );
+
+    console.log(`[DB] Reordered ${updates.length} announcements`);
+
+    // Emit WebSocket event to refresh display tickers
+    io.emit('announcement:new', {});
+
+    res.json({ success: true, updated: updates.length });
+  } catch (error) {
+    console.error('Failed to reorder announcements:', error);
+    res.status(500).json({ error: 'Failed to reorder announcements' });
   }
 });
 

@@ -1,7 +1,139 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { announcementsApi, Announcement, CreateAnnouncementInput, UpdateAnnouncementInput } from '../api/announcements';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  KeyboardSensor,
+  useSensors,
+  useSensor,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { announcementsApi, Announcement, CreateAnnouncementInput, UpdateAnnouncementInput, AnnouncementsResponse } from '../api/announcements';
+
+// Check if an announcement is expired
+const isExpired = (expiresAt: string | null): boolean => {
+  if (!expiresAt) return false;
+  return new Date(expiresAt) < new Date();
+};
+
+interface SortableRowProps {
+  announcement: Announcement;
+  position: number;
+  onEdit: (announcement: Announcement) => void;
+  onDelete: (announcement: Announcement) => void;
+  onToggle: (id: string, enabled: boolean) => void;
+  isToggling: boolean;
+}
+
+function SortableRow({ announcement, position, onEdit, onDelete, onToggle, isToggling }: SortableRowProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: announcement.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <tr
+      ref={setNodeRef}
+      style={style}
+      className={`hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${!announcement.enabled ? 'bg-gray-50 dark:bg-gray-700' : ''}`}
+    >
+      {/* Drag handle */}
+      <td className="px-2 py-4 w-8">
+        <button
+          {...attributes}
+          {...listeners}
+          className="cursor-grab active:cursor-grabbing p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+          title="Drag to reorder"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+            <circle cx="5" cy="3" r="1.5" />
+            <circle cx="11" cy="3" r="1.5" />
+            <circle cx="5" cy="8" r="1.5" />
+            <circle cx="11" cy="8" r="1.5" />
+            <circle cx="5" cy="13" r="1.5" />
+            <circle cx="11" cy="13" r="1.5" />
+          </svg>
+        </button>
+      </td>
+      {/* Position badge */}
+      <td className="px-3 py-4 whitespace-nowrap">
+        <span className="inline-flex items-center justify-center w-7 h-7 text-xs font-bold rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">
+          #{position}
+        </span>
+      </td>
+      <td className="px-6 py-4">
+        <button
+          onClick={() => onEdit(announcement)}
+          className="text-sm text-gray-900 dark:text-white max-w-md truncate text-left hover:text-primary dark:hover:text-primary-light transition-colors"
+        >
+          {announcement.text}
+        </button>
+        {announcement.createdBy && (
+          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            Created by {announcement.createdBy.name}
+          </div>
+        )}
+      </td>
+      <td className="px-6 py-4 whitespace-nowrap">
+        {isExpired(announcement.expiresAt) ? (
+          <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300">
+            Expired
+          </span>
+        ) : (
+          <button
+            onClick={() => onToggle(announcement.id, !announcement.enabled)}
+            disabled={isToggling}
+            className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full cursor-pointer transition-colors ${
+              announcement.enabled
+                ? 'bg-green-100 text-green-800 hover:bg-green-200 dark:bg-green-900/40 dark:text-green-300 dark:hover:bg-green-800/40'
+                : 'bg-red-100 text-red-800 hover:bg-red-200 dark:bg-red-900/40 dark:text-red-300 dark:hover:bg-red-800/40'
+            }`}
+          >
+            {announcement.enabled ? 'Active' : 'Disabled'}
+          </button>
+        )}
+      </td>
+      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+        {announcement.expiresAt
+          ? new Date(announcement.expiresAt).toLocaleDateString()
+          : 'Never'}
+      </td>
+      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+        <button
+          onClick={() => onEdit(announcement)}
+          className="text-primary dark:text-primary-light hover:text-primary/80 dark:hover:text-primary-light/80 mr-4"
+        >
+          Edit
+        </button>
+        <button
+          onClick={() => onDelete(announcement)}
+          className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+        >
+          Delete
+        </button>
+      </td>
+    </tr>
+  );
+}
 
 export default function Announcements() {
   const queryClient = useQueryClient();
@@ -12,10 +144,17 @@ export default function Announcements() {
   // Form state
   const [formData, setFormData] = useState<CreateAnnouncementInput>({
     text: '',
-    priority: 0,
     enabled: true,
     expiresAt: null,
   });
+
+  // Drag sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 8 },
+    }),
+    useSensor(KeyboardSensor)
+  );
 
   // Fetch announcements
   const { data, isLoading, error } = useQuery({
@@ -77,10 +216,18 @@ export default function Announcements() {
     },
   });
 
+  // Reorder mutation
+  const reorderMutation = useMutation({
+    mutationFn: announcementsApi.reorder,
+    onError: () => {
+      queryClient.invalidateQueries({ queryKey: ['announcements'] });
+      toast.error('Failed to save new order');
+    },
+  });
+
   const resetForm = () => {
     setFormData({
       text: '',
-      priority: 0,
       enabled: true,
       expiresAt: null,
     });
@@ -108,28 +255,39 @@ export default function Announcements() {
     setEditingAnnouncement(announcement);
     setFormData({
       text: announcement.text,
-      priority: announcement.priority,
       enabled: announcement.enabled,
       expiresAt: announcement.expiresAt,
     });
   };
 
-  const getPriorityBadgeColor = (priority: number) => {
-    if (priority >= 10) return 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300';
-    if (priority >= 5) return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300';
-    return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
-  };
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id || !announcements.length) return;
 
-  const getPriorityLabel = (priority: number) => {
-    if (priority >= 10) return 'High';
-    if (priority >= 5) return 'Medium';
-    return 'Low';
-  };
+    const oldIndex = announcements.findIndex(a => a.id === active.id);
+    const newIndex = announcements.findIndex(a => a.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
 
-  // Check if an announcement is expired
-  const isExpired = (expiresAt: string | null): boolean => {
-    if (!expiresAt) return false;
-    return new Date(expiresAt) < new Date();
+    const reordered = arrayMove(announcements, oldIndex, newIndex);
+    const count = reordered.length;
+
+    // Assign priorities: top = count (highest), bottom = 1 (lowest)
+    const order = reordered.map((a, i) => ({
+      id: a.id,
+      priority: count - i,
+    }));
+
+    // Optimistic update
+    const updatedAnnouncements = reordered.map((a, i) => ({
+      ...a,
+      priority: count - i,
+    }));
+    queryClient.setQueryData(['announcements'], (old: AnnouncementsResponse | undefined) => {
+      if (!old) return old;
+      return { ...old, announcements: updatedAnnouncements };
+    });
+
+    reorderMutation.mutate(order);
   };
 
   if (isLoading) {
@@ -157,7 +315,7 @@ export default function Announcements() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Announcements</h1>
           <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
-            Manage announcements displayed on the digital signage ticker.
+            Manage announcements displayed on the digital signage ticker. Drag rows to reorder.
           </p>
         </div>
         <button
@@ -176,96 +334,47 @@ export default function Announcements() {
 
       {/* Announcements Table */}
       <div className="bg-white dark:bg-gray-800 shadow-sm dark:shadow-gray-900/50 rounded-lg overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-          <thead className="bg-gray-50 dark:bg-gray-700">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                Announcement
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                Priority
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                Status
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                Expires
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-            {announcements.map((announcement) => (
-              <tr key={announcement.id} className={`hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${!announcement.enabled ? 'bg-gray-50 dark:bg-gray-700' : ''}`}>
-                <td className="px-6 py-4">
-                  <button
-                    onClick={() => openEditModal(announcement)}
-                    className="text-sm text-gray-900 dark:text-white max-w-md truncate text-left hover:text-primary dark:hover:text-primary-light transition-colors"
-                  >
-                    {announcement.text}
-                  </button>
-                  {announcement.createdBy && (
-                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      Created by {announcement.createdBy.name}
-                    </div>
-                  )}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span
-                    className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getPriorityBadgeColor(
-                      announcement.priority
-                    )}`}
-                  >
-                    {getPriorityLabel(announcement.priority)} ({announcement.priority})
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  {isExpired(announcement.expiresAt) ? (
-                    <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300">
-                      Expired
-                    </span>
-                  ) : (
-                    <button
-                      onClick={() => toggleEnabledMutation.mutate({
-                        id: announcement.id,
-                        enabled: !announcement.enabled
-                      })}
-                      disabled={toggleEnabledMutation.isPending}
-                      className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full cursor-pointer transition-colors ${
-                        announcement.enabled
-                          ? 'bg-green-100 text-green-800 hover:bg-green-200 dark:bg-green-900/40 dark:text-green-300 dark:hover:bg-green-800/40'
-                          : 'bg-red-100 text-red-800 hover:bg-red-200 dark:bg-red-900/40 dark:text-red-300 dark:hover:bg-red-800/40'
-                      }`}
-                    >
-                      {announcement.enabled ? 'Active' : 'Disabled'}
-                    </button>
-                  )}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                  {announcement.expiresAt
-                    ? new Date(announcement.expiresAt).toLocaleDateString()
-                    : 'Never'}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                  <button
-                    onClick={() => openEditModal(announcement)}
-                    className="text-primary dark:text-primary-light hover:text-primary/80 dark:hover:text-primary-light/80 mr-4"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => setDeleteConfirmAnnouncement(announcement)}
-                    className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
-                  >
-                    Delete
-                  </button>
-                </td>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <thead className="bg-gray-50 dark:bg-gray-700">
+              <tr>
+                <th className="px-2 py-3 w-8">
+                  <span className="sr-only">Drag</span>
+                </th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  #
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Announcement
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Status
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Expires
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Actions
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <SortableContext items={announcements.map(a => a.id)} strategy={verticalListSortingStrategy}>
+              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                {announcements.map((announcement, index) => (
+                  <SortableRow
+                    key={announcement.id}
+                    announcement={announcement}
+                    position={index + 1}
+                    onEdit={openEditModal}
+                    onDelete={setDeleteConfirmAnnouncement}
+                    onToggle={(id, enabled) => toggleEnabledMutation.mutate({ id, enabled })}
+                    isToggling={toggleEnabledMutation.isPending}
+                  />
+                ))}
+              </tbody>
+            </SortableContext>
+          </table>
+        </DndContext>
 
         {announcements.length === 0 && (
           <div className="text-center py-12 text-gray-500 dark:text-gray-400">
@@ -313,41 +422,22 @@ export default function Announcements() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                    Priority (0-20)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="20"
-                    value={formData.priority}
-                    onChange={(e) => setFormData({ ...formData, priority: parseInt(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
-                  />
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Higher priority = shown first
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                    Expires At
-                  </label>
-                  <input
-                    type="date"
-                    value={formData.expiresAt ? formData.expiresAt.split('T')[0] : ''}
-                    onChange={(e) => setFormData({
-                      ...formData,
-                      expiresAt: e.target.value ? new Date(e.target.value).toISOString() : null
-                    })}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
-                  />
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Leave empty for no expiration
-                  </p>
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+                  Expires At
+                </label>
+                <input
+                  type="date"
+                  value={formData.expiresAt ? formData.expiresAt.split('T')[0] : ''}
+                  onChange={(e) => setFormData({
+                    ...formData,
+                    expiresAt: e.target.value ? new Date(e.target.value).toISOString() : null
+                  })}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Leave empty for no expiration
+                </p>
               </div>
 
               <div className="flex items-center">
