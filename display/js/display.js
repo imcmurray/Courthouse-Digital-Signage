@@ -208,14 +208,11 @@
       if (tickerEl) tickerEl.style.display = 'none';
     }
 
-    // Apply ticker speed
+    // Apply ticker speed (pixels per second)
     if (displayConfig.tickerSpeed) {
-      const duration = displayConfig.tickerSpeed === 'slow' ? 45 :
-                       displayConfig.tickerSpeed === 'fast' ? 20 : 30;
-      const tickerContent = document.getElementById('ticker-content');
-      if (tickerContent) {
-        tickerContent.style.animationDuration = `${duration}s`;
-      }
+      CONFIG.tickerSpeed = displayConfig.tickerSpeed === 'slow' ? 30 :
+                           displayConfig.tickerSpeed === 'fast' ? 80 : 50;
+      startTickerAnimation();
     }
   }
 
@@ -330,6 +327,10 @@
     return minutesUntil <= 15 && minutesUntil >= -60;
   }
 
+  // Track current ticker animation
+  let tickerAnimation = null;
+  let announcementsSignature = '';
+
   // Fetch announcements
   async function fetchAnnouncements() {
     try {
@@ -344,7 +345,14 @@
 
       if (response.ok) {
         const data = await response.json();
-        announcements = data.announcements || [];
+        const newAnnouncements = data.announcements || [];
+
+        // Only re-render if announcements have actually changed
+        const newSignature = newAnnouncements.map(a => a.id + a.text + a.priority).join('|');
+        if (newSignature === announcementsSignature) return;
+
+        announcements = newAnnouncements;
+        announcementsSignature = newSignature;
         renderTicker();
       }
     } catch (error) {
@@ -359,12 +367,45 @@
 
     if (announcements.length === 0) {
       tickerContent.innerHTML = '<span class="ticker-text">Welcome to the U.S. Bankruptcy Court</span>';
+      startTickerAnimation();
       return;
     }
 
     tickerContent.innerHTML = announcements
       .map(a => `<span class="ticker-text">${escapeHtml(a.text)}</span>`)
       .join('');
+
+    startTickerAnimation();
+  }
+
+  // JS-driven ticker animation with proper width calculation
+  function startTickerAnimation() {
+    const container = document.getElementById('ticker-container');
+    const content = document.getElementById('ticker-content');
+    if (!container || !content) return;
+
+    // Cancel any existing animation
+    if (tickerAnimation) {
+      tickerAnimation.cancel();
+      tickerAnimation = null;
+    }
+
+    // Wait a frame for layout to settle after innerHTML change
+    requestAnimationFrame(() => {
+      const containerWidth = container.offsetWidth;
+      const contentWidth = content.scrollWidth;
+      const totalDistance = containerWidth + contentWidth;
+      const duration = (totalDistance / CONFIG.tickerSpeed) * 1000;
+
+      tickerAnimation = content.animate([
+        { transform: `translateX(${containerWidth}px)` },
+        { transform: `translateX(-${contentWidth}px)` }
+      ], {
+        duration: duration,
+        iterations: Infinity,
+        easing: 'linear'
+      });
+    });
   }
 
   // Weather cache for offline mode

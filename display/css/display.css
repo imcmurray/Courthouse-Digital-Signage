@@ -362,11 +362,11 @@ html, body {
 }
 
 .ticker-content {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   height: 100%;
   white-space: nowrap;
-  animation: ticker-scroll 30s linear infinite;
+  will-change: transform;
 }
 
 .ticker-text {
@@ -374,15 +374,6 @@ html, body {
   padding: 0 100px;
   font-weight: bold;
   color: var(--gray-light);
-}
-
-@keyframes ticker-scroll {
-  0% {
-    transform: translateX(100%);
-  }
-  100% {
-    transform: translateX(-100%);
-  }
 }
 
 /* Offline Indicator */
