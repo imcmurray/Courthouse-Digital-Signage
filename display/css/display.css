@@ -85,6 +85,14 @@ html, body {
   color: var(--black);
 }
 
+.court-name h3 {
+  font-size: 20px;
+  font-weight: normal;
+  color: var(--black);
+  opacity: 0.8;
+  margin-top: 2px;
+}
+
 /* Info Widget */
 .info-widget {
   display: flex;

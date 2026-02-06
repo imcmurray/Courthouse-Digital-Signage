@@ -129,6 +129,15 @@
       if (courtSubtitleEl) courtSubtitleEl.textContent = displayConfig.courtSubtitle;
     }
 
+    // Apply chief judge and clerk of court
+    const officialsEl = document.getElementById('court-officials');
+    if (officialsEl) {
+      const parts = [];
+      if (displayConfig.chiefJudge) parts.push(displayConfig.chiefJudge + ', Chief Judge');
+      if (displayConfig.clerkOfCourt) parts.push(displayConfig.clerkOfCourt + ', Clerk of Court');
+      officialsEl.textContent = parts.join(' \u2022 ');
+    }
+
     // Apply custom court logo if available
     if (displayConfig.courtLogo) {
       const courtSealEl = document.getElementById('court-seal');

@@ -7,6 +7,8 @@ import apiClient, { getStoredToken } from '../api/client';
 interface SettingsData {
   court_name: string;
   court_subtitle: string;
+  chief_judge: string;
+  clerk_of_court: string;
   timezone: string;
   default_theme: string;
   court_logo?: string;
@@ -42,6 +44,8 @@ export default function Settings() {
   const [formData, setFormData] = useState<SettingsData>({
     court_name: '',
     court_subtitle: '',
+    chief_judge: '',
+    clerk_of_court: '',
     timezone: 'America/Denver',
     default_theme: 'default',
   });
@@ -84,6 +88,8 @@ export default function Settings() {
       setFormData({
         court_name: data.settings.court_name || '',
         court_subtitle: data.settings.court_subtitle || '',
+        chief_judge: data.settings.chief_judge || '',
+        clerk_of_court: data.settings.clerk_of_court || '',
         timezone: data.settings.timezone || 'America/Denver',
         default_theme: data.settings.default_theme || 'default',
         court_logo: data.settings.court_logo,
@@ -197,6 +203,8 @@ export default function Settings() {
       setFormData({
         court_name: data.settings.court_name || '',
         court_subtitle: data.settings.court_subtitle || '',
+        chief_judge: data.settings.chief_judge || '',
+        clerk_of_court: data.settings.clerk_of_court || '',
         timezone: data.settings.timezone || 'America/Denver',
         default_theme: data.settings.default_theme || 'default',
         court_logo: data.settings.court_logo,
@@ -425,6 +433,39 @@ export default function Settings() {
                 The district or additional text shown below the court name.
               </p>
             </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="chief_judge" className="block text-sm font-medium text-gray-700 dark:text-gray-200">
+                  Chief Judge
+                </label>
+                <input
+                  type="text"
+                  id="chief_judge"
+                  value={formData.chief_judge}
+                  onChange={(e) => handleInputChange('chief_judge', e.target.value)}
+                  className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
+                  placeholder="e.g., Honorable Peggy Hunt"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="clerk_of_court" className="block text-sm font-medium text-gray-700 dark:text-gray-200">
+                  Clerk of Court
+                </label>
+                <input
+                  type="text"
+                  id="clerk_of_court"
+                  value={formData.clerk_of_court}
+                  onChange={(e) => handleInputChange('clerk_of_court', e.target.value)}
+                  className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
+                  placeholder="e.g., David A. Sime"
+                />
+              </div>
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 -mt-2">
+              Displayed on the signage header as "Chief Judge &bull; Clerk of Court".
+            </p>
 
             {/* Court Logo Upload */}
             <div>
