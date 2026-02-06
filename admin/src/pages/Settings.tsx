@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import Breadcrumb from '../components/Breadcrumb';
-import { getStoredToken } from '../api/client';
+import apiClient, { getStoredToken } from '../api/client';
 
 interface SettingsData {
   court_name: string;
@@ -48,6 +48,18 @@ export default function Settings() {
   const [hasChanges, setHasChanges] = useState(false);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+
+  // Data Management state
+  const importFileInputRef = useRef<HTMLInputElement>(null);
+  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(
+    new Set(['settings', 'displays', 'docket', 'announcements', 'users', 'auditLogs'])
+  );
+  const [isExporting, setIsExporting] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [showImportConfirm, setShowImportConfirm] = useState(false);
+  const [importData, setImportData] = useState<Record<string, unknown> | null>(null);
 
   // Fetch settings
   const { data, isLoading, error } = useQuery<SettingsResponse>({
@@ -233,6 +245,117 @@ export default function Settings() {
   const handleRemoveLogo = async () => {
     if (confirm('Are you sure you want to remove the court logo?')) {
       await removeLogoMutation.mutateAsync();
+    }
+  };
+
+  // Data Management category definitions
+  const categoryOptions = [
+    { key: 'settings', label: 'Settings' },
+    { key: 'displays', label: 'Displays' },
+    { key: 'docket', label: 'Docket Entries' },
+    { key: 'announcements', label: 'Announcements' },
+    { key: 'users', label: 'Users' },
+    { key: 'auditLogs', label: 'Audit Logs' },
+  ];
+
+  const toggleCategory = (key: string) => {
+    setSelectedCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
+
+  const handleExport = async () => {
+    if (selectedCategories.size === 0) {
+      toast.error('Select at least one category to export');
+      return;
+    }
+    setIsExporting(true);
+    try {
+      const include = Array.from(selectedCategories).join(',');
+      const response = await apiClient.get(`/api/export`, {
+        params: { include },
+        responseType: 'blob',
+      });
+      const blob = new Blob([response.data], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const dateStr = new Date().toISOString().split('T')[0];
+      a.download = `courthouse-export-${dateStr}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success('Data exported successfully');
+    } catch {
+      toast.error('Export failed');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleClear = async () => {
+    setIsClearing(true);
+    try {
+      const response = await apiClient.delete('/api/clear', {
+        data: { categories: Array.from(selectedCategories) },
+      });
+      const total = Object.values(response.data.cleared as Record<string, number>).reduce((a: number, b: number) => a + b, 0);
+      toast.success(`Cleared ${total} records`);
+      queryClient.invalidateQueries();
+    } catch {
+      toast.error('Clear failed');
+    } finally {
+      setIsClearing(false);
+      setShowClearConfirm(false);
+    }
+  };
+
+  const handleImportFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const parsed = JSON.parse(ev.target?.result as string);
+        if (!parsed.version || !parsed.categories) {
+          toast.error('Invalid export file format');
+          return;
+        }
+        setImportData(parsed);
+        setShowImportConfirm(true);
+      } catch {
+        toast.error('Failed to parse JSON file');
+      }
+    };
+    reader.readAsText(file);
+    // Reset so the same file can be selected again
+    if (importFileInputRef.current) importFileInputRef.current.value = '';
+  };
+
+  const handleImport = async () => {
+    if (!importData) return;
+    setIsImporting(true);
+    try {
+      const response = await apiClient.post('/api/import', importData);
+      const total = Object.values(response.data.imported as Record<string, number>).reduce((a: number, b: number) => a + b, 0);
+      toast.success(`Imported ${total} records`);
+      queryClient.invalidateQueries();
+    } catch (err: unknown) {
+      const message = (err && typeof err === 'object' && 'response' in err)
+        ? (err as { response?: { data?: { error?: string } } }).response?.data?.error || 'Import failed'
+        : 'Import failed';
+      toast.error(message);
+    } finally {
+      setIsImporting(false);
+      setShowImportConfirm(false);
+      setImportData(null);
     }
   };
 
@@ -497,6 +620,145 @@ export default function Settings() {
                 </span>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Data Management */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 p-6">
+        <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-1">Data Management</h3>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+          Export, clear, or import system data.
+        </p>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5">
+          {categoryOptions.map((cat) => (
+            <label key={cat.key} className="flex items-center space-x-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={selectedCategories.has(cat.key)}
+                onChange={() => toggleCategory(cat.key)}
+                className="rounded border-gray-300 dark:border-gray-600 text-primary focus:ring-primary dark:bg-gray-700"
+              />
+              <span className="text-sm text-gray-700 dark:text-gray-200">{cat.label}</span>
+            </label>
+          ))}
+        </div>
+
+        <div className="flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={handleExport}
+            disabled={isExporting || selectedCategories.size === 0}
+            className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50"
+          >
+            {isExporting ? 'Exporting...' : 'Export Selected'}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (selectedCategories.size === 0) {
+                toast.error('Select at least one category to clear');
+                return;
+              }
+              setShowClearConfirm(true);
+            }}
+            disabled={isClearing || selectedCategories.size === 0}
+            className="inline-flex items-center px-4 py-2 text-sm font-medium text-red-700 dark:text-red-300 bg-white dark:bg-gray-700 border border-red-300 dark:border-red-600 rounded-md hover:bg-red-50 dark:hover:bg-red-900/30 disabled:opacity-50"
+          >
+            {isClearing ? 'Clearing...' : 'Clear Selected'}
+          </button>
+          <button
+            type="button"
+            onClick={() => importFileInputRef.current?.click()}
+            disabled={isImporting}
+            className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50"
+          >
+            {isImporting ? 'Importing...' : 'Import...'}
+          </button>
+          <input
+            ref={importFileInputRef}
+            type="file"
+            accept=".json"
+            onChange={handleImportFileSelect}
+            className="hidden"
+          />
+        </div>
+      </div>
+
+      {/* Clear Confirmation Modal */}
+      {showClearConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Confirm Clear Data</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+              This will permanently delete all data in the following categories:
+            </p>
+            <ul className="list-disc list-inside text-sm text-gray-700 dark:text-gray-200 mb-6 space-y-1">
+              {categoryOptions
+                .filter((c) => selectedCategories.has(c.key))
+                .map((c) => (
+                  <li key={c.key}>{c.label}</li>
+                ))}
+            </ul>
+            <div className="flex justify-end space-x-3">
+              <button
+                type="button"
+                onClick={() => setShowClearConfirm(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleClear}
+                disabled={isClearing}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50"
+              >
+                {isClearing ? 'Clearing...' : 'Clear Data'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Import Confirmation Modal */}
+      {showImportConfirm && importData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Confirm Import</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+              This will import the following data (duplicates will be skipped):
+            </p>
+            <ul className="list-disc list-inside text-sm text-gray-700 dark:text-gray-200 mb-6 space-y-1">
+              {Object.entries((importData as { categories: Record<string, unknown[]> }).categories).map(
+                ([key, values]) => (
+                  <li key={key}>
+                    {key}: {Array.isArray(values) ? values.length : 0} records
+                  </li>
+                )
+              )}
+            </ul>
+            <div className="flex justify-end space-x-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowImportConfirm(false);
+                  setImportData(null);
+                }}
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleImport}
+                disabled={isImporting}
+                className="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-secondary disabled:opacity-50"
+              >
+                {isImporting ? 'Importing...' : 'Import Data'}
+              </button>
+            </div>
           </div>
         </div>
       )}

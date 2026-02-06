@@ -96,7 +96,7 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
   credentials: true
 }));
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 
 // =========================================
 // Rate Limiting Configuration
@@ -2478,6 +2478,244 @@ app.delete('/api/settings/logo', authenticateToken, requireAdmin, async (req: Au
   } catch (error) {
     console.error('Failed to remove logo:', error);
     res.status(500).json({ error: 'Failed to remove logo' });
+  }
+});
+
+// =========================================
+// Data Management Endpoints (Admin Only)
+// =========================================
+
+// GET /api/export - Export system data
+app.get('/api/export', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const includeParam = (req.query.include as string) || '';
+    const include = new Set(includeParam.split(',').filter(Boolean));
+
+    const categories: Record<string, unknown[]> = {};
+
+    if (include.has('settings')) {
+      categories.settings = await prisma.setting.findMany();
+    }
+
+    if (include.has('displays')) {
+      const displays = await prisma.display.findMany();
+      categories.displays = displays.map(({ apiKeyHash, ...rest }) => rest);
+    }
+
+    if (include.has('docket')) {
+      categories.docketEntries = await prisma.docketEntry.findMany();
+      categories.displayDocketEntries = await prisma.displayDocketEntry.findMany();
+    }
+
+    if (include.has('announcements')) {
+      categories.announcements = await prisma.announcement.findMany();
+    }
+
+    if (include.has('users')) {
+      const users = await prisma.user.findMany();
+      categories.users = users.map(({ passwordHash, ...rest }) => rest);
+    }
+
+    if (include.has('auditLogs')) {
+      categories.auditLogs = await prisma.auditLog.findMany();
+    }
+
+    const exportData = {
+      exportedAt: new Date().toISOString(),
+      version: 1,
+      categories,
+    };
+
+    const dateStr = new Date().toISOString().split('T')[0];
+    res.setHeader('Content-Disposition', `attachment; filename="courthouse-export-${dateStr}.json"`);
+    res.setHeader('Content-Type', 'application/json');
+    res.json(exportData);
+  } catch (error) {
+    console.error('Export failed:', error);
+    res.status(500).json({ error: 'Export failed' });
+  }
+});
+
+// DELETE /api/clear - Clear selected data categories
+app.delete('/api/clear', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { categories } = req.body as { categories: string[] };
+    if (!Array.isArray(categories) || categories.length === 0) {
+      return res.status(400).json({ error: 'categories array is required' });
+    }
+
+    const cleared: Record<string, number> = {};
+
+    await prisma.$transaction(async (tx) => {
+      // Delete in FK-safe order
+      if (categories.includes('docket')) {
+        const dde = await tx.displayDocketEntry.deleteMany({});
+        cleared.displayDocketEntries = dde.count;
+        const de = await tx.docketEntry.deleteMany({});
+        cleared.docketEntries = de.count;
+      }
+
+      if (categories.includes('announcements')) {
+        const r = await tx.announcement.deleteMany({});
+        cleared.announcements = r.count;
+      }
+
+      if (categories.includes('auditLogs')) {
+        const r = await tx.auditLog.deleteMany({});
+        cleared.auditLogs = r.count;
+      }
+
+      if (categories.includes('displays')) {
+        // display_docket_entries cascade from displays, but also delete api_keys
+        if (!categories.includes('docket')) {
+          await tx.displayDocketEntry.deleteMany({});
+        }
+        await tx.apiKey.deleteMany({});
+        const r = await tx.display.deleteMany({});
+        cleared.displays = r.count;
+      }
+
+      if (categories.includes('users')) {
+        const r = await tx.user.deleteMany({});
+        cleared.users = r.count;
+      }
+
+      if (categories.includes('settings')) {
+        const r = await tx.setting.deleteMany({});
+        cleared.settings = r.count;
+      }
+    });
+
+    await createAuditLog('clear', 'system', null, req.user?.userId || null, { cleared });
+    res.json({ cleared });
+  } catch (error) {
+    console.error('Clear failed:', error);
+    res.status(500).json({ error: 'Clear failed' });
+  }
+});
+
+// POST /api/import - Import system data
+app.post('/api/import', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const data = req.body;
+    if (!data || data.version !== 1 || !data.categories) {
+      return res.status(400).json({ error: 'Invalid import file. Expected version 1 with categories.' });
+    }
+
+    const imported: Record<string, number> = {};
+    const cats = data.categories;
+
+    await prisma.$transaction(async (tx) => {
+      if (cats.settings && Array.isArray(cats.settings)) {
+        let count = 0;
+        for (const s of cats.settings) {
+          await tx.setting.upsert({
+            where: { key: s.key },
+            update: { value: s.value, updatedById: s.updatedById || null },
+            create: { key: s.key, value: s.value, updatedById: s.updatedById || null },
+          });
+          count++;
+        }
+        imported.settings = count;
+      }
+
+      if (cats.users && Array.isArray(cats.users)) {
+        const placeholderHash = await bcrypt.hash('RESET_REQUIRED', 10);
+        const usersToCreate = cats.users.map((u: Record<string, unknown>) => ({
+          id: u.id as string,
+          email: u.email as string,
+          passwordHash: placeholderHash,
+          name: u.name as string,
+          role: (u.role as string) || 'viewer',
+          isActive: u.isActive !== false,
+        }));
+        const r = await tx.user.createMany({ data: usersToCreate, skipDuplicates: true });
+        imported.users = r.count;
+      }
+
+      if (cats.displays && Array.isArray(cats.displays)) {
+        const placeholderKeyHash = crypto.createHash('sha256').update('REGENERATE_REQUIRED').digest('hex');
+        const displaysToCreate = cats.displays.map((d: Record<string, unknown>) => ({
+          id: d.id as string,
+          name: d.name as string,
+          location: d.location as string,
+          judgeFilter: (d.judgeFilter as string) || null,
+          courtroomFilter: (d.courtroomFilter as string) || null,
+          chapterFilter: (d.chapterFilter as string) || null,
+          showStricken: d.showStricken === true,
+          showZoomInfo: d.showZoomInfo !== false,
+          highlightCurrent: d.highlightCurrent !== false,
+          theme: (d.theme as string) || 'default',
+          columns: (d.columns as string) || '["NAME","CH","TIME","CASE","MATTER","ROOM"]',
+          showWeather: d.showWeather !== false,
+          weatherLocation: (d.weatherLocation as string) || null,
+          noticeText: (d.noticeText as string) || 'Please turn your phones OFF in the Courthouse',
+          tickerEnabled: d.tickerEnabled !== false,
+          tickerSpeed: (d.tickerSpeed as string) || 'medium',
+          status: (d.status as string) || 'unknown',
+          apiKeyHash: placeholderKeyHash,
+        }));
+        const r = await tx.display.createMany({ data: displaysToCreate, skipDuplicates: true });
+        imported.displays = r.count;
+      }
+
+      if (cats.docketEntries && Array.isArray(cats.docketEntries)) {
+        const entriesToCreate = cats.docketEntries.map((e: Record<string, unknown>) => ({
+          id: e.id as string,
+          caseNumber: e.caseNumber as string,
+          caseTitle: e.caseTitle as string,
+          caseChapter: e.caseChapter as string,
+          adversaryNumber: (e.adversaryNumber as string) || null,
+          adversaryTitle: (e.adversaryTitle as string) || null,
+          hearingDate: new Date(e.hearingDate as string),
+          hearingTime: e.hearingTime as string,
+          hearingMatter: e.hearingMatter as string,
+          hearingJudge: e.hearingJudge as string,
+          courtroom: (e.courtroom as string) || null,
+          movingParty: (e.movingParty as string) || null,
+          opposingParty: (e.opposingParty as string) || null,
+          trustee: (e.trustee as string) || null,
+          isZoom: e.isZoom === true,
+          zoomMeetingId: (e.zoomMeetingId as string) || null,
+          zoomPasscode: (e.zoomPasscode as string) || null,
+          zoomPhone: (e.zoomPhone as string) || null,
+          status: (e.status as string) || 'scheduled',
+          statusNote: (e.statusNote as string) || null,
+          comment: (e.comment as string) || null,
+          createdById: (e.createdById as string) || null,
+        }));
+        const r = await tx.docketEntry.createMany({ data: entriesToCreate, skipDuplicates: true });
+        imported.docketEntries = r.count;
+      }
+
+      if (cats.displayDocketEntries && Array.isArray(cats.displayDocketEntries)) {
+        const ddesToCreate = cats.displayDocketEntries.map((d: Record<string, unknown>) => ({
+          displayId: d.displayId as string,
+          docketEntryId: d.docketEntryId as string,
+        }));
+        const r = await tx.displayDocketEntry.createMany({ data: ddesToCreate, skipDuplicates: true });
+        imported.displayDocketEntries = r.count;
+      }
+
+      if (cats.announcements && Array.isArray(cats.announcements)) {
+        const announcementsToCreate = cats.announcements.map((a: Record<string, unknown>) => ({
+          id: a.id as string,
+          text: a.text as string,
+          priority: (a.priority as number) || 100,
+          enabled: a.enabled !== false,
+          expiresAt: a.expiresAt ? new Date(a.expiresAt as string) : null,
+          createdById: (a.createdById as string) || null,
+        }));
+        const r = await tx.announcement.createMany({ data: announcementsToCreate, skipDuplicates: true });
+        imported.announcements = r.count;
+      }
+    });
+
+    await createAuditLog('import', 'system', null, req.user?.userId || null, { imported });
+    res.json({ imported });
+  } catch (error) {
+    console.error('Import failed:', error);
+    res.status(500).json({ error: 'Import failed' });
   }
 });
 
