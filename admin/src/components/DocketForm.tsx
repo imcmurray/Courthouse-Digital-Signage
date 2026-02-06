@@ -185,15 +185,15 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl dark:shadow-gray-900/50 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-gray-900">
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
             {isEditing ? 'Edit Docket Entry' : 'Add New Docket Entry'}
           </h2>
           <button
             onClick={handleCloseAttempt}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
             type="button"
             aria-label="Close form"
           >
@@ -207,10 +207,10 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
         <form onSubmit={handleSubmit(handleFormSubmit)} className="px-6 py-4 space-y-6">
           {/* Case Information Section */}
           <div>
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Case Information</h3>
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Case Information</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label htmlFor="caseNumber" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="caseNumber" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                   Case Number <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -218,7 +218,7 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
                   id="caseNumber"
                   {...register('caseNumber')}
                   placeholder="e.g., 25-27186"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                 />
                 {errors.caseNumber && (
                   <p className="mt-1 text-sm text-red-600" role="alert">{errors.caseNumber.message}</p>
@@ -226,7 +226,7 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
               </div>
 
               <div>
-                <label htmlFor="caseTitle" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="caseTitle" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                   Case Title (Debtor Name) <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -234,7 +234,7 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
                   id="caseTitle"
                   {...register('caseTitle')}
                   placeholder="e.g., John Smith"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                 />
                 {errors.caseTitle && (
                   <p className="mt-1 text-sm text-red-600" role="alert">{errors.caseTitle.message}</p>
@@ -242,13 +242,13 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
               </div>
 
               <div>
-                <label htmlFor="caseChapter" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="caseChapter" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                   Chapter <span className="text-red-500">*</span>
                 </label>
                 <select
                   id="caseChapter"
                   {...register('caseChapter')}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                 >
                   <option value="7">Chapter 7</option>
                   <option value="11">Chapter 11</option>
@@ -263,7 +263,7 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
             {/* Adversary fields */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
               <div>
-                <label htmlFor="adversaryNumber" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="adversaryNumber" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                   Adversary Number (optional)
                 </label>
                 <input
@@ -271,11 +271,11 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
                   id="adversaryNumber"
                   {...register('adversaryNumber')}
                   placeholder="e.g., 25-01234"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                 />
               </div>
               <div>
-                <label htmlFor="adversaryTitle" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="adversaryTitle" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                   Adversary Title (optional)
                 </label>
                 <input
@@ -283,7 +283,7 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
                   id="adversaryTitle"
                   {...register('adversaryTitle')}
                   placeholder="e.g., Smith v. Jones"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                 />
               </div>
             </div>
@@ -291,37 +291,37 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
 
           {/* Hearing Information Section */}
           <div>
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Hearing Information</h3>
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Hearing Information</h3>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
-                <label htmlFor="hearingDate" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="hearingDate" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                   Hearing Date <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="date"
                   id="hearingDate"
                   {...register('hearingDate')}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                 />
                 {errors.hearingDate && (
                   <p className="mt-1 text-sm text-red-600" role="alert">{errors.hearingDate.message}</p>
                 )}
                 {!errors.hearingDate && isPastDate() && (
-                  <p className="mt-1 text-sm text-amber-600" role="status">
+                  <p className="mt-1 text-sm text-amber-600 dark:text-amber-400" role="status">
                     ⚠️ Warning: This date is in the past
                   </p>
                 )}
               </div>
 
               <div>
-                <label htmlFor="hearingTime" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="hearingTime" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                   Hearing Time <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="time"
                   id="hearingTime"
                   {...register('hearingTime')}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                 />
                 {errors.hearingTime && (
                   <p className="mt-1 text-sm text-red-600" role="alert">{errors.hearingTime.message}</p>
@@ -329,7 +329,7 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
               </div>
 
               <div>
-                <label htmlFor="hearingJudge" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="hearingJudge" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                   Judge <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -337,7 +337,7 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
                   id="hearingJudge"
                   {...register('hearingJudge')}
                   placeholder="e.g., Judge Anderson"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                 />
                 {errors.hearingJudge && (
                   <p className="mt-1 text-sm text-red-600" role="alert">{errors.hearingJudge.message}</p>
@@ -345,7 +345,7 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
               </div>
 
               <div>
-                <label htmlFor="courtroom" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="courtroom" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                   Courtroom
                 </label>
                 <input
@@ -353,13 +353,13 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
                   id="courtroom"
                   {...register('courtroom')}
                   placeholder="e.g., 321"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                 />
               </div>
             </div>
 
             <div className="mt-4">
-              <label htmlFor="hearingMatter" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="hearingMatter" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                 Matter Description <span className="text-red-500">*</span>
               </label>
               <textarea
@@ -367,7 +367,7 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
                 {...register('hearingMatter')}
                 rows={3}
                 placeholder="e.g., Motion for Relief from Stay"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
               />
               {errors.hearingMatter && (
                 <p className="mt-1 text-sm text-red-600" role="alert">{errors.hearingMatter.message}</p>
@@ -377,10 +377,10 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
 
           {/* Parties Section */}
           <div>
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Parties (Optional)</h3>
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Parties (Optional)</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label htmlFor="movingParty" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="movingParty" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                   Moving Party
                 </label>
                 <input
@@ -388,11 +388,11 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
                   id="movingParty"
                   {...register('movingParty')}
                   placeholder="e.g., Bank of America"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                 />
               </div>
               <div>
-                <label htmlFor="opposingParty" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="opposingParty" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                   Opposing Party
                 </label>
                 <input
@@ -400,11 +400,11 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
                   id="opposingParty"
                   {...register('opposingParty')}
                   placeholder="e.g., Debtor"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                 />
               </div>
               <div>
-                <label htmlFor="trustee" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="trustee" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                   Trustee
                 </label>
                 <input
@@ -412,7 +412,7 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
                   id="trustee"
                   {...register('trustee')}
                   placeholder="e.g., Jane Doe, Trustee"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                 />
               </div>
             </div>
@@ -420,23 +420,23 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
 
           {/* Zoom Information Section */}
           <div>
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Remote Hearing</h3>
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Remote Hearing</h3>
             <div className="flex items-center mb-4">
               <input
                 type="checkbox"
                 {...register('isZoom')}
                 id="isZoom"
-                className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                className="h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600 rounded"
               />
-              <label htmlFor="isZoom" className="ml-2 text-sm text-gray-700">
+              <label htmlFor="isZoom" className="ml-2 text-sm text-gray-700 dark:text-gray-200">
                 This is a Zoom/remote hearing
               </label>
             </div>
 
             {isZoom && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pl-6 border-l-2 border-blue-200">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pl-6 border-l-2 border-blue-200 dark:border-blue-700">
                 <div>
-                  <label htmlFor="zoomMeetingId" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="zoomMeetingId" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                     Meeting ID
                   </label>
                   <input
@@ -444,11 +444,11 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
                     id="zoomMeetingId"
                     {...register('zoomMeetingId')}
                     placeholder="e.g., 123 456 7890"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                   />
                 </div>
                 <div>
-                  <label htmlFor="zoomPasscode" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="zoomPasscode" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                     Passcode
                   </label>
                   <input
@@ -456,11 +456,11 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
                     id="zoomPasscode"
                     {...register('zoomPasscode')}
                     placeholder="e.g., abc123"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                   />
                 </div>
                 <div>
-                  <label htmlFor="zoomPhone" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="zoomPhone" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                     Dial-in Number
                   </label>
                   <input
@@ -468,7 +468,7 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
                     id="zoomPhone"
                     {...register('zoomPhone')}
                     placeholder="e.g., +1 (123) 456-7890"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                   />
                 </div>
               </div>
@@ -477,20 +477,20 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
 
           {/* Display Assignment Section */}
           <div>
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Display Assignment</h3>
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Display Assignment</h3>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
                 Assign to Displays (optional)
               </label>
-              <p className="text-sm text-gray-500 mb-3">
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
                 Select which displays should show this docket entry. Leave empty to show on all displays.
               </p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-40 overflow-y-auto border border-gray-200 rounded-lg p-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-40 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg p-3">
                 {displays.length === 0 ? (
-                  <p className="text-sm text-gray-500 col-span-2">No displays available</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 col-span-2">No displays available</p>
                 ) : (
                   displays.map((display: Display) => (
-                    <label key={display.id} className="flex items-center space-x-2 p-2 hover:bg-gray-50 rounded cursor-pointer">
+                    <label key={display.id} className="flex items-center space-x-2 p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded cursor-pointer">
                       <input
                         type="checkbox"
                         checked={selectedDisplayIds.includes(display.id)}
@@ -502,18 +502,18 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
                             setValue('displayIds', currentIds.filter((id: string) => id !== display.id));
                           }
                         }}
-                        className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                        className="h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600 rounded"
                       />
                       <div className="flex-1 min-w-0">
-                        <span className="text-sm font-medium text-gray-900 block truncate">{display.name}</span>
-                        <span className="text-xs text-gray-500 block truncate">{display.location}</span>
+                        <span className="text-sm font-medium text-gray-900 dark:text-white block truncate">{display.name}</span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400 block truncate">{display.location}</span>
                       </div>
                     </label>
                   ))
                 )}
               </div>
               {selectedDisplayIds.length > 0 && (
-                <p className="mt-2 text-sm text-gray-600">
+                <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
                   {selectedDisplayIds.length} display{selectedDisplayIds.length !== 1 ? 's' : ''} selected
                 </p>
               )}
@@ -522,16 +522,16 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
 
           {/* Status Section */}
           <div>
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Status</h3>
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Status</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="status" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                   Status
                 </label>
                 <select
                   id="status"
                   {...register('status')}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                 >
                   <option value="scheduled">Scheduled</option>
                   <option value="in_progress">In Progress</option>
@@ -543,7 +543,7 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
                 </select>
               </div>
               <div>
-                <label htmlFor="statusNote" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="statusNote" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                   Status Note (optional)
                 </label>
                 <input
@@ -551,13 +551,13 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
                   id="statusNote"
                   {...register('statusNote')}
                   placeholder="e.g., Continued to next week"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                 />
               </div>
             </div>
 
             <div className="mt-4">
-              <label htmlFor="comment" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="comment" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                 Internal Comment (optional)
               </label>
               <textarea
@@ -565,17 +565,17 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
                 {...register('comment')}
                 rows={2}
                 placeholder="Internal notes (not displayed on signage)"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
               />
             </div>
           </div>
 
           {/* Form Actions */}
-          <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+          <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200 dark:border-gray-700">
             <button
               type="button"
               onClick={handleCloseAttempt}
-              className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              className="px-4 py-2 text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
             >
               Cancel
             </button>
@@ -583,7 +583,7 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
               type="button"
               onClick={handleReset}
               disabled={!isDirty}
-              className="px-4 py-2 text-gray-700 bg-amber-100 rounded-lg hover:bg-amber-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 text-gray-700 dark:text-gray-200 bg-amber-100 dark:bg-amber-900/40 rounded-lg hover:bg-amber-200 dark:hover:bg-amber-800/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Reset
             </button>

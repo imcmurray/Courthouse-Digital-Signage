@@ -78,6 +78,10 @@ export const displaysApi = {
     const response = await apiClient.post<{ success: boolean; message: string; apiKey: string; displayId: string }>(`/api/displays/${id}/regenerate-key`);
     return response.data;
   },
+
+  refreshAll: async (): Promise<void> => {
+    await apiClient.post('/api/displays/refresh');
+  },
 };
 
 export default displaysApi;

@@ -62,12 +62,12 @@ export default function Breadcrumb() {
   }
 
   return (
-    <nav className="flex items-center space-x-2 text-sm text-gray-500 mb-2" aria-label="Breadcrumb">
+    <nav className="flex items-center space-x-2 text-sm text-gray-500 dark:text-gray-400 mb-2" aria-label="Breadcrumb">
       {displayBreadcrumbs.map((crumb, index) => (
         <span key={crumb.path} className="flex items-center">
           {index > 0 && (
             <svg
-              className="w-4 h-4 mx-2 text-gray-400"
+              className="w-4 h-4 mx-2 text-gray-400 dark:text-gray-500"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -81,7 +81,7 @@ export default function Breadcrumb() {
             </svg>
           )}
           {crumb.isLast ? (
-            <span className="text-gray-700 font-medium">{crumb.displayName}</span>
+            <span className="text-gray-700 dark:text-gray-200 font-medium">{crumb.displayName}</span>
           ) : (
             <Link
               to={crumb.path}

@@ -94,12 +94,12 @@ export default function SessionExpiredModal({ onSessionRestored }: SessionExpire
 
       {/* Modal */}
       <div className="flex min-h-full items-center justify-center p-4">
-        <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full p-6 transform transition-all">
+        <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl dark:shadow-gray-900/50 max-w-md w-full p-6 transform transition-all">
           {/* Header */}
           <div className="text-center mb-6">
-            <div className="mx-auto h-14 w-14 flex items-center justify-center rounded-full bg-amber-100 mb-4">
+            <div className="mx-auto h-14 w-14 flex items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/40 mb-4">
               <svg
-                className="h-8 w-8 text-amber-600"
+                className="h-8 w-8 text-amber-600 dark:text-amber-400"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -112,8 +112,8 @@ export default function SessionExpiredModal({ onSessionRestored }: SessionExpire
                 />
               </svg>
             </div>
-            <h3 className="text-lg font-semibold text-gray-900">Session Expired</h3>
-            <p className="mt-2 text-sm text-gray-600">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Session Expired</h3>
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
               Your session has expired due to inactivity. Please login again to continue your work.
             </p>
           </div>
@@ -121,7 +121,7 @@ export default function SessionExpiredModal({ onSessionRestored }: SessionExpire
           {/* Login Form */}
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div>
-              <label htmlFor="modal-email" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="modal-email" className="block text-sm font-medium text-gray-700 dark:text-gray-200">
                 Email address
               </label>
               <input
@@ -131,8 +131,8 @@ export default function SessionExpiredModal({ onSessionRestored }: SessionExpire
                 autoFocus
                 {...register('email')}
                 className={`mt-1 block w-full px-3 py-2 border ${
-                  errors.email ? 'border-red-300' : 'border-gray-300'
-                } rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm`}
+                  errors.email ? 'border-red-300 dark:border-red-600' : 'border-gray-300 dark:border-gray-600'
+                } rounded-md shadow-sm dark:shadow-gray-900/50 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm dark:bg-gray-700 dark:text-white`}
                 placeholder="admin@courthouse.gov"
               />
               {errors.email && (
@@ -141,7 +141,7 @@ export default function SessionExpiredModal({ onSessionRestored }: SessionExpire
             </div>
 
             <div>
-              <label htmlFor="modal-password" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="modal-password" className="block text-sm font-medium text-gray-700 dark:text-gray-200">
                 Password
               </label>
               <input
@@ -150,8 +150,8 @@ export default function SessionExpiredModal({ onSessionRestored }: SessionExpire
                 autoComplete="current-password"
                 {...register('password')}
                 className={`mt-1 block w-full px-3 py-2 border ${
-                  errors.password ? 'border-red-300' : 'border-gray-300'
-                } rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm`}
+                  errors.password ? 'border-red-300 dark:border-red-600' : 'border-gray-300 dark:border-gray-600'
+                } rounded-md shadow-sm dark:shadow-gray-900/50 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm dark:bg-gray-700 dark:text-white`}
                 placeholder="Enter your password"
               />
               {errors.password && (
@@ -163,7 +163,7 @@ export default function SessionExpiredModal({ onSessionRestored }: SessionExpire
               <button
                 type="button"
                 onClick={handleClose}
-                className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+                className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
               >
                 Go to Login Page
               </button>

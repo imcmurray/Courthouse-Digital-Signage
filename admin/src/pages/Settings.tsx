@@ -246,7 +246,7 @@ export default function Settings() {
 
   if (error) {
     return (
-      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+      <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded-lg p-4">
         <p className="text-red-600">Failed to load settings. Please try again.</p>
       </div>
     );
@@ -256,10 +256,10 @@ export default function Settings() {
     <div className="space-y-6">
       <Breadcrumb items={[{ label: 'Settings' }]} />
 
-      <div className="bg-white rounded-lg shadow">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-900">System Settings</h2>
-          <p className="mt-1 text-sm text-gray-500">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50">
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">System Settings</h2>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
             Configure global settings for the courthouse digital signage system.
           </p>
         </div>
@@ -267,10 +267,10 @@ export default function Settings() {
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           {/* Court Information Section */}
           <div className="space-y-4">
-            <h3 className="text-lg font-medium text-gray-900 border-b pb-2">Court Information</h3>
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white border-b dark:border-gray-700 pb-2">Court Information</h3>
 
             <div>
-              <label htmlFor="court_name" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="court_name" className="block text-sm font-medium text-gray-700 dark:text-gray-200">
                 Court Name
               </label>
               <input
@@ -278,16 +278,16 @@ export default function Settings() {
                 id="court_name"
                 value={formData.court_name}
                 onChange={(e) => handleInputChange('court_name', e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
+                className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
                 placeholder="e.g., U.S. Bankruptcy Court"
               />
-              <p className="mt-1 text-xs text-gray-500">
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                 This name appears on the display header.
               </p>
             </div>
 
             <div>
-              <label htmlFor="court_subtitle" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="court_subtitle" className="block text-sm font-medium text-gray-700 dark:text-gray-200">
                 Court Subtitle
               </label>
               <input
@@ -295,23 +295,23 @@ export default function Settings() {
                 id="court_subtitle"
                 value={formData.court_subtitle}
                 onChange={(e) => handleInputChange('court_subtitle', e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
+                className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
                 placeholder="e.g., District of Utah"
               />
-              <p className="mt-1 text-xs text-gray-500">
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                 The district or additional text shown below the court name.
               </p>
             </div>
 
             {/* Court Logo Upload */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
                 Court Logo
               </label>
               <div className="flex items-start space-x-4">
                 {/* Logo Preview */}
                 <div className="flex-shrink-0">
-                  <div className="w-24 h-24 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center bg-gray-50 overflow-hidden">
+                  <div className="w-24 h-24 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg flex items-center justify-center bg-gray-50 dark:bg-gray-700 overflow-hidden">
                     {logoPreview ? (
                       <img
                         src={logoPreview}
@@ -351,7 +351,7 @@ export default function Settings() {
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
                       disabled={isUploading || uploadLogoMutation.isPending}
-                      className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50"
+                      className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50"
                     >
                       {isUploading || uploadLogoMutation.isPending ? (
                         <>
@@ -375,13 +375,13 @@ export default function Settings() {
                         type="button"
                         onClick={handleRemoveLogo}
                         disabled={removeLogoMutation.isPending}
-                        className="inline-flex items-center px-3 py-2 border border-red-300 shadow-sm text-sm leading-4 font-medium rounded-md text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 ml-2"
+                        className="inline-flex items-center px-3 py-2 border border-red-300 dark:border-red-600 shadow-sm text-sm leading-4 font-medium rounded-md text-red-700 dark:text-red-300 bg-white dark:bg-gray-700 hover:bg-red-50 dark:hover:bg-red-900/30 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 ml-2"
                       >
                         {removeLogoMutation.isPending ? 'Removing...' : 'Remove'}
                       </button>
                     )}
                   </div>
-                  <p className="mt-2 text-xs text-gray-500">
+                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
                     PNG or SVG, max 5MB. Recommended size: 200x200 pixels.
                   </p>
                 </div>
@@ -391,17 +391,17 @@ export default function Settings() {
 
           {/* System Configuration Section */}
           <div className="space-y-4">
-            <h3 className="text-lg font-medium text-gray-900 border-b pb-2">System Configuration</h3>
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white border-b dark:border-gray-700 pb-2">System Configuration</h3>
 
             <div>
-              <label htmlFor="timezone" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="timezone" className="block text-sm font-medium text-gray-700 dark:text-gray-200">
                 Timezone
               </label>
               <select
                 id="timezone"
                 value={formData.timezone}
                 onChange={(e) => handleInputChange('timezone', e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
+                className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
               >
                 {timezoneOptions.map((tz) => (
                   <option key={tz.value} value={tz.value}>
@@ -409,20 +409,20 @@ export default function Settings() {
                   </option>
                 ))}
               </select>
-              <p className="mt-1 text-xs text-gray-500">
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                 All times will be displayed in this timezone.
               </p>
             </div>
 
             <div>
-              <label htmlFor="default_theme" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="default_theme" className="block text-sm font-medium text-gray-700 dark:text-gray-200">
                 Default Display Theme
               </label>
               <select
                 id="default_theme"
                 value={formData.default_theme}
                 onChange={(e) => handleInputChange('default_theme', e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
+                className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
               >
                 {themeOptions.map((theme) => (
                   <option key={theme.value} value={theme.value}>
@@ -430,19 +430,19 @@ export default function Settings() {
                   </option>
                 ))}
               </select>
-              <p className="mt-1 text-xs text-gray-500">
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                 The default theme for new displays. Individual displays can override this.
               </p>
             </div>
           </div>
 
           {/* Save Buttons */}
-          <div className="flex items-center justify-end space-x-3 pt-4 border-t">
+          <div className="flex items-center justify-end space-x-3 pt-4 border-t dark:border-gray-700">
             <button
               type="button"
               onClick={handleReset}
               disabled={!hasChanges || saveMutation.isPending}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Reset
             </button>
@@ -485,11 +485,11 @@ export default function Settings() {
 
       {/* Settings Metadata */}
       {data?.metadata && (
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Last Updated</h3>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 p-6">
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Last Updated</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
             {Object.entries(data.metadata).map(([key, meta]) => (
-              <div key={key} className="flex justify-between text-gray-600">
+              <div key={key} className="flex justify-between text-gray-600 dark:text-gray-300">
                 <span className="font-medium">{key.replace(/_/g, ' ')}:</span>
                 <span>
                   {new Date(meta.updatedAt).toLocaleString()}

@@ -2,6 +2,7 @@ import { createBrowserRouter, RouterProvider, Navigate, Outlet } from 'react-rou
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import AdminLayout from './components/AdminLayout';
 import SessionExpiredModal from './components/SessionExpiredModal';
@@ -20,6 +21,7 @@ const queryClient = new QueryClient();
 // Root layout component that provides auth context
 function RootLayout() {
   return (
+    <ThemeProvider>
     <AuthProvider>
       <Outlet />
       <Toaster
@@ -50,6 +52,7 @@ function RootLayout() {
       />
       <SessionExpiredModal />
     </AuthProvider>
+    </ThemeProvider>
   );
 }
 
@@ -179,10 +182,10 @@ const router = createBrowserRouter([
       {
         path: '*',
         element: (
-          <div className="min-h-screen flex items-center justify-center bg-gray-50">
+          <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
             <div className="text-center">
-              <h1 className="text-4xl font-bold text-gray-900">404</h1>
-              <p className="mt-2 text-gray-600">Page not found</p>
+              <h1 className="text-4xl font-bold text-gray-900 dark:text-white">404</h1>
+              <p className="mt-2 text-gray-600 dark:text-gray-300">Page not found</p>
               <a href="/admin/dashboard" className="mt-4 inline-block text-primary hover:underline">
                 Go to Dashboard
               </a>

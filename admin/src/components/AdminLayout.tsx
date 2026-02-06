@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import toast from 'react-hot-toast';
 import Breadcrumb from './Breadcrumb';
 
@@ -54,6 +55,7 @@ const adminOnlyNavItems: NavItem[] = [
 
 export default function AdminLayout({ children }: AdminLayoutProps) {
   const { user, logout } = useAuth();
+  const { isDark, toggleTheme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
@@ -88,7 +90,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const showLabels = isMobile ? true : isSidebarOpen;
 
   return (
-    <div className="min-h-screen flex bg-gray-50">
+    <div className="min-h-screen flex bg-gray-50 dark:bg-gray-900">
       {/* Mobile overlay */}
       {isMobile && isMobileSidebarOpen && (
         <div
@@ -223,14 +225,14 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       {/* Main content */}
       <div className="flex-1 flex flex-col">
         {/* Top header */}
-        <header className="bg-white shadow-sm border-b border-gray-200 px-4 md:px-6 py-4">
+        <header className="bg-white dark:bg-gray-800 shadow-sm dark:shadow-gray-900/50 border-b border-gray-200 dark:border-gray-700 px-4 md:px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               {/* Hamburger menu button - only show on mobile */}
               {isMobile && (
                 <button
                   onClick={() => setMobileSidebarOpen(true)}
-                  className="p-2 -ml-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                  className="p-2 -ml-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                   aria-label="Open menu"
                 >
                   <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -240,7 +242,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
               )}
               <div>
                 <Breadcrumb />
-                <h2 className="text-xl font-semibold text-gray-800">
+                <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-100">
                   {allNavItems.find(item => isActive(item.path))?.label ||
                     adminOnlyNavItems.find(item => isActive(item.path))?.label ||
                     'Admin'}
@@ -252,18 +254,35 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
               {/* User info */}
               <div className="flex items-center space-x-3">
                 <div className="text-right">
-                  <p className="text-sm font-medium text-gray-900">{user?.name}</p>
-                  <p className="text-xs text-gray-500 capitalize">{user?.role}</p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">{user?.name}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">{user?.role}</p>
                 </div>
                 <div className="h-10 w-10 rounded-full bg-primary flex items-center justify-center text-white font-semibold">
                   {user?.name?.charAt(0).toUpperCase() || 'U'}
                 </div>
               </div>
 
+              {/* Dark mode toggle */}
+              <button
+                onClick={toggleTheme}
+                className="px-3 py-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+              >
+                {isDark ? (
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                  </svg>
+                ) : (
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                  </svg>
+                )}
+              </button>
+
               {/* Logout button */}
               <button
                 onClick={handleLogout}
-                className="px-3 py-2 text-sm text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                className="px-3 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
                 aria-label="Log out"
               >
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

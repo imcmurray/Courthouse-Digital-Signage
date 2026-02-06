@@ -68,10 +68,10 @@ export default function UserForm({ user, onSubmit, onClose, isLoading }: UserFor
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl dark:shadow-gray-900/50 max-w-md w-full mx-4">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-900">
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
             {isEditing ? 'Edit User' : 'Add New User'}
           </h3>
         </div>
@@ -80,7 +80,7 @@ export default function UserForm({ user, onSubmit, onClose, isLoading }: UserFor
         <form onSubmit={handleSubmit(handleFormSubmit)} className="p-6 space-y-4">
           {/* Name */}
           <div>
-            <label htmlFor="name" className="block text-sm font-medium text-gray-700">
+            <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-gray-200">
               Full Name
             </label>
             <input
@@ -88,8 +88,8 @@ export default function UserForm({ user, onSubmit, onClose, isLoading }: UserFor
               type="text"
               {...register('name')}
               className={`mt-1 block w-full px-3 py-2 border ${
-                errors.name ? 'border-red-300' : 'border-gray-300'
-              } rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary`}
+                errors.name ? 'border-red-300 dark:border-red-600' : 'border-gray-300 dark:border-gray-600'
+              } rounded-md shadow-sm dark:shadow-gray-900/50 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white`}
               placeholder="John Doe"
             />
             {errors.name && (
@@ -99,7 +99,7 @@ export default function UserForm({ user, onSubmit, onClose, isLoading }: UserFor
 
           {/* Email */}
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+            <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-200">
               Email Address
             </label>
             <input
@@ -107,8 +107,8 @@ export default function UserForm({ user, onSubmit, onClose, isLoading }: UserFor
               type="email"
               {...register('email')}
               className={`mt-1 block w-full px-3 py-2 border ${
-                errors.email ? 'border-red-300' : 'border-gray-300'
-              } rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary`}
+                errors.email ? 'border-red-300 dark:border-red-600' : 'border-gray-300 dark:border-gray-600'
+              } rounded-md shadow-sm dark:shadow-gray-900/50 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white`}
               placeholder="user@courthouse.gov"
             />
             {errors.email && (
@@ -118,7 +118,7 @@ export default function UserForm({ user, onSubmit, onClose, isLoading }: UserFor
 
           {/* Password */}
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-200">
               Password {isEditing && <span className="text-gray-400">(leave blank to keep current)</span>}
             </label>
             <input
@@ -126,8 +126,8 @@ export default function UserForm({ user, onSubmit, onClose, isLoading }: UserFor
               type="password"
               {...register('password')}
               className={`mt-1 block w-full px-3 py-2 border ${
-                errors.password ? 'border-red-300' : 'border-gray-300'
-              } rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary`}
+                errors.password ? 'border-red-300 dark:border-red-600' : 'border-gray-300 dark:border-gray-600'
+              } rounded-md shadow-sm dark:shadow-gray-900/50 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white`}
               placeholder={isEditing ? '••••••••' : 'Minimum 8 characters'}
             />
             {errors.password && (
@@ -137,15 +137,15 @@ export default function UserForm({ user, onSubmit, onClose, isLoading }: UserFor
 
           {/* Role */}
           <div>
-            <label htmlFor="role" className="block text-sm font-medium text-gray-700">
+            <label htmlFor="role" className="block text-sm font-medium text-gray-700 dark:text-gray-200">
               Role
             </label>
             <select
               id="role"
               {...register('role')}
               className={`mt-1 block w-full px-3 py-2 border ${
-                errors.role ? 'border-red-300' : 'border-gray-300'
-              } rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary`}
+                errors.role ? 'border-red-300 dark:border-red-600' : 'border-gray-300 dark:border-gray-600'
+              } rounded-md shadow-sm dark:shadow-gray-900/50 focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white`}
             >
               <option value="viewer">Viewer - Read-only access</option>
               <option value="editor">Editor - Can manage docket and announcements</option>
@@ -163,9 +163,9 @@ export default function UserForm({ user, onSubmit, onClose, isLoading }: UserFor
                 id="isActive"
                 type="checkbox"
                 {...register('isActive' as 'isActive')}
-                className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                className="h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600 rounded"
               />
-              <label htmlFor="isActive" className="ml-2 block text-sm text-gray-700">
+              <label htmlFor="isActive" className="ml-2 block text-sm text-gray-700 dark:text-gray-200">
                 Account is active
               </label>
             </div>
@@ -176,7 +176,7 @@ export default function UserForm({ user, onSubmit, onClose, isLoading }: UserFor
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+              className="px-4 py-2 text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
             >
               Cancel
             </button>

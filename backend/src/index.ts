@@ -1648,6 +1648,17 @@ app.post('/api/displays/:id/regenerate-key', authenticateToken, requireAdmin, as
   }
 });
 
+// POST /api/displays/refresh - Force all displays to refresh
+app.post('/api/displays/refresh', authenticateToken, requireAdmin, async (_req: AuthenticatedRequest, res: Response) => {
+  try {
+    io.emit('display:refresh');
+    res.json({ success: true, message: 'Refresh signal sent to all displays' });
+  } catch (error) {
+    console.error('Failed to send refresh signal:', error);
+    res.status(500).json({ error: 'Failed to send refresh signal' });
+  }
+});
+
 // =========================================
 // User Management Endpoints (Admin Only)
 // =========================================

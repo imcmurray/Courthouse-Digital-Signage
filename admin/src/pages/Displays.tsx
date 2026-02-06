@@ -163,11 +163,11 @@ export default function Displays() {
   const getStatusBadgeColor = (status: string) => {
     switch (status) {
       case 'online':
-        return 'bg-green-100 text-green-800';
+        return 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300';
       case 'offline':
-        return 'bg-red-100 text-red-800';
+        return 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
     }
   };
 
@@ -210,8 +210,8 @@ export default function Displays() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Displays</h1>
-          <p className="mt-1 text-sm text-gray-600">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Displays</h1>
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
             Manage digital signage displays and their configurations.
           </p>
         </div>
@@ -230,39 +230,39 @@ export default function Displays() {
       </div>
 
       {/* Displays Table */}
-      <div className="bg-white shadow-sm rounded-lg overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+      <div className="bg-white dark:bg-gray-800 shadow-sm dark:shadow-gray-900/50 rounded-lg overflow-hidden">
+        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+          <thead className="bg-gray-50 dark:bg-gray-700">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Display
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Location
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Status
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Last Heartbeat
               </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Actions
               </th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
             {displays.map((display) => (
               <tr key={display.id}>
                 <td className="px-6 py-4">
-                  <div className="text-sm font-medium text-gray-900">
+                  <div className="text-sm font-medium text-gray-900 dark:text-white">
                     {display.name}
                   </div>
-                  <div className="text-xs text-gray-500 font-mono">
+                  <div className="text-xs text-gray-500 dark:text-gray-400 font-mono">
                     {display.id}
                   </div>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                   {display.location}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
@@ -274,7 +274,7 @@ export default function Displays() {
                     {display.status.charAt(0).toUpperCase() + display.status.slice(1)}
                   </span>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                   {display.lastHeartbeat
                     ? new Date(display.lastHeartbeat).toLocaleString()
                     : 'Never'}
@@ -305,7 +305,7 @@ export default function Displays() {
         </table>
 
         {displays.length === 0 && (
-          <div className="text-center py-12 text-gray-500">
+          <div className="text-center py-12 text-gray-500 dark:text-gray-400">
             No displays found. Click "Add Display" to register one.
           </div>
         )}
@@ -314,15 +314,15 @@ export default function Displays() {
       {/* Create/Edit Modal */}
       {(isFormOpen || editingDisplay) && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-lg font-semibold text-gray-900">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
               {editingDisplay ? 'Edit Display' : 'Register New Display'}
             </h3>
             <form onSubmit={editingDisplay ? handleUpdate : handleCreate} className="mt-4 space-y-4">
               {/* Basic Info */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                     Display ID *
                   </label>
                   <input
@@ -332,14 +332,14 @@ export default function Displays() {
                     required
                     disabled={!!editingDisplay}
                     placeholder="e.g., display-321-main"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary disabled:bg-gray-100"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary disabled:bg-gray-100 dark:disabled:bg-gray-700 dark:bg-gray-700 dark:text-white"
                   />
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     Unique identifier (cannot be changed later)
                   </p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                     Display Name *
                   </label>
                   <input
@@ -348,13 +348,13 @@ export default function Displays() {
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     required
                     placeholder="e.g., Courtroom 321 Main Display"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                   Location *
                 </label>
                 <input
@@ -363,14 +363,14 @@ export default function Displays() {
                   onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                   required
                   placeholder="e.g., Third Floor, Outside Courtroom 321"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                 />
               </div>
 
               {/* Filters */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                     Courtroom Filter
                   </label>
                   <input
@@ -378,14 +378,14 @@ export default function Displays() {
                     value={formData.courtroomFilter || ''}
                     onChange={(e) => setFormData({ ...formData, courtroomFilter: e.target.value || null })}
                     placeholder="e.g., 321"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                   />
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     Only show entries for this courtroom
                   </p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                     Judge Filter
                   </label>
                   <input
@@ -393,17 +393,17 @@ export default function Displays() {
                     value={formData.judgeFilter || ''}
                     onChange={(e) => setFormData({ ...formData, judgeFilter: e.target.value || null })}
                     placeholder="e.g., Smith"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                   />
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     Only show entries for this judge
                   </p>
                 </div>
               </div>
 
               {/* Display Options */}
-              <div className="border-t pt-4 mt-4">
-                <h4 className="text-sm font-medium text-gray-900 mb-3">Display Options</h4>
+              <div className="border-t dark:border-gray-700 pt-4 mt-4">
+                <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-3">Display Options</h4>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="flex items-center">
                     <input
@@ -411,9 +411,9 @@ export default function Displays() {
                       id="showWeather"
                       checked={formData.showWeather}
                       onChange={(e) => setFormData({ ...formData, showWeather: e.target.checked })}
-                      className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                      className="h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600 rounded"
                     />
-                    <label htmlFor="showWeather" className="ml-2 text-sm text-gray-700">
+                    <label htmlFor="showWeather" className="ml-2 text-sm text-gray-700 dark:text-gray-200">
                       Show Weather Widget
                     </label>
                   </div>
@@ -423,9 +423,9 @@ export default function Displays() {
                       id="tickerEnabled"
                       checked={formData.tickerEnabled}
                       onChange={(e) => setFormData({ ...formData, tickerEnabled: e.target.checked })}
-                      className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                      className="h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600 rounded"
                     />
-                    <label htmlFor="tickerEnabled" className="ml-2 text-sm text-gray-700">
+                    <label htmlFor="tickerEnabled" className="ml-2 text-sm text-gray-700 dark:text-gray-200">
                       Enable Announcement Ticker
                     </label>
                   </div>
@@ -435,9 +435,9 @@ export default function Displays() {
                       id="showZoomInfo"
                       checked={formData.showZoomInfo}
                       onChange={(e) => setFormData({ ...formData, showZoomInfo: e.target.checked })}
-                      className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                      className="h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600 rounded"
                     />
-                    <label htmlFor="showZoomInfo" className="ml-2 text-sm text-gray-700">
+                    <label htmlFor="showZoomInfo" className="ml-2 text-sm text-gray-700 dark:text-gray-200">
                       Show Zoom Info
                     </label>
                   </div>
@@ -447,9 +447,9 @@ export default function Displays() {
                       id="highlightCurrent"
                       checked={formData.highlightCurrent}
                       onChange={(e) => setFormData({ ...formData, highlightCurrent: e.target.checked })}
-                      className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                      className="h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600 rounded"
                     />
-                    <label htmlFor="highlightCurrent" className="ml-2 text-sm text-gray-700">
+                    <label htmlFor="highlightCurrent" className="ml-2 text-sm text-gray-700 dark:text-gray-200">
                       Highlight Current Hearing
                     </label>
                   </div>
@@ -459,9 +459,9 @@ export default function Displays() {
                       id="showStricken"
                       checked={formData.showStricken}
                       onChange={(e) => setFormData({ ...formData, showStricken: e.target.checked })}
-                      className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                      className="h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600 rounded"
                     />
-                    <label htmlFor="showStricken" className="ml-2 text-sm text-gray-700">
+                    <label htmlFor="showStricken" className="ml-2 text-sm text-gray-700 dark:text-gray-200">
                       Show Stricken Entries
                     </label>
                   </div>
@@ -471,13 +471,13 @@ export default function Displays() {
               {/* Ticker Speed */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                     Ticker Speed
                   </label>
                   <select
                     value={formData.tickerSpeed}
                     onChange={(e) => setFormData({ ...formData, tickerSpeed: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                   >
                     <option value="slow">Slow</option>
                     <option value="medium">Medium</option>
@@ -485,7 +485,7 @@ export default function Displays() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                     Weather Location
                   </label>
                   <input
@@ -493,14 +493,14 @@ export default function Displays() {
                     value={formData.weatherLocation || ''}
                     onChange={(e) => setFormData({ ...formData, weatherLocation: e.target.value || null })}
                     placeholder="e.g., Salt Lake City"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                   />
                 </div>
               </div>
 
               {/* Notice Text */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                   Notice Banner Text
                 </label>
                 <input
@@ -508,7 +508,7 @@ export default function Displays() {
                   value={formData.noticeText}
                   onChange={(e) => setFormData({ ...formData, noticeText: e.target.value })}
                   placeholder="Please turn your phones OFF in the Courthouse"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                 />
               </div>
 
@@ -520,7 +520,7 @@ export default function Displays() {
                     setEditingDisplay(null);
                     resetForm();
                   }}
-                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+                  className="px-4 py-2 text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
                 >
                   Cancel
                 </button>
@@ -544,25 +544,25 @@ export default function Displays() {
       {/* API Key Modal (shown after successful creation) */}
       {newApiKey && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-lg w-full mx-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-lg w-full mx-4">
             <div className="flex items-center mb-4">
-              <div className="flex-shrink-0 h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
+              <div className="flex-shrink-0 h-12 w-12 rounded-full bg-green-100 dark:bg-green-900/40 flex items-center justify-center">
                 <svg className="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
               </div>
               <div className="ml-4">
-                <h3 className="text-lg font-semibold text-gray-900">Display Registered!</h3>
-                <p className="text-sm text-gray-500">Save the API key below - it won't be shown again.</p>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Display Registered!</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Save the API key below - it won't be shown again.</p>
               </div>
             </div>
 
-            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 border border-gray-200 dark:border-gray-600">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
                 Display API Key
               </label>
               <div className="flex items-center">
-                <code className="flex-1 text-sm bg-white p-2 rounded border font-mono break-all">
+                <code className="flex-1 text-sm bg-white dark:bg-gray-800 dark:text-gray-200 p-2 rounded border dark:border-gray-600 font-mono break-all">
                   {newApiKey}
                 </code>
                 <button
@@ -574,8 +574,8 @@ export default function Displays() {
                   </svg>
                 </button>
               </div>
-              <p className="text-xs text-gray-500 mt-2">
-                Use this key with the display client: <code className="bg-gray-100 px-1 rounded">?apiKey=YOUR_KEY</code>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                Use this key with the display client: <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">?apiKey=YOUR_KEY</code>
               </p>
             </div>
 
@@ -594,14 +594,14 @@ export default function Displays() {
       {/* Delete Confirmation Modal */}
       {deleteConfirmDisplay && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold text-gray-900">Confirm Delete</h3>
-            <p className="mt-2 text-gray-600">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Confirm Delete</h3>
+            <p className="mt-2 text-gray-600 dark:text-gray-300">
               Are you sure you want to delete this display?
             </p>
-            <div className="mt-2 p-3 bg-gray-50 rounded-lg">
-              <p className="text-sm font-medium text-gray-900">{deleteConfirmDisplay.name}</p>
-              <p className="text-xs text-gray-500 font-mono">{deleteConfirmDisplay.id}</p>
+            <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+              <p className="text-sm font-medium text-gray-900 dark:text-white">{deleteConfirmDisplay.name}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 font-mono">{deleteConfirmDisplay.id}</p>
             </div>
             <p className="mt-2 text-sm text-red-600">
               This action cannot be undone. The display's API key will be invalidated.
@@ -609,7 +609,7 @@ export default function Displays() {
             <div className="mt-4 flex justify-end space-x-3">
               <button
                 onClick={() => setDeleteConfirmDisplay(null)}
-                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+                className="px-4 py-2 text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
               >
                 Cancel
               </button>
@@ -628,24 +628,24 @@ export default function Displays() {
       {/* Regenerate API Key Confirmation Modal */}
       {regenerateConfirmDisplay && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
             <div className="flex items-center mb-4">
-              <div className="flex-shrink-0 h-12 w-12 rounded-full bg-amber-100 flex items-center justify-center">
+              <div className="flex-shrink-0 h-12 w-12 rounded-full bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center">
                 <svg className="h-6 w-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
               </div>
               <div className="ml-4">
-                <h3 className="text-lg font-semibold text-gray-900">Regenerate API Key</h3>
-                <p className="text-sm text-gray-500">This will invalidate the current key</p>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Regenerate API Key</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400">This will invalidate the current key</p>
               </div>
             </div>
-            <div className="p-3 bg-gray-50 rounded-lg">
-              <p className="text-sm font-medium text-gray-900">{regenerateConfirmDisplay.name}</p>
-              <p className="text-xs text-gray-500 font-mono">{regenerateConfirmDisplay.id}</p>
+            <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+              <p className="text-sm font-medium text-gray-900 dark:text-white">{regenerateConfirmDisplay.name}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 font-mono">{regenerateConfirmDisplay.id}</p>
             </div>
-            <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-              <p className="text-sm text-amber-800">
+            <div className="mt-3 p-3 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-lg">
+              <p className="text-sm text-amber-800 dark:text-amber-300">
                 <strong>Warning:</strong> The current API key will be immediately invalidated.
                 The display client will stop working until you update it with the new key.
               </p>
@@ -653,7 +653,7 @@ export default function Displays() {
             <div className="mt-4 flex justify-end space-x-3">
               <button
                 onClick={() => setRegenerateConfirmDisplay(null)}
-                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+                className="px-4 py-2 text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
               >
                 Cancel
               </button>
@@ -672,25 +672,25 @@ export default function Displays() {
       {/* Regenerated API Key Modal (shown after successful regeneration) */}
       {regeneratedApiKey && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-lg w-full mx-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-lg w-full mx-4">
             <div className="flex items-center mb-4">
-              <div className="flex-shrink-0 h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
+              <div className="flex-shrink-0 h-12 w-12 rounded-full bg-green-100 dark:bg-green-900/40 flex items-center justify-center">
                 <svg className="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
               </div>
               <div className="ml-4">
-                <h3 className="text-lg font-semibold text-gray-900">API Key Regenerated!</h3>
-                <p className="text-sm text-gray-500">Save the new key below - it won't be shown again.</p>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">API Key Regenerated!</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Save the new key below - it won't be shown again.</p>
               </div>
             </div>
 
-            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 border border-gray-200 dark:border-gray-600">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
                 New Display API Key
               </label>
               <div className="flex items-center">
-                <code className="flex-1 text-sm bg-white p-2 rounded border font-mono break-all">
+                <code className="flex-1 text-sm bg-white dark:bg-gray-800 dark:text-gray-200 p-2 rounded border dark:border-gray-600 font-mono break-all">
                   {regeneratedApiKey}
                 </code>
                 <button
@@ -702,8 +702,8 @@ export default function Displays() {
                   </svg>
                 </button>
               </div>
-              <p className="text-xs text-gray-500 mt-2">
-                Update the display client with this new key: <code className="bg-gray-100 px-1 rounded">?apiKey=YOUR_NEW_KEY</code>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                Update the display client with this new key: <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">?apiKey=YOUR_NEW_KEY</code>
               </p>
             </div>
 
