@@ -25,6 +25,9 @@ export default function Docket() {
   const [importError, setImportError] = useState<string | null>(null);
   const [importRowErrors, setImportRowErrors] = useState<Map<number, string[]>>(new Map());
 
+  // Hide expired (past date+time) entries
+  const [hideExpired, setHideExpired] = useState(false);
+
   // Filter state (local, not URL-based)
   const [filterState, setFilterState] = useState({
     date: '',
@@ -120,6 +123,7 @@ export default function Docket() {
   if (debouncedSearch) apiFilters.search = debouncedSearch;
   if (sortBy) apiFilters.sortBy = sortBy;
   if (sortBy) apiFilters.sortOrder = sortOrder;
+  if (hideExpired) apiFilters.hidePast = true;
 
   // Fetch docket entries with filters
   // placeholderData keeps previous results visible while fetching with new filters,
@@ -474,6 +478,18 @@ export default function Docket() {
     return `${hour12}:${minutes} ${ampm}`;
   };
 
+  // Check if a docket entry's hearing date+time has passed
+  const isExpired = (entry: DocketEntry): boolean => {
+    const d = new Date(entry.hearingDate);
+    const [hours, minutes] = entry.hearingTime.split(':').map(Number);
+    // Build local datetime using UTC date parts (hearingDate is stored as UTC midnight)
+    const hearingDateTime = new Date(
+      d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(),
+      hours, minutes
+    );
+    return hearingDateTime < new Date();
+  };
+
   // Only show full-page spinner on the very first load (no cached data yet)
   if (isLoading && !data) {
     return (
@@ -613,10 +629,27 @@ export default function Docket() {
             />
           </div>
 
+          {/* Hide Past Toggle */}
+          <div className="flex items-center">
+            <label htmlFor="hide-expired" className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                id="hide-expired"
+                checked={hideExpired}
+                onChange={(e) => setHideExpired(e.target.checked)}
+                className="h-4 w-4 text-primary border-gray-300 dark:border-gray-600 rounded focus:ring-primary"
+              />
+              <span className="text-sm text-gray-700 dark:text-gray-200">Hide past</span>
+            </label>
+          </div>
+
           {/* Clear Filters Button */}
-          {(dateFilter || statusFilter || courtroomFilter || judgeFilter || searchFilter) && (
+          {(dateFilter || statusFilter || courtroomFilter || judgeFilter || searchFilter || hideExpired) && (
             <button
-              onClick={() => setFilterState({ date: '', status: '', courtroom: '', judge: '', search: '', page: 1, sortBy: '', sortOrder: 'asc' })}
+              onClick={() => {
+                setFilterState({ date: '', status: '', courtroom: '', judge: '', search: '', page: 1, sortBy: '', sortOrder: 'asc' });
+                setHideExpired(false);
+              }}
               className="px-3 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
             >
               Clear Filters
@@ -628,8 +661,11 @@ export default function Docket() {
             {isFetching && (
               <div className="animate-spin rounded-full h-4 w-4 border-2 border-gray-300 border-t-primary"></div>
             )}
-            {(dateFilter || statusFilter || courtroomFilter || searchFilter) && (
-              <span>Showing {entries.length} filtered {entries.length === 1 ? 'entry' : 'entries'}</span>
+            {(dateFilter || statusFilter || courtroomFilter || searchFilter || hideExpired) && (
+              <span>
+                {data?.total ?? 0} {(data?.total ?? 0) === 1 ? 'entry' : 'entries'}
+                {hideExpired && ' (past hidden)'}
+              </span>
             )}
           </div>
         </div>
@@ -659,8 +695,11 @@ export default function Docket() {
                 >
                   Party{getSortIndicator('caseTitle')}
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Matter
+                <th
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 select-none"
+                  onClick={() => handleSort('hearingMatter')}
+                >
+                  Matter{getSortIndicator('hearingMatter')}
                 </th>
                 <th
                   className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 select-none"
@@ -674,13 +713,15 @@ export default function Docket() {
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-              {entries.map((entry) => (
-                <tr key={entry.id} className={`hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${entry.status === 'stricken' ? 'bg-gray-50 dark:bg-gray-900' : ''}`}>
+              {entries.map((entry) => {
+                const expired = isExpired(entry);
+                return (
+                <tr key={entry.id} className={`hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${entry.status === 'stricken' ? 'bg-gray-50 dark:bg-gray-900' : ''} ${expired ? 'opacity-50' : ''}`}>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900 dark:text-white">
+                    <div className={`text-sm font-medium ${expired ? 'text-gray-400 dark:text-gray-500' : 'text-gray-900 dark:text-white'}`}>
                       {formatTime(entry.hearingTime)}
                     </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                    <div className={`text-xs ${expired ? 'text-gray-400 dark:text-gray-500' : 'text-gray-500 dark:text-gray-400'}`}>
                       {formatDate(entry.hearingDate)}
                     </div>
                     {entry.isZoom && (
@@ -751,17 +792,22 @@ export default function Docket() {
                     </button>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
 
         {entries.length === 0 && (
           <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-            {(searchFilter || dateFilter || statusFilter || courtroomFilter || judgeFilter) ? (
+            {(searchFilter || dateFilter || statusFilter || courtroomFilter || judgeFilter || hideExpired) ? (
               <>
                 <p className="text-lg font-medium text-gray-600 dark:text-gray-300 mb-2">No results found</p>
-                <p className="text-sm">Try different search terms or adjust your filters.</p>
+                <p className="text-sm">
+                  {hideExpired
+                    ? 'All matching entries have passed. Uncheck "Hide past" to see them.'
+                    : 'Try different search terms or adjust your filters.'}
+                </p>
               </>
             ) : (
               'No docket entries found. Click "Add Entry" to create one.'

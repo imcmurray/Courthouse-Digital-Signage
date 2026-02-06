@@ -930,12 +930,18 @@ paths:
           in: query
           schema:
             type: string
-            enum: [hearingTime, hearingDate, caseNumber, caseTitle, status, courtroom, hearingJudge, caseChapter]
+            enum: [hearingTime, hearingDate, caseNumber, caseTitle, status, courtroom, hearingJudge, caseChapter, hearingMatter]
         - name: sortOrder
           in: query
           schema:
             type: string
             enum: [asc, desc]
+        - name: hidePast
+          in: query
+          description: When 'true', excludes entries whose hearing date+time have already passed
+          schema:
+            type: string
+            enum: ['true']
       responses:
         '200':
           description: Paginated docket entries

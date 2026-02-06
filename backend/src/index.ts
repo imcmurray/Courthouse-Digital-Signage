@@ -677,7 +677,7 @@ app.get('/api/recent-activity', authenticateToken, async (req: AuthenticatedRequ
 // GET /api/docket - List docket entries with optional filters and pagination
 app.get('/api/docket', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { date, courtroom, status, judge, chapter, search, limit = '10', page = '1', sortBy, sortOrder } = req.query;
+    const { date, courtroom, status, judge, chapter, search, limit = '10', page = '1', sortBy, sortOrder, hidePast } = req.query;
 
     // Parse pagination params
     const pageSize = Math.min(parseInt(limit as string, 10) || 10, 100);
@@ -716,14 +716,42 @@ app.get('/api/docket', authenticateToken, async (req: AuthenticatedRequest, res:
       ];
     }
 
+    // Hide entries whose hearing date+time have passed
+    if (hidePast === 'true') {
+      const now = new Date();
+      const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const tomorrowMidnight = new Date(todayMidnight);
+      tomorrowMidnight.setDate(tomorrowMidnight.getDate() + 1);
+      const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+      // Wrap existing conditions + "not expired" in an AND
+      const existing = { ...where };
+      for (const k of Object.keys(where)) delete (where as Record<string, unknown>)[k];
+      where.AND = [
+        existing,
+        {
+          OR: [
+            { hearingDate: { gte: tomorrowMidnight } },
+            {
+              AND: [
+                { hearingDate: { gte: todayMidnight, lt: tomorrowMidnight } },
+                { hearingTime: { gte: currentTime } }
+              ]
+            }
+          ]
+        }
+      ];
+    }
+
     // Get total count for pagination
     const total = await prisma.docketEntry.count({ where });
 
     // Build orderBy clause - support dynamic sorting
-    const validSortFields = ['hearingTime', 'hearingDate', 'caseNumber', 'caseTitle', 'status', 'courtroom', 'hearingJudge', 'caseChapter'];
+    const validSortFields = ['hearingTime', 'hearingDate', 'caseNumber', 'caseTitle', 'status', 'courtroom', 'hearingJudge', 'caseChapter', 'hearingMatter'];
     const validSortOrders = ['asc', 'desc'];
 
     let orderBy: Record<string, string>[] = [
+      { hearingDate: 'asc' },
       { hearingTime: 'asc' },
       { caseTitle: 'asc' }
     ];
@@ -732,7 +760,11 @@ app.get('/api/docket', authenticateToken, async (req: AuthenticatedRequest, res:
       const order = (sortOrder && typeof sortOrder === 'string' && validSortOrders.includes(sortOrder))
         ? sortOrder
         : 'asc';
-      orderBy = [{ [sortBy]: order }];
+      if (sortBy === 'hearingTime') {
+        orderBy = [{ hearingDate: order }, { hearingTime: order }];
+      } else {
+        orderBy = [{ [sortBy]: order }];
+      }
     }
 
     // Get paginated entries

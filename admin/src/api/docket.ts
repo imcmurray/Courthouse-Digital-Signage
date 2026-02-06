@@ -72,6 +72,7 @@ export interface DocketFilters {
   limit?: number;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
+  hidePast?: boolean;
 }
 
 export interface JudgeZoomDefaults {
@@ -93,6 +94,7 @@ export const docketApi = {
     if (filters?.limit) params.append('limit', filters.limit.toString());
     if (filters?.sortBy) params.append('sortBy', filters.sortBy);
     if (filters?.sortOrder) params.append('sortOrder', filters.sortOrder);
+    if (filters?.hidePast) params.append('hidePast', 'true');
 
     const queryString = params.toString();
     const url = queryString ? `/api/docket?${queryString}` : '/api/docket';
