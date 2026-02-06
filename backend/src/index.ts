@@ -1369,7 +1369,7 @@ app.get('/api/announcements', async (req, res) => {
 });
 
 // Create announcement
-app.post('/api/announcements', async (req, res) => {
+app.post('/api/announcements', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { text, priority = 100, enabled = true, expiresAt } = req.body;
 
@@ -1403,7 +1403,7 @@ app.post('/api/announcements', async (req, res) => {
 });
 
 // Get single announcement
-app.get('/api/announcements/:id', async (req, res) => {
+app.get('/api/announcements/:id', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const announcement = await prisma.announcement.findUnique({
       where: { id: req.params.id },
@@ -1427,7 +1427,7 @@ app.get('/api/announcements/:id', async (req, res) => {
 });
 
 // Update announcement
-app.put('/api/announcements/:id', async (req, res) => {
+app.put('/api/announcements/:id', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { text, priority, enabled, expiresAt } = req.body;
 
@@ -1466,7 +1466,7 @@ app.put('/api/announcements/:id', async (req, res) => {
 });
 
 // Delete announcement
-app.delete('/api/announcements/:id', async (req, res) => {
+app.delete('/api/announcements/:id', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     await prisma.announcement.delete({
       where: { id: req.params.id },
@@ -1488,7 +1488,7 @@ app.delete('/api/announcements/:id', async (req, res) => {
 });
 
 // GET /api/displays - List all displays
-app.get('/api/displays', async (req: Request, res: Response) => {
+app.get('/api/displays', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const displays = await prisma.display.findMany({
       orderBy: { name: 'asc' }
@@ -1502,7 +1502,7 @@ app.get('/api/displays', async (req: Request, res: Response) => {
 });
 
 // POST /api/displays - Create a new display
-app.post('/api/displays', async (req: Request, res: Response) => {
+app.post('/api/displays', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const {
       id,
@@ -1571,7 +1571,7 @@ app.post('/api/displays', async (req: Request, res: Response) => {
 });
 
 // PUT /api/displays/:id - Update a display
-app.put('/api/displays/:id', async (req: Request, res: Response) => {
+app.put('/api/displays/:id', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
     const {
@@ -1661,7 +1661,7 @@ app.get('/api/display-docket-entries', authenticateToken, async (req: Authentica
 });
 
 // DELETE /api/displays/:id - Delete a display
-app.delete('/api/displays/:id', async (req: Request, res: Response) => {
+app.delete('/api/displays/:id', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
 
@@ -2114,6 +2114,72 @@ app.get('/api/api-keys/:id', authenticateToken, requireAdmin, async (req: Authen
   } catch (error) {
     console.error('Failed to fetch API key:', error);
     res.status(500).json({ error: 'Failed to fetch API key' });
+  }
+});
+
+// PUT /api/api-keys/:id - Update an API key (admin only)
+app.put('/api/api-keys/:id', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const existingKey = await prisma.apiKey.findUnique({
+      where: { id: req.params.id }
+    });
+
+    if (!existingKey) {
+      return res.status(404).json({ error: 'API key not found' });
+    }
+
+    const { name, permissions, displayId, expiresAt } = req.body;
+
+    const updateData: Record<string, unknown> = {};
+    if (name !== undefined) {
+      if (typeof name !== 'string' || name.trim().length === 0) {
+        return res.status(400).json({ error: 'Name must be a non-empty string' });
+      }
+      updateData.name = name.trim();
+    }
+    if (permissions !== undefined) {
+      if (!Array.isArray(permissions) || permissions.length === 0) {
+        return res.status(400).json({ error: 'Permissions must be a non-empty array' });
+      }
+      const validPermissions = ['read', 'write', 'admin'];
+      const invalid = permissions.filter((p: string) => !validPermissions.includes(p));
+      if (invalid.length > 0) {
+        return res.status(400).json({ error: `Invalid permissions: ${invalid.join(', ')}` });
+      }
+      updateData.permissions = JSON.stringify(permissions);
+    }
+    if (displayId !== undefined) {
+      updateData.displayId = displayId || null;
+    }
+    if (expiresAt !== undefined) {
+      updateData.expiresAt = expiresAt ? new Date(expiresAt) : null;
+    }
+
+    const updatedKey = await prisma.apiKey.update({
+      where: { id: req.params.id },
+      data: updateData,
+      include: {
+        display: {
+          select: { id: true, name: true }
+        }
+      }
+    });
+
+    console.log(`[DB] UPDATE api_keys WHERE id = ${req.params.id}`);
+    res.json({
+      id: updatedKey.id,
+      name: updatedKey.name,
+      keyPrefix: updatedKey.keyPrefix,
+      permissions: JSON.parse(updatedKey.permissions),
+      displayId: updatedKey.displayId,
+      display: updatedKey.display,
+      expiresAt: updatedKey.expiresAt,
+      lastUsedAt: updatedKey.lastUsedAt,
+      createdAt: updatedKey.createdAt
+    });
+  } catch (error) {
+    console.error('Failed to update API key:', error);
+    res.status(500).json({ error: 'Failed to update API key' });
   }
 });
 

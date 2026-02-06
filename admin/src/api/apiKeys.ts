@@ -23,6 +23,13 @@ export interface CreateApiKeyInput {
   expiresAt?: string | null;
 }
 
+export interface UpdateApiKeyInput {
+  name?: string;
+  permissions?: string[];
+  displayId?: string | null;
+  expiresAt?: string | null;
+}
+
 export const apiKeysApi = {
   // Get all API keys
   getAll: async (): Promise<{ apiKeys: ApiKey[]; total: number }> => {
@@ -39,6 +46,12 @@ export const apiKeysApi = {
   // Create a new API key
   create: async (data: CreateApiKeyInput): Promise<CreateApiKeyResponse> => {
     const response = await apiClient.post('/api/api-keys', data);
+    return response.data;
+  },
+
+  // Update an API key
+  update: async (id: string, data: UpdateApiKeyInput): Promise<ApiKey> => {
+    const response = await apiClient.put<ApiKey>(`/api/api-keys/${id}`, data);
     return response.data;
   },
 

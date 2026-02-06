@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { apiKeysApi, ApiKey, CreateApiKeyInput } from '../api/apiKeys';
+import { apiKeysApi, ApiKey, CreateApiKeyInput, UpdateApiKeyInput } from '../api/apiKeys';
 import { displaysApi, Display } from '../api/displays';
 
 export default function ApiKeys() {
   const queryClient = useQueryClient();
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingKey, setEditingKey] = useState<ApiKey | null>(null);
   const [revokeConfirmKey, setRevokeConfirmKey] = useState<ApiKey | null>(null);
   const [newApiKey, setNewApiKey] = useState<string | null>(null);
 
@@ -48,6 +49,22 @@ export default function ApiKeys() {
     },
   });
 
+  // Update API key mutation
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: UpdateApiKeyInput }) =>
+      apiKeysApi.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['api-keys'] });
+      toast.success('API key updated successfully');
+      setIsFormOpen(false);
+      setEditingKey(null);
+      resetForm();
+    },
+    onError: (error: { response?: { data?: { error?: string } } }) => {
+      toast.error(error.response?.data?.error || 'Failed to update API key');
+    },
+  });
+
   // Revoke API key mutation
   const revokeMutation = useMutation({
     mutationFn: apiKeysApi.revoke,
@@ -70,9 +87,24 @@ export default function ApiKeys() {
     });
   };
 
-  const handleCreate = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    createMutation.mutate(formData);
+    if (editingKey) {
+      updateMutation.mutate({ id: editingKey.id, data: formData });
+    } else {
+      createMutation.mutate(formData);
+    }
+  };
+
+  const handleEdit = (key: ApiKey) => {
+    setEditingKey(key);
+    setFormData({
+      name: key.name,
+      permissions: key.permissions,
+      displayId: key.displayId,
+      expiresAt: key.expiresAt ? new Date(key.expiresAt).toISOString().slice(0, 16) : null,
+    });
+    setIsFormOpen(true);
   };
 
   const handleRevoke = () => {
@@ -165,6 +197,7 @@ export default function ApiKeys() {
         <button
           onClick={() => {
             resetForm();
+            setEditingKey(null);
             setIsFormOpen(true);
           }}
           className="flex items-center px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
@@ -247,7 +280,13 @@ export default function ApiKeys() {
                     <span className="text-gray-400">Never</span>
                   )}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
+                  <button
+                    onClick={() => handleEdit(key)}
+                    className="text-primary hover:text-primary/80"
+                  >
+                    Edit
+                  </button>
                   <button
                     onClick={() => setRevokeConfirmKey(key)}
                     className="text-red-600 hover:text-red-800"
@@ -271,11 +310,15 @@ export default function ApiKeys() {
       {isFormOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-lg w-full mx-4">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Create API Key</h3>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              The API key will only be shown once after creation. Make sure to copy it.
-            </p>
-            <form onSubmit={handleCreate} className="mt-4 space-y-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+              {editingKey ? 'Edit API Key' : 'Create API Key'}
+            </h3>
+            {!editingKey && (
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                The API key will only be shown once after creation. Make sure to copy it.
+              </p>
+            )}
+            <form onSubmit={handleSubmit} className="mt-4 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                   Name *
@@ -381,6 +424,7 @@ export default function ApiKeys() {
                   type="button"
                   onClick={() => {
                     setIsFormOpen(false);
+                    setEditingKey(null);
                     resetForm();
                   }}
                   className="px-4 py-2 text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
@@ -389,10 +433,12 @@ export default function ApiKeys() {
                 </button>
                 <button
                   type="submit"
-                  disabled={createMutation.isPending || formData.permissions.length === 0}
+                  disabled={(editingKey ? updateMutation.isPending : createMutation.isPending) || formData.permissions.length === 0}
                   className="px-4 py-2 text-white bg-primary rounded-lg hover:bg-primary/90 disabled:opacity-50"
                 >
-                  {createMutation.isPending ? 'Creating...' : 'Create API Key'}
+                  {editingKey
+                    ? (updateMutation.isPending ? 'Saving...' : 'Save Changes')
+                    : (createMutation.isPending ? 'Creating...' : 'Create API Key')}
                 </button>
               </div>
             </form>
