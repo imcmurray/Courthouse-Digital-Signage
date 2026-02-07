@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <!-- Cloud -->
+  <ellipse cx="24" cy="16" rx="14" ry="8" fill="#9CA3AF"/>
+  <circle cx="15" cy="11" r="8" fill="#9CA3AF"/>
+  <circle cx="29" cy="9" r="7" fill="#9CA3AF"/>
+  <!-- Snowflakes -->
+  <circle cx="14" cy="30" r="2" fill="#DBEAFE"/>
+  <circle cx="24" cy="28" r="2" fill="#DBEAFE"/>
+  <circle cx="34" cy="31" r="2" fill="#DBEAFE"/>
+  <circle cx="18" cy="37" r="2" fill="#DBEAFE"/>
+  <circle cx="29" cy="38" r="2" fill="#DBEAFE"/>
+  <circle cx="12" cy="42" r="2" fill="#DBEAFE"/>
+  <circle cx="24" cy="44" r="2" fill="#DBEAFE"/>
+</svg>

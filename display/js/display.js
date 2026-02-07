@@ -410,70 +410,139 @@
 
   // Weather cache for offline mode
   let cachedWeatherData = null;
+  // Cache NWS /points metadata (never changes for a given location)
+  let nwsForecastUrls = null;
+
+  // Parse NWS icon URL to extract condition code and day/night
+  // e.g. "https://api.weather.gov/icons/land/day/sct?size=small" → { code: "sct", isDaytime: true }
+  // e.g. "https://api.weather.gov/icons/land/night/tsra,40/ovc" → { code: "tsra", isDaytime: false }
+  function parseNwsIconUrl(iconUrl) {
+    if (!iconUrl) return { code: 'default', isDaytime: true };
+    try {
+      const url = new URL(iconUrl);
+      const parts = url.pathname.split('/');
+      // Path: /icons/land/{day|night}/{condition[,probability][/condition2]}
+      const dayNightIdx = parts.indexOf('day') !== -1 ? parts.indexOf('day') : parts.indexOf('night');
+      const isDaytime = parts[dayNightIdx] === 'day';
+      const conditionPart = parts[dayNightIdx + 1] || 'default';
+      // Strip probability suffix (e.g. "tsra,40" → "tsra")
+      const code = conditionPart.split(',')[0];
+      return { code, isDaytime };
+    } catch (e) {
+      return { code: 'default', isDaytime: true };
+    }
+  }
+
+  // Map NWS condition code to local SVG path
+  function getWeatherIconPath(code, isDaytime) {
+    // Day/night variants for sky conditions
+    const dayNightMap = {
+      skc: isDaytime ? 'clear-day' : 'clear-night',
+      few: isDaytime ? 'few-clouds-day' : 'few-clouds-night',
+      sct: isDaytime ? 'partly-cloudy-day' : 'partly-cloudy-night',
+    };
+    if (dayNightMap[code]) return `assets/weather/${dayNightMap[code]}.svg`;
+
+    // Universal mappings (no day/night variant)
+    const universalMap = {
+      bkn: 'mostly-cloudy',
+      ovc: 'overcast',
+      ra: 'rain',
+      minus_ra: 'rain',
+      shra: 'rain',
+      tsra: 'thunderstorm',
+      tsra_sct: 'thunderstorm',
+      tsra_hi: 'thunderstorm',
+      sn: 'snow',
+      snip: 'snow',
+      blizzard: 'snow',
+      cold: 'snow',
+      fzra: 'freezing-rain',
+      ra_fzra: 'freezing-rain',
+      fzra_sn: 'freezing-rain',
+      raip: 'freezing-rain',
+      ip: 'freezing-rain',
+      ra_sn: 'freezing-rain',
+      fg: 'fog',
+      wind_skc: 'wind',
+      wind_few: 'wind',
+      wind_sct: 'wind',
+      wind_bkn: 'wind',
+      wind_ovc: 'wind',
+      hz: 'haze',
+      fu: 'haze',
+      du: 'haze',
+    };
+    const mapped = universalMap[code];
+    return mapped ? `assets/weather/${mapped}.svg` : 'assets/weather/default.svg';
+  }
 
   // Fetch weather data
   async function fetchWeather() {
     try {
-      // Using National Weather Service API (free, no key required)
-      // Salt Lake City coordinates: 40.7608, -111.8910
-      const pointsUrl = 'https://api.weather.gov/points/40.7608,-111.8910';
+      const nwsHeaders = { 'User-Agent': 'CourthouseSignage/1.0' };
 
-      const pointsResponse = await fetch(pointsUrl, {
-        headers: {
-          'User-Agent': 'CourthouseSignage/1.0',
-        },
-      });
-
-      if (pointsResponse.ok) {
+      // Fetch /points metadata once, cache the URLs
+      if (!nwsForecastUrls) {
+        const pointsUrl = 'https://api.weather.gov/points/40.7608,-111.8910';
+        const pointsResponse = await fetch(pointsUrl, { headers: nwsHeaders });
+        if (!pointsResponse.ok) throw new Error('Points request failed');
         const pointsData = await pointsResponse.json();
-        const forecastUrl = pointsData.properties.forecast;
-
-        const forecastResponse = await fetch(forecastUrl, {
-          headers: {
-            'User-Agent': 'CourthouseSignage/1.0',
-          },
-        });
-
-        if (forecastResponse.ok) {
-          const forecastData = await forecastResponse.json();
-          const periods = forecastData.properties.periods;
-
-          // Get current conditions from first period
-          const current = periods[0];
-
-          // Find today's high and low from the forecast periods
-          // NWS returns periods like "Today", "Tonight", "Tuesday", etc.
-          let high = null;
-          let low = null;
-
-          for (const period of periods.slice(0, 4)) {
-            if (period.isDaytime && high === null) {
-              high = period.temperature;
-            } else if (!period.isDaytime && low === null) {
-              low = period.temperature;
-            }
-            if (high !== null && low !== null) break;
-          }
-
-          // Cache the weather data
-          cachedWeatherData = {
-            current,
-            high,
-            low,
-            temperatureUnit: current.temperatureUnit,
-            timestamp: new Date().toISOString()
-          };
-
-          // Store in localStorage for offline mode
-          try {
-            localStorage.setItem('weatherCache', JSON.stringify(cachedWeatherData));
-          } catch (e) {
-            console.warn('Could not cache weather data:', e);
-          }
-
-          renderWeather(cachedWeatherData);
-        }
+        nwsForecastUrls = {
+          forecast: pointsData.properties.forecast,
+          forecastHourly: pointsData.properties.forecastHourly,
+        };
       }
+
+      // Fetch both forecasts in parallel
+      const [forecastRes, hourlyRes] = await Promise.all([
+        fetch(nwsForecastUrls.forecast, { headers: nwsHeaders }),
+        fetch(nwsForecastUrls.forecastHourly, { headers: nwsHeaders }),
+      ]);
+
+      if (!forecastRes.ok || !hourlyRes.ok) throw new Error('Forecast request failed');
+
+      const [forecastData, hourlyData] = await Promise.all([
+        forecastRes.json(),
+        hourlyRes.json(),
+      ]);
+
+      // Current conditions from hourly forecast (changes every hour)
+      const hourlyPeriod = hourlyData.properties.periods[0];
+      const { code: iconCode, isDaytime } = parseNwsIconUrl(hourlyPeriod.icon);
+
+      // Hi/Lo from regular forecast (12-hour periods)
+      const periods = forecastData.properties.periods;
+      let high = null;
+      let low = null;
+      for (const period of periods.slice(0, 4)) {
+        if (period.isDaytime && high === null) {
+          high = period.temperature;
+        } else if (!period.isDaytime && low === null) {
+          low = period.temperature;
+        }
+        if (high !== null && low !== null) break;
+      }
+
+      // Cache flat structure
+      cachedWeatherData = {
+        temperature: hourlyPeriod.temperature,
+        temperatureUnit: hourlyPeriod.temperatureUnit === 'F' ? 'F' : hourlyPeriod.temperatureUnit,
+        shortForecast: hourlyPeriod.shortForecast,
+        iconCode,
+        isDaytime,
+        high,
+        low,
+        timestamp: new Date().toISOString(),
+      };
+
+      try {
+        localStorage.setItem('weatherCache', JSON.stringify(cachedWeatherData));
+      } catch (e) {
+        console.warn('Could not cache weather data:', e);
+      }
+
+      renderWeather(cachedWeatherData);
     } catch (error) {
       console.error('Failed to fetch weather:', error);
       // Try to use cached data for offline mode
@@ -502,21 +571,10 @@
     const highEl = weatherEl.querySelector('.temp-high');
     const lowEl = weatherEl.querySelector('.temp-low');
 
-    if (iconEl) iconEl.textContent = getWeatherEmoji(data.current.shortForecast);
-    if (tempEl) tempEl.textContent = `${data.current.temperature}°${data.temperatureUnit}`;
+    if (iconEl) iconEl.src = getWeatherIconPath(data.iconCode || 'default', data.isDaytime !== false);
+    if (tempEl) tempEl.textContent = `${data.temperature}°${data.temperatureUnit}`;
     if (highEl && data.high !== null) highEl.textContent = `H: ${data.high}°`;
     if (lowEl && data.low !== null) lowEl.textContent = `L: ${data.low}°`;
-  }
-
-  // Get weather emoji based on forecast
-  function getWeatherEmoji(forecast) {
-    const lower = (forecast || '').toLowerCase();
-    if (lower.includes('sunny') || lower.includes('clear')) return 'sunny';
-    if (lower.includes('cloud')) return 'cloudy';
-    if (lower.includes('rain') || lower.includes('shower')) return 'rain';
-    if (lower.includes('snow')) return 'snow';
-    if (lower.includes('thunder') || lower.includes('storm')) return 'stormy';
-    return 'weather';
   }
 
   // Set up WebSocket connection

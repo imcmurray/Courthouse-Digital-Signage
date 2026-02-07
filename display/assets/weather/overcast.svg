@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <!-- Back cloud -->
+  <ellipse cx="20" cy="20" rx="12" ry="7" fill="#9CA3AF"/>
+  <circle cx="13" cy="15" r="7" fill="#9CA3AF"/>
+  <circle cx="25" cy="14" r="6" fill="#9CA3AF"/>
+  <!-- Front cloud -->
+  <ellipse cx="28" cy="30" rx="14" ry="8" fill="#6B7280"/>
+  <circle cx="19" cy="24" r="8" fill="#6B7280"/>
+  <circle cx="33" cy="23" r="7" fill="#6B7280"/>
+</svg>

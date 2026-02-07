@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <!-- Horizontal fog lines -->
+  <line x1="6" y1="14" x2="42" y2="14" stroke="#9CA3AF" stroke-width="3" stroke-linecap="round"/>
+  <line x1="10" y1="21" x2="38" y2="21" stroke="#9CA3AF" stroke-width="3" stroke-linecap="round"/>
+  <line x1="6" y1="28" x2="42" y2="28" stroke="#6B7280" stroke-width="3" stroke-linecap="round"/>
+  <line x1="10" y1="35" x2="38" y2="35" stroke="#6B7280" stroke-width="3" stroke-linecap="round"/>
+</svg>

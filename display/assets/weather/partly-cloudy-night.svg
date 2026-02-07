@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <!-- Moon peeking from behind -->
+  <path d="M22 4a11 11 0 1 0 0 22 11 11 0 0 1 0-22z" fill="#FCD34D"/>
+  <!-- Larger cloud covering lower half -->
+  <ellipse cx="28" cy="34" rx="14" ry="8" fill="#9CA3AF"/>
+  <circle cx="20" cy="28" r="8" fill="#9CA3AF"/>
+  <circle cx="32" cy="26" r="7" fill="#9CA3AF"/>
+</svg>
