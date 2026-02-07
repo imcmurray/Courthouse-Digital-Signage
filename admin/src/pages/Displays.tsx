@@ -27,6 +27,7 @@ export default function Displays() {
     showStricken: false,
     showZoomInfo: true,
     highlightCurrent: true,
+    orientation: 'landscape',
     theme: 'default',
     showWeather: true,
     weatherLocation: null,
@@ -153,6 +154,7 @@ export default function Displays() {
       showStricken: false,
       showZoomInfo: true,
       highlightCurrent: true,
+      orientation: 'landscape',
       theme: 'default',
       showWeather: true,
       weatherLocation: null,
@@ -192,6 +194,7 @@ export default function Displays() {
       showStricken: display.showStricken,
       showZoomInfo: display.showZoomInfo,
       highlightCurrent: display.highlightCurrent,
+      orientation: display.orientation || 'landscape',
       theme: display.theme,
       showWeather: display.showWeather,
       weatherLocation: display.weatherLocation,
@@ -304,6 +307,11 @@ export default function Displays() {
                   </button>
                   <div className="text-xs text-gray-500 dark:text-gray-400 font-mono">
                     {display.id}
+                    {display.orientation === 'portrait' && (
+                      <span className="ml-2 inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
+                        Portrait
+                      </span>
+                    )}
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
@@ -456,6 +464,21 @@ export default function Displays() {
               {/* Display Options */}
               <div className="border-t dark:border-gray-700 pt-4 mt-4">
                 <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-3">Display Options</h4>
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+                      Orientation
+                    </label>
+                    <select
+                      value={formData.orientation}
+                      onChange={(e) => setFormData({ ...formData, orientation: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                    >
+                      <option value="landscape">Landscape (1920×1080)</option>
+                      <option value="portrait">Portrait (1080×1920)</option>
+                    </select>
+                  </div>
+                </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="flex items-center">
                     <input
@@ -772,14 +795,21 @@ export default function Displays() {
       )}
 
       {/* Display Preview Modal */}
-      {previewDisplay && (
+      {previewDisplay && (() => {
+        const isPortrait = previewDisplay.orientation === 'portrait';
+        const containerW = isPortrait ? 360 : 960;
+        const containerH = isPortrait ? 640 : 540;
+        const iframeW = isPortrait ? 1080 : 1920;
+        const iframeH = isPortrait ? 1920 : 1080;
+        const scale = isPortrait ? 1/3 : 0.5;
+        return (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
-          <div className="bg-gray-900 rounded-lg max-w-[1060px] w-full mx-4 flex flex-col max-h-[90vh]">
+          <div className={`bg-gray-900 rounded-lg ${isPortrait ? 'max-w-[460px]' : 'max-w-[1060px]'} w-full mx-4 flex flex-col max-h-[90vh]`}>
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700">
               <div>
                 <h3 className="text-lg font-semibold text-white">{previewDisplay.name}</h3>
-                <p className="text-sm text-gray-400">{previewDisplay.location}</p>
+                <p className="text-sm text-gray-400">{previewDisplay.location} {isPortrait && '(Portrait)'}</p>
               </div>
               <div className="flex items-center space-x-3">
                 {previewToken && (
@@ -813,15 +843,15 @@ export default function Displays() {
               ) : previewToken ? (
                 <div
                   className="bg-black rounded overflow-hidden"
-                  style={{ width: 960, height: 540 }}
+                  style={{ width: containerW, height: containerH }}
                 >
                   <iframe
                     src={`${API_BASE_URL}/display/index.html?displayId=${previewDisplay.id}&apiKey=${previewToken.previewToken}`}
                     title={`Preview: ${previewDisplay.name}`}
                     style={{
-                      width: 1920,
-                      height: 1080,
-                      transform: 'scale(0.5)',
+                      width: iframeW,
+                      height: iframeH,
+                      transform: `scale(${scale})`,
                       transformOrigin: 'top left',
                       border: 'none',
                     }}
@@ -842,7 +872,8 @@ export default function Displays() {
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

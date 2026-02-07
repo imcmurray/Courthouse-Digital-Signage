@@ -1353,6 +1353,7 @@ app.get('/api/displays/:id/config', displayLimiter, authenticateApiKey, async (r
       noticeText: display.noticeText,
       tickerEnabled: display.tickerEnabled,
       tickerSpeed: display.tickerSpeed,
+      orientation: display.orientation,
       showStricken: display.showStricken,
       showZoomInfo: display.showZoomInfo,
       highlightCurrent: display.highlightCurrent,
@@ -1661,7 +1662,8 @@ app.post('/api/displays', authenticateToken, async (req: AuthenticatedRequest, r
       weatherLocation,
       noticeText,
       tickerEnabled,
-      tickerSpeed
+      tickerSpeed,
+      orientation
     } = req.body;
 
     if (!id || !name || !location) {
@@ -1683,6 +1685,7 @@ app.post('/api/displays', authenticateToken, async (req: AuthenticatedRequest, r
         showStricken: showStricken ?? false,
         showZoomInfo: showZoomInfo ?? true,
         highlightCurrent: highlightCurrent ?? true,
+        orientation: orientation || 'landscape',
         theme: theme || 'default',
         columns: columns ? JSON.stringify(columns) : '["NAME","CH","TIME","CASE","MATTER","ROOM"]',
         showWeather: showWeather ?? true,
@@ -1730,7 +1733,8 @@ app.put('/api/displays/:id', authenticateToken, async (req: AuthenticatedRequest
       weatherLocation,
       noticeText,
       tickerEnabled,
-      tickerSpeed
+      tickerSpeed,
+      orientation
     } = req.body;
 
     // Check if display exists
@@ -1753,6 +1757,7 @@ app.put('/api/displays/:id', authenticateToken, async (req: AuthenticatedRequest
         ...(showStricken !== undefined && { showStricken }),
         ...(showZoomInfo !== undefined && { showZoomInfo }),
         ...(highlightCurrent !== undefined && { highlightCurrent }),
+        ...(orientation !== undefined && { orientation }),
         ...(theme !== undefined && { theme }),
         ...(columns !== undefined && { columns: Array.isArray(columns) ? JSON.stringify(columns) : columns }),
         ...(showWeather !== undefined && { showWeather }),

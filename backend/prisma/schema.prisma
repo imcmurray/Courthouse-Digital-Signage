@@ -73,6 +73,7 @@ model Display {
   showStricken     Boolean   @default(false) @map("show_stricken")
   showZoomInfo     Boolean   @default(true) @map("show_zoom_info")
   highlightCurrent Boolean   @default(true) @map("highlight_current")
+  orientation      String    @default("landscape") // "landscape" or "portrait"
   theme            String    @default("default")
   columns          String    @default("[\"NAME\",\"CH\",\"TIME\",\"CASE\",\"MATTER\",\"ROOM\"]") // JSON array
   showWeather      Boolean   @default(true) @map("show_weather")

@@ -409,3 +409,107 @@ html, body {
     transform: translateY(0);
   }
 }
+
+/* =============================================
+   Portrait Mode Overrides (1080x1920)
+   ============================================= */
+
+body.portrait {
+  width: 1080px;
+  height: 1920px;
+}
+
+/* Header: stack vertically */
+body.portrait .header {
+  height: auto;
+  padding: 15px 20px;
+}
+
+body.portrait .header-content {
+  flex-direction: column;
+  gap: 12px;
+}
+
+body.portrait .court-branding {
+  justify-content: center;
+}
+
+body.portrait .court-name h1 {
+  font-size: 36px;
+  text-align: center;
+}
+
+body.portrait .court-name h2 {
+  font-size: 22px;
+  text-align: center;
+}
+
+body.portrait .court-name h3 {
+  font-size: 14px;
+  text-align: center;
+}
+
+body.portrait .court-seal {
+  width: 70px;
+  height: 70px;
+}
+
+body.portrait .info-widget {
+  width: 100%;
+  justify-content: center;
+  padding: 10px 20px;
+  gap: 30px;
+}
+
+/* Table: smaller fonts, shorter rows */
+body.portrait .docket-table th {
+  font-size: 24px;
+  padding: 10px 8px;
+}
+
+body.portrait .docket-table td {
+  font-size: 22px;
+  padding: 8px;
+}
+
+body.portrait .docket-table tbody tr {
+  height: 55px;
+}
+
+/* Zoom detail rows: scale down */
+body.portrait .zoom-detail-row .zoom-inline {
+  font-size: 16px;
+  gap: 16px;
+}
+
+body.portrait .zoom-detail-row .zoom-badge {
+  font-size: 14px;
+  padding: 2px 8px;
+}
+
+body.portrait .zoom-detail-row .zoom-field {
+  font-size: 14px;
+}
+
+body.portrait .zoom-detail-row .zoom-value {
+  font-size: 16px;
+}
+
+/* Bottom bar: more compact */
+body.portrait .notice-banner {
+  height: 50px;
+  font-size: 22px;
+}
+
+body.portrait .ticker-container {
+  height: 44px;
+}
+
+body.portrait .ticker-text {
+  font-size: 20px;
+}
+
+/* Adjust padding-bottom for shorter bottom bar */
+body.portrait {
+  padding-bottom: 94px; /* 50px notice + 44px ticker */
+}

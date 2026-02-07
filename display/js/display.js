@@ -203,6 +203,17 @@
       if (weatherEl) weatherEl.style.display = 'none';
     }
 
+    // Apply orientation
+    if (displayConfig.orientation === 'portrait') {
+      document.body.classList.add('portrait');
+      document.documentElement.style.width = '1080px';
+      document.documentElement.style.height = '1920px';
+    } else {
+      document.body.classList.remove('portrait');
+      document.documentElement.style.width = '1920px';
+      document.documentElement.style.height = '1080px';
+    }
+
     if (!displayConfig.tickerEnabled) {
       const tickerEl = document.getElementById('ticker-container');
       if (tickerEl) tickerEl.style.display = 'none';
@@ -308,7 +319,8 @@
 
     // Enable auto-scroll if needed
     const container = document.getElementById('docket-container');
-    if (container && docketData.length > 8) {
+    const scrollThreshold = document.body.classList.contains('portrait') ? 18 : 8;
+    if (container && docketData.length > scrollThreshold) {
       container.classList.add('scrolling');
     } else if (container) {
       container.classList.remove('scrolling');

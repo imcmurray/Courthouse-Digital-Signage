@@ -10,6 +10,7 @@ export interface Display {
   showStricken: boolean;
   showZoomInfo: boolean;
   highlightCurrent: boolean;
+  orientation: string;
   theme: string;
   columns: string;
   showWeather: boolean;
@@ -34,6 +35,7 @@ export interface CreateDisplayInput {
   showStricken?: boolean;
   showZoomInfo?: boolean;
   highlightCurrent?: boolean;
+  orientation?: string;
   theme?: string;
   showWeather?: boolean;
   weatherLocation?: string | null;
