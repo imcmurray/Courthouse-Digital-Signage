@@ -1333,7 +1333,7 @@ app.get('/api/displays/:id/config', displayLimiter, authenticateApiKey, async (r
     // Fetch global settings for court name, subtitle, and logo
     const settings = await prisma.setting.findMany({
       where: {
-        key: { in: ['court_name', 'court_subtitle', 'chief_judge', 'clerk_of_court', 'timezone', 'court_logo'] }
+        key: { in: ['court_name', 'court_subtitle', 'courthouse_name', 'chief_judge', 'clerk_of_court', 'timezone', 'court_logo'] }
       }
     });
 
@@ -1362,6 +1362,7 @@ app.get('/api/displays/:id/config', displayLimiter, authenticateApiKey, async (r
       // Global settings
       courtName: settingsMap.court_name || 'U.S. Bankruptcy Court',
       courtSubtitle: settingsMap.court_subtitle || 'District of Utah',
+      courthouseName: settingsMap.courthouse_name || '',
       chiefJudge: settingsMap.chief_judge || '',
       clerkOfCourt: settingsMap.clerk_of_court || '',
       timezone: settingsMap.timezone || 'America/Denver',
@@ -2535,7 +2536,7 @@ app.get('/api/settings/public', async (req: Request, res: Response) => {
   try {
     const settings = await prisma.setting.findMany({
       where: {
-        key: { in: ['court_name', 'court_subtitle', 'chief_judge', 'clerk_of_court', 'court_logo'] }
+        key: { in: ['court_name', 'court_subtitle', 'courthouse_name', 'chief_judge', 'clerk_of_court', 'court_logo'] }
       }
     });
 
@@ -2547,6 +2548,7 @@ app.get('/api/settings/public', async (req: Request, res: Response) => {
     res.json({
       courtName: settingsMap.court_name || 'U.S. Bankruptcy Court',
       courtSubtitle: settingsMap.court_subtitle || 'District of Utah',
+      courthouseName: settingsMap.courthouse_name || '',
       chiefJudge: settingsMap.chief_judge || '',
       clerkOfCourt: settingsMap.clerk_of_court || '',
       courtLogo: settingsMap.court_logo || null
@@ -2598,7 +2600,7 @@ app.put('/api/settings', authenticateToken, requireAdmin, async (req: Authentica
     }
 
     // Valid settings keys that can be updated
-    const validKeys = ['court_name', 'court_subtitle', 'chief_judge', 'clerk_of_court', 'timezone', 'default_theme'];
+    const validKeys = ['court_name', 'court_subtitle', 'courthouse_name', 'chief_judge', 'clerk_of_court', 'timezone', 'default_theme'];
 
     // Update each setting
     const updatedSettings: Record<string, unknown> = {};

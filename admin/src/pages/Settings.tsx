@@ -7,6 +7,7 @@ import apiClient, { getStoredToken } from '../api/client';
 interface SettingsData {
   court_name: string;
   court_subtitle: string;
+  courthouse_name: string;
   chief_judge: string;
   clerk_of_court: string;
   timezone: string;
@@ -44,6 +45,7 @@ export default function Settings() {
   const [formData, setFormData] = useState<SettingsData>({
     court_name: '',
     court_subtitle: '',
+    courthouse_name: '',
     chief_judge: '',
     clerk_of_court: '',
     timezone: 'America/Denver',
@@ -88,6 +90,7 @@ export default function Settings() {
       setFormData({
         court_name: data.settings.court_name || '',
         court_subtitle: data.settings.court_subtitle || '',
+        courthouse_name: data.settings.courthouse_name || '',
         chief_judge: data.settings.chief_judge || '',
         clerk_of_court: data.settings.clerk_of_court || '',
         timezone: data.settings.timezone || 'America/Denver',
@@ -203,6 +206,7 @@ export default function Settings() {
       setFormData({
         court_name: data.settings.court_name || '',
         court_subtitle: data.settings.court_subtitle || '',
+        courthouse_name: data.settings.courthouse_name || '',
         chief_judge: data.settings.chief_judge || '',
         clerk_of_court: data.settings.clerk_of_court || '',
         timezone: data.settings.timezone || 'America/Denver',
@@ -431,6 +435,23 @@ export default function Settings() {
               />
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                 The district or additional text shown below the court name.
+              </p>
+            </div>
+
+            <div>
+              <label htmlFor="courthouse_name" className="block text-sm font-medium text-gray-700 dark:text-gray-200">
+                Courthouse Name
+              </label>
+              <input
+                type="text"
+                id="courthouse_name"
+                value={formData.courthouse_name}
+                onChange={(e) => handleInputChange('courthouse_name', e.target.value)}
+                className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
+                placeholder="e.g., Frank E. Moss Federal Courthouse"
+              />
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                The name of the physical courthouse building, shown on the display.
               </p>
             </div>
 

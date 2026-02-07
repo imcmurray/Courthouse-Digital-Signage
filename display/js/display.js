@@ -100,6 +100,18 @@
     }
   }
 
+  // Show or hide the separator between subtitle and courthouse name
+  function updateCourthouseSep() {
+    var sep = document.getElementById('courthouse-sep');
+    var subtitle = document.getElementById('court-subtitle');
+    var courthouse = document.getElementById('courthouse-name');
+    if (sep) {
+      var show = subtitle && subtitle.textContent && courthouse && courthouse.textContent;
+      sep.textContent = ' | ';
+      sep.classList.toggle('visible', !!show);
+    }
+  }
+
   // Fetch public court branding (no API key needed)
   async function fetchCourtBranding() {
     try {
@@ -113,12 +125,17 @@
         const courtSubtitleEl = document.getElementById('court-subtitle');
         if (courtSubtitleEl && data.courtSubtitle) courtSubtitleEl.textContent = data.courtSubtitle;
 
+        const courthouseNameEl = document.getElementById('courthouse-name');
+        if (courthouseNameEl) courthouseNameEl.textContent = data.courthouseName || '';
+
+        updateCourthouseSep();
+
         const officialsEl = document.getElementById('court-officials');
         if (officialsEl) {
           const parts = [];
           if (data.chiefJudge) parts.push(data.chiefJudge + ', Chief Judge');
           if (data.clerkOfCourt) parts.push(data.clerkOfCourt + ', Clerk of Court');
-          officialsEl.textContent = parts.join(' \u2022 ');
+          officialsEl.textContent = parts.join(' | ');
         }
 
         if (data.courtLogo) {
@@ -170,13 +187,20 @@
       if (courtSubtitleEl) courtSubtitleEl.textContent = displayConfig.courtSubtitle;
     }
 
+    if (displayConfig.courthouseName) {
+      const courthouseNameEl = document.getElementById('courthouse-name');
+      if (courthouseNameEl) courthouseNameEl.textContent = displayConfig.courthouseName;
+    }
+
+    updateCourthouseSep();
+
     // Apply chief judge and clerk of court
     const officialsEl = document.getElementById('court-officials');
     if (officialsEl) {
       const parts = [];
       if (displayConfig.chiefJudge) parts.push(displayConfig.chiefJudge + ', Chief Judge');
       if (displayConfig.clerkOfCourt) parts.push(displayConfig.clerkOfCourt + ', Clerk of Court');
-      officialsEl.textContent = parts.join(' \u2022 ');
+      officialsEl.textContent = parts.join(' | ');
     }
 
     // Apply custom court logo if available
