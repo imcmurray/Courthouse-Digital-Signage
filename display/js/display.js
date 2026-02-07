@@ -317,7 +317,7 @@
         : '';
 
       let html = `
-        <tr class="${classes.join(' ')}">
+        <tr class="${escapeHtml(classes.join(' '))}">
           <td>${escapeHtml(entry.caseTitle)}${adversaryMarker}</td>
           <td>${escapeHtml(entry.caseChapter)}</td>
           <td>${formatTime(entry.hearingTime)}</td>
@@ -330,7 +330,7 @@
 
       if (hasZoom) {
         html += `
-          <tr class="zoom-detail-row ${rowParity}">
+          <tr class="zoom-detail-row ${escapeHtml(rowParity)}">
             <td colspan="7">
               <div class="zoom-inline">
                 <span class="zoom-badge">Zoom</span>

@@ -9,6 +9,7 @@ import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import multer from 'multer';
+import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import swaggerUi from 'swagger-ui-express';
 import YAML from 'yaml';
@@ -125,6 +126,7 @@ app.use(cors({
   credentials: true
 }));
 app.use(express.json({ limit: '50mb' }));
+app.use(cookieParser());
 
 // =========================================
 // Rate Limiting Configuration
@@ -211,7 +213,12 @@ const authenticateToken = async (req: AuthenticatedRequest, res: Response, next:
   }
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
+    const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload & { type?: string };
+
+    // Reject refresh tokens used as access tokens
+    if (decoded.type === 'refresh') {
+      return res.status(403).json({ error: 'Refresh tokens cannot be used for API access' });
+    }
 
     // Check if user still exists and is active in database
     const user = await prisma.user.findUnique({
@@ -427,9 +434,17 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
 
     console.log(`[AUTH] User logged in: ${user.email} (${user.role})`);
 
+    // Set refresh token as HttpOnly cookie
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      path: '/api/auth',
+    });
+
     res.json({
       accessToken,
-      refreshToken,
       user: {
         id: user.id,
         email: user.email,
@@ -443,18 +458,19 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
   }
 });
 
-// POST /api/auth/logout - Logout (client-side token removal)
+// POST /api/auth/logout - Logout
 app.post('/api/auth/logout', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
-  // In a stateless JWT setup, logout is handled client-side
-  // We could add token blacklisting here in the future
   console.log(`[AUTH] User logged out: ${req.user?.email}`);
+  // Clear the refresh token cookie
+  res.clearCookie('refreshToken', { path: '/api/auth' });
   res.json({ message: 'Logged out successfully' });
 });
 
 // POST /api/auth/refresh - Refresh JWT token
 app.post('/api/auth/refresh', async (req: Request, res: Response) => {
   try {
-    const { refreshToken } = req.body;
+    // Read refresh token from HttpOnly cookie (fallback to body for backward compat)
+    const refreshToken = req.cookies?.refreshToken || req.body.refreshToken;
 
     if (!refreshToken) {
       return res.status(400).json({ error: 'Refresh token required' });
@@ -2723,8 +2739,8 @@ app.post('/api/settings/logo', authenticateToken, requireAdmin, upload.single('l
     if (existingLogo) {
       try {
         const oldPath = JSON.parse(existingLogo.value);
-        const oldFilePath = path.join(__dirname, '../..', oldPath);
-        if (fs.existsSync(oldFilePath)) {
+        const oldFilePath = path.resolve(UPLOADS_DIR, path.basename(oldPath));
+        if (oldFilePath.startsWith(path.resolve(UPLOADS_DIR)) && fs.existsSync(oldFilePath)) {
           fs.unlinkSync(oldFilePath);
         }
       } catch (e) {
@@ -2781,11 +2797,11 @@ app.delete('/api/settings/logo', authenticateToken, requireAdmin, async (req: Au
     });
 
     if (existingLogo) {
-      // Delete file from disk
+      // Delete file from disk (validate path stays within uploads directory)
       try {
         const logoPath = JSON.parse(existingLogo.value);
-        const filePath = path.join(__dirname, '../..', logoPath);
-        if (fs.existsSync(filePath)) {
+        const filePath = path.resolve(UPLOADS_DIR, path.basename(logoPath));
+        if (filePath.startsWith(path.resolve(UPLOADS_DIR)) && fs.existsSync(filePath)) {
           fs.unlinkSync(filePath);
         }
       } catch (e) {

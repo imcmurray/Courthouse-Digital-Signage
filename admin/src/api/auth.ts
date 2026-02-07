@@ -11,7 +11,6 @@ export interface User {
 
 export interface LoginResponse {
   accessToken: string;
-  refreshToken: string;
   user: User;
 }
 
@@ -23,10 +22,10 @@ export interface LoginCredentials {
 export const authApi = {
   login: async (credentials: LoginCredentials): Promise<LoginResponse> => {
     const response = await apiClient.post<LoginResponse>('/api/auth/login', credentials);
-    const { accessToken, refreshToken } = response.data;
+    const { accessToken } = response.data;
 
-    // Store tokens
-    setStoredTokens(accessToken, refreshToken);
+    // Store access token (refresh token is set as HttpOnly cookie by backend)
+    setStoredTokens(accessToken);
 
     return response.data;
   },
@@ -46,8 +45,8 @@ export const authApi = {
     return response.data;
   },
 
-  refreshToken: async (refreshToken: string): Promise<{ accessToken: string; user: User }> => {
-    const response = await apiClient.post('/api/auth/refresh', { refreshToken });
+  refreshToken: async (): Promise<{ accessToken: string; user: User }> => {
+    const response = await apiClient.post('/api/auth/refresh');
     return response.data;
   },
 };

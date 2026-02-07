@@ -9,28 +9,27 @@ export const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true, // Send cookies (refresh token) with requests
 });
 
-// Token management
+// Token management (access token only - refresh token is in HttpOnly cookie)
 const TOKEN_KEY = 'auth_token';
-const REFRESH_TOKEN_KEY = 'refresh_token';
 
 export const getStoredToken = (): string | null => {
   return localStorage.getItem(TOKEN_KEY);
 };
 
-export const getStoredRefreshToken = (): string | null => {
-  return localStorage.getItem(REFRESH_TOKEN_KEY);
+export const setStoredAccessToken = (accessToken: string): void => {
+  localStorage.setItem(TOKEN_KEY, accessToken);
 };
 
-export const setStoredTokens = (accessToken: string, refreshToken: string): void => {
+// Keep backward-compatible alias that ignores refreshToken parameter
+export const setStoredTokens = (accessToken: string, _refreshToken?: string): void => {
   localStorage.setItem(TOKEN_KEY, accessToken);
-  localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
 };
 
 export const clearStoredTokens = (): void => {
   localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(REFRESH_TOKEN_KEY);
 };
 
 // Track if we're already showing the session expired modal
@@ -64,32 +63,24 @@ apiClient.interceptors.response.use(
     if ((error.response?.status === 401 || error.response?.status === 403) && !originalRequest._retry) {
       originalRequest._retry = true;
 
-      const refreshToken = getStoredRefreshToken();
-      if (refreshToken) {
-        try {
-          const response = await axios.post(`${API_BASE_URL}/api/auth/refresh`, {
-            refreshToken,
-          });
+      // Attempt refresh via HttpOnly cookie (no token in body needed)
+      try {
+        const response = await axios.post(`${API_BASE_URL}/api/auth/refresh`, {}, {
+          withCredentials: true,
+        });
 
-          const { accessToken } = response.data;
-          localStorage.setItem(TOKEN_KEY, accessToken);
+        const { accessToken } = response.data;
+        localStorage.setItem(TOKEN_KEY, accessToken);
 
-          originalRequest.headers.Authorization = `Bearer ${accessToken}`;
-          return apiClient(originalRequest);
-        } catch (refreshError) {
-          // Refresh failed, show session expired modal instead of redirecting
-          if (!isSessionExpiredModalShown) {
-            isSessionExpiredModalShown = true;
-            triggerSessionExpired();
-          }
-          return Promise.reject(refreshError);
-        }
-      } else {
-        // No refresh token available, show session expired modal
+        originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+        return apiClient(originalRequest);
+      } catch (refreshError) {
+        // Refresh failed, show session expired modal instead of redirecting
         if (!isSessionExpiredModalShown && getStoredToken()) {
           isSessionExpiredModalShown = true;
           triggerSessionExpired();
         }
+        return Promise.reject(refreshError);
       }
     }
 
