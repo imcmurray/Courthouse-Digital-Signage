@@ -14,6 +14,12 @@ export default defineConfig({
         target: 'http://localhost:3000',
         ws: true,
       },
+      '/display': {
+        target: 'http://localhost:3000',
+      },
+      '/uploads': {
+        target: 'http://localhost:3000',
+      },
     },
   },
 });
