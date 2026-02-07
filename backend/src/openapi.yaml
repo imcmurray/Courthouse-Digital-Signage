@@ -21,11 +21,11 @@ tags:
   - name: Dashboard
     description: Dashboard statistics and recent activity
   - name: Docket
-    description: Docket entry CRUD and related lookups
+    description: Docket entry CRUD and related lookups. Mutating operations (POST, PUT, DELETE) require editor or admin role.
   - name: Displays
-    description: Display client management and configuration
+    description: Display client management and configuration. Mutating operations (POST, PUT, DELETE) require editor or admin role.
   - name: Announcements
-    description: Ticker announcements
+    description: Ticker announcements. Mutating operations (POST, PUT, DELETE, PATCH) require editor or admin role.
   - name: Users
     description: User account management (admin only)
   - name: API Keys
@@ -75,17 +75,22 @@ components:
       properties:
         accessToken:
           type: string
-        refreshToken:
-          type: string
+          description: Short-lived JWT access token (30 min)
         user:
           $ref: '#/components/schemas/UserSummary'
+      description: |
+        The refresh token is set as an HttpOnly cookie (refreshToken) scoped to /api/auth.
+        It is not returned in the response body.
 
     RefreshRequest:
       type: object
+      description: |
+        The refresh token is read from the HttpOnly cookie set at login.
+        A refreshToken in the body is accepted as a fallback for backward compatibility.
       properties:
         refreshToken:
           type: string
-      required: [refreshToken]
+          description: Optional fallback — prefer cookie-based refresh
 
     RefreshResponse:
       type: object
@@ -679,6 +684,9 @@ paths:
     post:
       tags: [Auth]
       summary: Log in with email and password
+      description: |
+        Returns an access token in the response body and sets the refresh token
+        as an HttpOnly, Secure, SameSite=Strict cookie scoped to /api/auth.
       requestBody:
         required: true
         content:
@@ -708,7 +716,7 @@ paths:
   /api/auth/logout:
     post:
       tags: [Auth]
-      summary: Log out (invalidate session client-side)
+      summary: Log out and clear refresh token cookie
       security:
         - bearerAuth: []
       responses:
@@ -731,9 +739,12 @@ paths:
   /api/auth/refresh:
     post:
       tags: [Auth]
-      summary: Refresh access token
+      summary: Refresh access token using HttpOnly cookie
+      description: |
+        Reads the refresh token from the HttpOnly cookie set at login.
+        Falls back to reading refreshToken from the request body for backward compatibility.
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema:
@@ -806,7 +817,9 @@ paths:
   /api/schema-check:
     get:
       tags: [Health]
-      summary: Verify database schema has all required tables
+      summary: Verify database schema has all required tables (admin only)
+      security:
+        - bearerAuth: []
       responses:
         '200':
           description: Schema verification result
@@ -983,6 +996,12 @@ paths:
                 $ref: '#/components/schemas/Error'
         '401':
           description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Editor or admin access required
           content:
             application/json:
               schema:
@@ -1403,6 +1422,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '403':
+          description: Editor or admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '409':
           description: Display ID already exists
           content:
@@ -1710,13 +1735,17 @@ paths:
     get:
       tags: [Announcements]
       summary: List announcements
-      description: Public endpoint — returns active announcements. With JWT, returns all.
+      description: |
+        Public endpoint — unauthenticated requests always receive active-only announcements.
+        With a valid JWT, the active query parameter controls filtering.
       parameters:
         - name: active
           in: query
           schema:
             type: boolean
-          description: If true, only return enabled and non-expired announcements
+          description: |
+            If true, only return enabled and non-expired announcements.
+            Forced to true for unauthenticated requests.
       responses:
         '200':
           description: List of announcements
@@ -1752,6 +1781,12 @@ paths:
                 $ref: '#/components/schemas/Error'
         '401':
           description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Editor or admin access required
           content:
             application/json:
               schema:
@@ -2573,7 +2608,7 @@ paths:
   /api/settings/logo:
     post:
       tags: [Settings]
-      summary: Upload court logo (PNG or SVG, max 5MB)
+      summary: Upload court logo (PNG only, max 5MB)
       security:
         - bearerAuth: []
       requestBody:
