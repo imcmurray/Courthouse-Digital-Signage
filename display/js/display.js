@@ -16,10 +16,17 @@
     tickerSpeed: 50, // pixels per second
   };
 
-  // Derive API base URL: ?apiBase= param, or same host on port 3000
+  // Derive API base URL: ?apiBase= param, same origin (behind proxy/nginx), or port 3000 fallback
   function getApiBaseUrl() {
     const params = new URLSearchParams(window.location.search);
-    return params.get('apiBase') || window.location.origin;
+    if (params.get('apiBase')) return params.get('apiBase');
+    const port = window.location.port;
+    // Behind nginx (80/443) or served directly by backend (3000): use same origin
+    if (!port || port === '80' || port === '443' || port === '3000') {
+      return window.location.origin;
+    }
+    // Other ports (e.g. separate static server on 8080): assume backend on 3000
+    return `${window.location.protocol}//${window.location.hostname}:3000`;
   }
 
   // State

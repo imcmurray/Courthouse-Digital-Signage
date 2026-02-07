@@ -5,9 +5,10 @@ import toast from 'react-hot-toast';
 import api from '../api/client';
 import DocketForm from '../components/DocketForm';
 import ModalPortal from '../components/ModalPortal';
-import { docketApi, CreateDocketEntryInput } from '../api/docket';
-import { announcementsApi, CreateAnnouncementInput } from '../api/announcements';
-import { displaysApi } from '../api/displays';
+import { docketApi, DocketEntry, CreateDocketEntryInput } from '../api/docket';
+import { announcementsApi, Announcement, CreateAnnouncementInput } from '../api/announcements';
+import { displaysApi, Display } from '../api/displays';
+import { calendarImportApi, ImportStatus, ImportLog } from '../api/calendarImport';
 
 interface DashboardStats {
   todaysHearings: number;
@@ -48,6 +49,7 @@ export default function Dashboard() {
       toast.success('Hearing created successfully');
       setIsAddHearingOpen(false);
       queryClient.invalidateQueries({ queryKey: ['dashboardStats'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboardHearings'] });
     },
     onError: () => {
       toast.error('Failed to create hearing');
@@ -61,6 +63,7 @@ export default function Dashboard() {
       setIsNewAnnouncementOpen(false);
       setAnnouncementForm({ text: '', priority: 0, enabled: true, expiresAt: null });
       queryClient.invalidateQueries({ queryKey: ['dashboardStats'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboardAnnouncements'] });
     },
     onError: () => {
       toast.error('Failed to create announcement');
@@ -77,13 +80,38 @@ export default function Dashboard() {
     },
   });
 
+  const toggleAnnouncementMutation = useMutation({
+    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
+      announcementsApi.update(id, { enabled }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['dashboardAnnouncements'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboardStats'] });
+    },
+    onError: () => {
+      toast.error('Failed to update announcement');
+    },
+  });
+
+  const runImportMutation = useMutation({
+    mutationFn: () => calendarImportApi.runImport(),
+    onSuccess: () => {
+      toast.success('Calendar import started');
+      queryClient.invalidateQueries({ queryKey: ['dashboardImportStatus'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboardImportHistory'] });
+    },
+    onError: () => {
+      toast.error('Failed to start import');
+    },
+  });
+
+  // Queries
   const { data: stats, isLoading: statsLoading } = useQuery<DashboardStats>({
     queryKey: ['dashboardStats'],
     queryFn: async () => {
       const response = await api.get('/api/stats');
       return response.data;
     },
-    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchInterval: 30000,
   });
 
   const { data: recentActivity, isLoading: activityLoading } = useQuery<ActivityItem[]>({
@@ -92,9 +120,48 @@ export default function Dashboard() {
       const response = await api.get('/api/recent-activity?limit=10');
       return response.data;
     },
-    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchInterval: 30000,
   });
 
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  // Widget 1: Today's hearings
+  const { data: todaysHearings } = useQuery({
+    queryKey: ['dashboardHearings', todayStr],
+    queryFn: () => docketApi.getAll({ date: todayStr, limit: 100, sortBy: 'hearingTime', sortOrder: 'asc' }),
+    refetchInterval: 60000,
+  });
+
+  // Widget 2: Display health
+  const { data: displaysData } = useQuery({
+    queryKey: ['dashboardDisplays'],
+    queryFn: () => displaysApi.getAll(),
+    refetchInterval: 30000,
+  });
+
+  // Widget 3: Active announcements
+  const { data: announcementsData } = useQuery({
+    queryKey: ['dashboardAnnouncements'],
+    queryFn: () => announcementsApi.getAll(),
+    refetchInterval: 30000,
+  });
+
+  // Widget 4: Import status
+  const { data: importStatus } = useQuery<ImportStatus>({
+    queryKey: ['dashboardImportStatus'],
+    queryFn: () => calendarImportApi.getStatus(),
+    refetchInterval: 15000,
+    enabled: user?.role === 'admin',
+  });
+
+  const { data: importHistory } = useQuery({
+    queryKey: ['dashboardImportHistory'],
+    queryFn: () => calendarImportApi.getHistory(1, 1),
+    refetchInterval: 30000,
+    enabled: user?.role === 'admin',
+  });
+
+  // Helpers
   const formatStat = (value: number | undefined, loading: boolean) => {
     if (loading) return '...';
     if (value === undefined) return '--';
@@ -135,16 +202,22 @@ export default function Dashboard() {
     const diffDays = Math.floor(diffMs / 86400000);
 
     if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins} min${diffMins > 1 ? 's' : ''} ago`;
-    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
-    if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
 
     return date.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
     });
+  };
+
+  const formatTime12h = (time24: string) => {
+    const [h, m] = time24.split(':');
+    const hour = parseInt(h);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const hour12 = hour % 12 || 12;
+    return `${hour12}:${m} ${ampm}`;
   };
 
   const getActivityIcon = (action: string) => {
@@ -176,83 +249,120 @@ export default function Dashboard() {
     }
   };
 
+  const isHearingSoon = (entry: DocketEntry) => {
+    const now = new Date();
+    const [h, m] = entry.hearingTime.split(':').map(Number);
+    const hearingDate = new Date(entry.hearingDate);
+    hearingDate.setHours(h, m, 0, 0);
+    const diffMs = hearingDate.getTime() - now.getTime();
+    return diffMs > 0 && diffMs <= 30 * 60 * 1000;
+  };
+
+  const isAnnouncementExpiringSoon = (ann: Announcement) => {
+    if (!ann.expiresAt) return false;
+    const diffMs = new Date(ann.expiresAt).getTime() - Date.now();
+    return diffMs > 0 && diffMs <= 24 * 60 * 60 * 1000;
+  };
+
+  const getDisplayStatusColor = (display: Display) => {
+    if (display.status === 'online') return 'bg-green-500';
+    return 'bg-red-500';
+  };
+
+  const getDisplayLastSeen = (display: Display) => {
+    if (!display.lastHeartbeat) return 'Never';
+    return formatTimestamp(display.lastHeartbeat);
+  };
+
+  // Widget 5: Group hearings by courtroom/judge
+  const hearingsByJudge = (todaysHearings?.entries || [])
+    .filter(e => e.status === 'scheduled' || e.status === 'in_progress')
+    .reduce<Record<string, DocketEntry[]>>((acc, entry) => {
+      const key = entry.hearingJudge || 'Unassigned';
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(entry);
+      return acc;
+    }, {});
+
+  const lastImport: ImportLog | undefined = importHistory?.logs?.[0];
+
   return (
-    <div className="space-y-6">
-      {/* Welcome message */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm dark:shadow-gray-900/50 p-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-          Welcome back, {user?.name?.split(' ')[0]}!
-        </h1>
-        <p className="mt-2 text-gray-600 dark:text-gray-300">
-          Here's an overview of your courthouse digital signage system.
-        </p>
+    <div className="space-y-4">
+      {/* Welcome */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+            Welcome back, {user?.name?.split(' ')[0]}!
+          </h1>
+          <p className="text-sm text-gray-600 dark:text-gray-300">
+            Here's an overview of your courthouse digital signage system.
+          </p>
+        </div>
       </div>
 
       {/* Stats cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm dark:shadow-gray-900/50 p-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm dark:shadow-gray-900/50 p-4">
           <div className="flex items-center">
-            <div className="h-12 w-12 rounded-lg bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center">
-              <svg className="h-6 w-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="h-10 w-10 rounded-lg bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center flex-shrink-0">
+              <svg className="h-5 w-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
               </svg>
             </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Today's Hearings</p>
-              <p className="text-2xl font-semibold text-gray-900 dark:text-white" data-testid="todays-hearings">
+            <div className="ml-3">
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Today's Hearings</p>
+              <p className="text-xl font-semibold text-gray-900 dark:text-white" data-testid="todays-hearings">
                 {formatStat(stats?.todaysHearings, statsLoading)}
               </p>
             </div>
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm dark:shadow-gray-900/50 p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm dark:shadow-gray-900/50 p-4">
           <div className="flex items-center">
-            <div className="h-12 w-12 rounded-lg bg-green-100 dark:bg-green-900/40 flex items-center justify-center">
-              <svg className="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="h-10 w-10 rounded-lg bg-green-100 dark:bg-green-900/40 flex items-center justify-center flex-shrink-0">
+              <svg className="h-5 w-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
               </svg>
             </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Active Displays</p>
-              <p className="text-2xl font-semibold text-gray-900 dark:text-white" data-testid="active-displays">
+            <div className="ml-3">
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Active Displays</p>
+              <p className="text-xl font-semibold text-gray-900 dark:text-white" data-testid="active-displays">
                 {formatStat(stats?.activeDisplays, statsLoading)}
                 {stats && stats.totalDisplays > 0 && (
-                  <span className="text-sm font-normal text-gray-400 ml-1">
-                    / {stats.totalDisplays}
-                  </span>
+                  <span className="text-sm font-normal text-gray-400 ml-1">/ {stats.totalDisplays}</span>
                 )}
               </p>
             </div>
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm dark:shadow-gray-900/50 p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm dark:shadow-gray-900/50 p-4">
           <div className="flex items-center">
-            <div className="h-12 w-12 rounded-lg bg-yellow-100 dark:bg-yellow-900/40 flex items-center justify-center">
-              <svg className="h-6 w-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="h-10 w-10 rounded-lg bg-yellow-100 dark:bg-yellow-900/40 flex items-center justify-center flex-shrink-0">
+              <svg className="h-5 w-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
               </svg>
             </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Announcements</p>
-              <p className="text-2xl font-semibold text-gray-900 dark:text-white" data-testid="active-announcements">
+            <div className="ml-3">
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Announcements</p>
+              <p className="text-xl font-semibold text-gray-900 dark:text-white" data-testid="active-announcements">
                 {formatStat(stats?.activeAnnouncements, statsLoading)}
               </p>
             </div>
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm dark:shadow-gray-900/50 p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm dark:shadow-gray-900/50 p-4">
           <div className="flex items-center">
-            <div className="h-12 w-12 rounded-lg bg-purple-100 dark:bg-purple-900/40 flex items-center justify-center">
-              <svg className="h-6 w-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="h-10 w-10 rounded-lg bg-purple-100 dark:bg-purple-900/40 flex items-center justify-center flex-shrink-0">
+              <svg className="h-5 w-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
               </svg>
             </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Active Users</p>
-              <p className="text-2xl font-semibold text-gray-900 dark:text-white" data-testid="active-users">
+            <div className="ml-3">
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Active Users</p>
+              <p className="text-xl font-semibold text-gray-900 dark:text-white" data-testid="active-users">
                 {formatStat(stats?.activeUsers, statsLoading)}
               </p>
             </div>
@@ -260,96 +370,316 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Quick Actions */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm dark:shadow-gray-900/50 p-6">
-        <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Quick Actions</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <button
-            onClick={() => setIsAddHearingOpen(true)}
-            className="flex items-center justify-center px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-          >
-            <svg className="h-5 w-5 text-gray-600 dark:text-gray-300 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-            </svg>
-            <span className="text-gray-700 dark:text-gray-200">Add Hearing</span>
-          </button>
-          <button
-            onClick={() => setIsNewAnnouncementOpen(true)}
-            className="flex items-center justify-center px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-          >
-            <svg className="h-5 w-5 text-gray-600 dark:text-gray-300 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
-            </svg>
-            <span className="text-gray-700 dark:text-gray-200">New Announcement</span>
-          </button>
-          <button
-            onClick={() => refreshDisplaysMutation.mutate()}
-            disabled={refreshDisplaysMutation.isPending}
-            className="flex items-center justify-center px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <svg className={`h-5 w-5 text-gray-600 dark:text-gray-300 mr-2 ${refreshDisplaysMutation.isPending ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            <span className="text-gray-700 dark:text-gray-200">{refreshDisplaysMutation.isPending ? 'Refreshing...' : 'Refresh Displays'}</span>
-          </button>
-        </div>
-      </div>
-
-      {/* System Status */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm dark:shadow-gray-900/50 p-6">
-        <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">System Status</h3>
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-gray-600 dark:text-gray-300">Backend API</span>
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300">
-              Online
-            </span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-gray-600 dark:text-gray-300">Database</span>
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300">
-              Connected
-            </span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-gray-600 dark:text-gray-300">WebSocket</span>
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-900/40 text-yellow-800 dark:text-yellow-300">
-              Initializing
-            </span>
+      {/* Quick Actions + System Status + Import Status */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm dark:shadow-gray-900/50 p-4">
+          <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Quick Actions</h3>
+          <div className="space-y-2">
+            <button
+              onClick={() => setIsAddHearingOpen(true)}
+              className="w-full flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+            >
+              <svg className="h-4 w-4 text-blue-500 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+              <span className="text-sm text-gray-700 dark:text-gray-200">Add Hearing</span>
+            </button>
+            <button
+              onClick={() => setIsNewAnnouncementOpen(true)}
+              className="w-full flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+            >
+              <svg className="h-4 w-4 text-yellow-500 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
+              </svg>
+              <span className="text-sm text-gray-700 dark:text-gray-200">New Announcement</span>
+            </button>
+            <button
+              onClick={() => refreshDisplaysMutation.mutate()}
+              disabled={refreshDisplaysMutation.isPending}
+              className="w-full flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg className={`h-4 w-4 text-green-500 mr-2 flex-shrink-0 ${refreshDisplaysMutation.isPending ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              <span className="text-sm text-gray-700 dark:text-gray-200">{refreshDisplaysMutation.isPending ? 'Refreshing...' : 'Refresh Displays'}</span>
+            </button>
           </div>
         </div>
-      </div>
 
-      {/* Recent Activity */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm dark:shadow-gray-900/50 p-6">
-        <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Recent Activity</h3>
-        {activityLoading ? (
-          <div className="text-gray-500 dark:text-gray-400 text-sm">Loading activity...</div>
-        ) : recentActivity && recentActivity.length > 0 ? (
-          <div className="space-y-4">
-            {recentActivity.map((activity) => (
-              <div key={activity.id} className="flex items-start space-x-3">
-                <div className="flex-shrink-0 mt-0.5">
-                  {getActivityIcon(activity.action)}
+        {/* Widget 2: Display Health */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm dark:shadow-gray-900/50 p-4">
+          <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Display Health</h3>
+          {displaysData?.displays && displaysData.displays.length > 0 ? (
+            <div className="space-y-2">
+              {displaysData.displays.map((display) => (
+                <div key={display.id} className="flex items-center justify-between">
+                  <div className="flex items-center min-w-0">
+                    <div className={`h-2.5 w-2.5 rounded-full ${getDisplayStatusColor(display)} flex-shrink-0`} />
+                    <div className="ml-2 min-w-0">
+                      <p className="text-sm text-gray-900 dark:text-white truncate">{display.name}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{display.location}</p>
+                    </div>
+                  </div>
+                  <span className="text-xs text-gray-400 dark:text-gray-500 flex-shrink-0 ml-2">
+                    {display.status === 'online' ? 'Online' : getDisplayLastSeen(display)}
+                  </span>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-gray-900 dark:text-white">
-                    <span className="font-medium">{activity.user}</span>{' '}
-                    {formatActivityDescription(activity)}
-                    {activity.entityId && (
-                      <span className="text-gray-500 dark:text-gray-400"> #{activity.entityId.slice(0, 8)}</span>
-                    )}
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                    {formatTimestamp(activity.timestamp)}
-                  </p>
-                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500 dark:text-gray-400">No displays configured</p>
+          )}
+        </div>
+
+        {/* Widget 4: Import Status (admin only) */}
+        {user?.role === 'admin' ? (
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm dark:shadow-gray-900/50 p-4">
+            <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Calendar Import</h3>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600 dark:text-gray-300">Auto-import</span>
+                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                  importStatus?.autoImportEnabled
+                    ? 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                }`}>
+                  {importStatus?.autoImportEnabled ? `Every ${importStatus.intervalMinutes}m` : 'Disabled'}
+                </span>
               </div>
-            ))}
+              {lastImport && (
+                <>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600 dark:text-gray-300">Last run</span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      {formatTimestamp(lastImport.createdAt)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600 dark:text-gray-300">Result</span>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                      lastImport.status === 'success'
+                        ? 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300'
+                        : lastImport.status === 'partial'
+                          ? 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-800 dark:text-yellow-300'
+                          : lastImport.status === 'running'
+                            ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300'
+                            : 'bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300'
+                    }`}>
+                      {lastImport.status === 'success' && `+${lastImport.entriesCreated} / ~${lastImport.entriesUpdated} / -${lastImport.entriesRemoved}`}
+                      {lastImport.status === 'partial' && 'Partial'}
+                      {lastImport.status === 'running' && 'Running...'}
+                      {lastImport.status === 'failed' && 'Failed'}
+                    </span>
+                  </div>
+                </>
+              )}
+              <button
+                onClick={() => runImportMutation.mutate()}
+                disabled={runImportMutation.isPending || importStatus?.isRunning}
+                className="w-full flex items-center justify-center px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-gray-700 dark:text-gray-200"
+              >
+                <svg className={`h-4 w-4 mr-1.5 ${(runImportMutation.isPending || importStatus?.isRunning) ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                {importStatus?.isRunning ? 'Importing...' : 'Import Now'}
+              </button>
+            </div>
           </div>
         ) : (
-          <div className="text-gray-500 dark:text-gray-400 text-sm">No recent activity</div>
+          /* System Status for non-admin users */
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm dark:shadow-gray-900/50 p-4">
+            <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">System Status</h3>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600 dark:text-gray-300">Backend API</span>
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300">Online</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600 dark:text-gray-300">Database</span>
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300">Connected</span>
+              </div>
+            </div>
+          </div>
         )}
+      </div>
+
+      {/* Widget 1: Today's Hearings + Widget 3: Active Announcements */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Today's Hearings Preview */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm dark:shadow-gray-900/50 p-4">
+          <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
+            Today's Hearings
+            {todaysHearings && todaysHearings.total > 0 && (
+              <span className="ml-2 text-gray-400">({todaysHearings.total})</span>
+            )}
+          </h3>
+          {todaysHearings?.entries && todaysHearings.entries.length > 0 ? (
+            <div className="max-h-52 overflow-y-auto -mx-2 px-2">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs text-gray-500 dark:text-gray-400">
+                    <th className="pb-2 font-medium">Time</th>
+                    <th className="pb-2 font-medium">Case</th>
+                    <th className="pb-2 font-medium hidden md:table-cell">Judge</th>
+                    <th className="pb-2 font-medium">Room</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                  {todaysHearings.entries.slice(0, 15).map((entry) => (
+                    <tr
+                      key={entry.id}
+                      className={isHearingSoon(entry) ? 'bg-amber-50 dark:bg-amber-900/10' : ''}
+                    >
+                      <td className="py-1.5 pr-2 whitespace-nowrap">
+                        <span className={`${isHearingSoon(entry) ? 'text-amber-600 dark:text-amber-400 font-medium' : 'text-gray-900 dark:text-white'}`}>
+                          {formatTime12h(entry.hearingTime)}
+                        </span>
+                        {isHearingSoon(entry) && (
+                          <span className="ml-1 text-[10px] text-amber-500 font-medium">SOON</span>
+                        )}
+                      </td>
+                      <td className="py-1.5 pr-2 text-gray-900 dark:text-white truncate max-w-[180px]" title={entry.caseNumber}>
+                        {entry.caseNumber}
+                      </td>
+                      <td className="py-1.5 pr-2 text-gray-600 dark:text-gray-300 truncate max-w-[120px] hidden md:table-cell">
+                        {entry.hearingJudge}
+                      </td>
+                      <td className="py-1.5 text-gray-600 dark:text-gray-300 whitespace-nowrap">
+                        {entry.courtroom || '--'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500 dark:text-gray-400">No hearings scheduled for today</p>
+          )}
+        </div>
+
+        {/* Active Announcements */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm dark:shadow-gray-900/50 p-4">
+          <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
+            Announcements
+            {announcementsData && announcementsData.total > 0 && (
+              <span className="ml-2 text-gray-400">({announcementsData.total})</span>
+            )}
+          </h3>
+          {announcementsData?.announcements && announcementsData.announcements.length > 0 ? (
+            <div className="max-h-52 overflow-y-auto -mx-2 px-2 space-y-2">
+              {announcementsData.announcements.map((ann) => (
+                <div key={ann.id} className="flex items-start space-x-3 py-1">
+                  <button
+                    onClick={() => toggleAnnouncementMutation.mutate({ id: ann.id, enabled: !ann.enabled })}
+                    className={`mt-0.5 relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      ann.enabled ? 'bg-primary' : 'bg-gray-300 dark:bg-gray-600'
+                    }`}
+                    title={ann.enabled ? 'Click to disable' : 'Click to enable'}
+                  >
+                    <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                      ann.enabled ? 'translate-x-4' : 'translate-x-0'
+                    }`} />
+                  </button>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm truncate ${ann.enabled ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500 line-through'}`}>
+                      {ann.text}
+                    </p>
+                    <div className="flex items-center space-x-2 mt-0.5">
+                      {isAnnouncementExpiringSoon(ann) && (
+                        <span className="text-[10px] font-medium text-amber-500 dark:text-amber-400">
+                          EXPIRES SOON
+                        </span>
+                      )}
+                      {ann.expiresAt && !isAnnouncementExpiringSoon(ann) && (
+                        <span className="text-[10px] text-gray-400 dark:text-gray-500">
+                          Expires {new Date(ann.expiresAt).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500 dark:text-gray-400">No announcements</p>
+          )}
+        </div>
+      </div>
+
+      {/* Widget 5: Today's Schedule by Courtroom/Judge + Recent Activity */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Schedule by Judge */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm dark:shadow-gray-900/50 p-4">
+          <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
+            Today's Schedule by Judge
+          </h3>
+          {Object.keys(hearingsByJudge).length > 0 ? (
+            <div className="max-h-48 overflow-y-auto -mx-2 px-2 space-y-3">
+              {Object.entries(hearingsByJudge).map(([judge, entries]) => (
+                <div key={judge}>
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{judge}</p>
+                    <span className="text-xs text-gray-400 dark:text-gray-500 flex-shrink-0 ml-2">
+                      {entries.length} hearing{entries.length !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {entries.map((entry) => (
+                      <span
+                        key={entry.id}
+                        className={`inline-flex items-center px-2 py-0.5 rounded text-xs ${
+                          isHearingSoon(entry)
+                            ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
+                            : entry.status === 'in_progress'
+                              ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                              : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
+                        }`}
+                        title={`${entry.caseNumber} - ${entry.courtroom || 'No room'}`}
+                      >
+                        {formatTime12h(entry.hearingTime)}
+                        {entry.courtroom && <span className="ml-1 text-gray-400">Rm {entry.courtroom}</span>}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500 dark:text-gray-400">No hearings scheduled for today</p>
+          )}
+        </div>
+
+        {/* Recent Activity */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm dark:shadow-gray-900/50 p-4">
+          <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Recent Activity</h3>
+          {activityLoading ? (
+            <div className="text-gray-500 dark:text-gray-400 text-sm">Loading activity...</div>
+          ) : recentActivity && recentActivity.length > 0 ? (
+            <div className="max-h-48 overflow-y-auto space-y-1 -mx-2 px-2">
+              {recentActivity.map((activity) => (
+                <div key={activity.id} className="flex items-center space-x-3 py-1.5">
+                  <div className="flex-shrink-0">
+                    {getActivityIcon(activity.action)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-gray-900 dark:text-white truncate">
+                      <span className="font-medium">{activity.user}</span>{' '}
+                      {formatActivityDescription(activity)}
+                      {activity.entityId && (
+                        <span className="text-gray-500 dark:text-gray-400"> #{activity.entityId.slice(0, 8)}</span>
+                      )}
+                    </p>
+                  </div>
+                  <span className="flex-shrink-0 text-xs text-gray-400 dark:text-gray-500">
+                    {formatTimestamp(activity.timestamp)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-gray-500 dark:text-gray-400 text-sm">No recent activity</div>
+          )}
+        </div>
       </div>
 
       {/* Add Hearing Modal */}

@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
+import { API_BASE_URL } from '../api/client';
 
 // Validation schema
 const loginSchema = z.object({
@@ -14,11 +15,26 @@ const loginSchema = z.object({
 
 type LoginFormData = z.infer<typeof loginSchema>;
 
+interface PublicBranding {
+  courtName: string;
+  courtSubtitle: string;
+  courthouseName: string;
+  courtLogo: string | null;
+}
+
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
   const { login, isAuthenticated, isLoading } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [branding, setBranding] = useState<PublicBranding | null>(null);
+
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/api/settings/public`)
+      .then(res => res.json())
+      .then(data => setBranding(data))
+      .catch(() => {});
+  }, []);
 
   // Get the redirect path from state (set by ProtectedRoute)
   const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/admin/dashboard';
@@ -86,26 +102,40 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
+    <div className="relative min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8 overflow-hidden">
+      {branding?.courtLogo && (
+        <div
+          className="absolute inset-0 bg-center bg-no-repeat bg-contain opacity-[0.07] dark:opacity-[0.05] blur-[6px] scale-150 pointer-events-none"
+          style={{ backgroundImage: `url(${API_BASE_URL}${branding.courtLogo})` }}
+        />
+      )}
+      <div className="relative max-w-md w-full space-y-8">
         {/* Header */}
         <div className="text-center">
-          <div className="mx-auto h-16 w-16 flex items-center justify-center rounded-full bg-primary">
-            <svg
-              className="h-10 w-10 text-white"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
-              />
-            </svg>
-          </div>
+          {branding?.courtLogo ? (
+            <img
+              src={`${API_BASE_URL}${branding.courtLogo}`}
+              alt="Court Logo"
+              className="mx-auto h-20 w-20 object-contain"
+            />
+          ) : (
+            <div className="mx-auto h-16 w-16 flex items-center justify-center rounded-full bg-primary">
+              <svg
+                className="h-10 w-10 text-white"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
+                />
+              </svg>
+            </div>
+          )}
           <h2 className="mt-6 text-3xl font-extrabold text-gray-900 dark:text-white">
             Courthouse Digital Signage
           </h2>
@@ -113,7 +143,7 @@ export default function Login() {
         </div>
 
         {/* Login Form */}
-        <form className="mt-8 space-y-6 bg-white dark:bg-gray-800 p-8 rounded-lg shadow-md dark:shadow-gray-900/50" onSubmit={handleSubmit(onSubmit)}>
+        <form className="mt-8 space-y-6 bg-white dark:bg-gray-800 p-8 rounded-lg shadow-xl dark:shadow-gray-900/70" onSubmit={handleSubmit(onSubmit)}>
           <div className="space-y-4">
             {/* Email Field */}
             <div>
@@ -203,9 +233,16 @@ export default function Login() {
         </form>
 
         {/* Footer */}
-        <p className="text-center text-xs text-gray-500 dark:text-gray-400">
-          U.S. Bankruptcy Court - District of Utah
-        </p>
+        <div className="text-center">
+          {branding?.courthouseName && (
+            <p className="text-sm font-medium text-gray-600 dark:text-gray-300">
+              {branding.courthouseName}
+            </p>
+          )}
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            {branding ? `${branding.courtName} \u2022 ${branding.courtSubtitle}` : 'U.S. Bankruptcy Court \u2022 District of Utah'}
+          </p>
+        </div>
       </div>
     </div>
   );
