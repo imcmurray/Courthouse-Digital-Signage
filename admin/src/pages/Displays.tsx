@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { displaysApi, Display, CreateDisplayInput, UpdateDisplayInput, PreviewTokenResponse } from '../api/displays';
+import { displaysApi, Display, CreateDisplayInput, PreviewTokenResponse } from '../api/displays';
 import { API_BASE_URL } from '../api/client';
 import { docketApi } from '../api/docket';
 import AutocompleteInput from '../components/AutocompleteInput';
+import DisplayEditModal from '../components/DisplayEditModal';
 import ModalPortal from '../components/ModalPortal';
 
 export default function Displays() {
@@ -71,20 +72,6 @@ export default function Displays() {
     },
     onError: (error: { response?: { data?: { error?: string } } }) => {
       toast.error(error.response?.data?.error || 'Failed to create display');
-    },
-  });
-
-  // Update display mutation
-  const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: UpdateDisplayInput }) => displaysApi.update(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['displays'] });
-      toast.success('Display updated successfully');
-      setEditingDisplay(null);
-      resetForm();
-    },
-    onError: (error: { response?: { data?: { error?: string } } }) => {
-      toast.error(error.response?.data?.error || 'Failed to update display');
     },
   });
 
@@ -170,39 +157,10 @@ export default function Displays() {
     createMutation.mutate(formData);
   };
 
-  const handleUpdate = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (editingDisplay) {
-      const { id, ...updateData } = formData;
-      updateMutation.mutate({ id: editingDisplay.id, data: updateData });
-    }
-  };
-
   const handleDelete = () => {
     if (deleteConfirmDisplay) {
       deleteMutation.mutate(deleteConfirmDisplay.id);
     }
-  };
-
-  const openEditModal = (display: Display) => {
-    setEditingDisplay(display);
-    setFormData({
-      id: display.id,
-      name: display.name,
-      location: display.location,
-      judgeFilter: display.judgeFilter,
-      courtroomFilter: display.courtroomFilter,
-      showStricken: display.showStricken,
-      showZoomInfo: display.showZoomInfo,
-      highlightCurrent: display.highlightCurrent,
-      orientation: display.orientation || 'landscape',
-      theme: display.theme,
-      showWeather: display.showWeather,
-      weatherLocation: display.weatherLocation,
-      noticeText: display.noticeText,
-      tickerEnabled: display.tickerEnabled,
-      tickerSpeed: display.tickerSpeed,
-    });
   };
 
   const getStatusBadgeColor = (status: string) => {
@@ -301,7 +259,7 @@ export default function Displays() {
               <tr key={display.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                 <td className="px-6 py-4">
                   <button
-                    onClick={() => openEditModal(display)}
+                    onClick={() => setEditingDisplay(display)}
                     className="text-sm font-medium text-gray-900 dark:text-white text-left hover:text-primary dark:hover:text-primary-light transition-colors"
                   >
                     {display.name}
@@ -342,7 +300,7 @@ export default function Displays() {
                     </button>
                   )}
                   <button
-                    onClick={() => openEditModal(display)}
+                    onClick={() => setEditingDisplay(display)}
                     className="text-primary dark:text-primary-light hover:text-primary/80 dark:hover:text-primary-light/80 mr-3"
                   >
                     Edit
@@ -372,15 +330,13 @@ export default function Displays() {
         )}
       </div>
 
-      {/* Create/Edit Modal */}
-      {(isFormOpen || editingDisplay) && (
+      {/* Create Modal */}
+      {isFormOpen && (
         <ModalPortal>
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-              {editingDisplay ? 'Edit Display' : 'Register New Display'}
-            </h3>
-            <form onSubmit={editingDisplay ? handleUpdate : handleCreate} className="mt-4 space-y-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Register New Display</h3>
+            <form onSubmit={handleCreate} className="mt-4 space-y-4">
               {/* Basic Info */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -392,9 +348,8 @@ export default function Displays() {
                     value={formData.id}
                     onChange={(e) => setFormData({ ...formData, id: e.target.value })}
                     required
-                    disabled={!!editingDisplay}
                     placeholder="e.g., display-321-main"
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary disabled:bg-gray-100 dark:disabled:bg-gray-700 dark:bg-gray-700 dark:text-white"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                   />
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     Unique identifier (cannot be changed later)
@@ -476,8 +431,8 @@ export default function Displays() {
                       onChange={(e) => setFormData({ ...formData, orientation: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                     >
-                      <option value="landscape">Landscape (1920×1080)</option>
-                      <option value="portrait">Portrait (1080×1920)</option>
+                      <option value="landscape">Landscape (1920x1080)</option>
+                      <option value="portrait">Portrait (1080x1920)</option>
                     </select>
                   </div>
                 </div>
@@ -594,7 +549,6 @@ export default function Displays() {
                   type="button"
                   onClick={() => {
                     setIsFormOpen(false);
-                    setEditingDisplay(null);
                     resetForm();
                   }}
                   className="px-4 py-2 text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
@@ -603,20 +557,27 @@ export default function Displays() {
                 </button>
                 <button
                   type="submit"
-                  disabled={createMutation.isPending || updateMutation.isPending}
+                  disabled={createMutation.isPending}
                   className="px-4 py-2 text-white bg-primary rounded-lg hover:bg-primary/90 disabled:opacity-50"
                 >
-                  {createMutation.isPending || updateMutation.isPending
-                    ? 'Saving...'
-                    : editingDisplay
-                    ? 'Update'
-                    : 'Register Display'}
+                  {createMutation.isPending ? 'Saving...' : 'Register Display'}
                 </button>
               </div>
             </form>
           </div>
         </div>
         </ModalPortal>
+      )}
+
+      {/* Edit Display Modal */}
+      {editingDisplay && (
+        <DisplayEditModal
+          display={editingDisplay}
+          onClose={() => {
+            setEditingDisplay(null);
+            resetForm();
+          }}
+        />
       )}
 
       {/* API Key Modal (shown after successful creation) */}

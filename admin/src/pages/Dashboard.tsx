@@ -6,8 +6,9 @@ import api from '../api/client';
 import DocketForm from '../components/DocketForm';
 import ModalPortal from '../components/ModalPortal';
 import { docketApi, DocketEntry, CreateDocketEntryInput } from '../api/docket';
-import { announcementsApi, Announcement, CreateAnnouncementInput } from '../api/announcements';
+import { announcementsApi, Announcement, CreateAnnouncementInput, UpdateAnnouncementInput } from '../api/announcements';
 import { displaysApi, Display } from '../api/displays';
+import DisplayEditModal from '../components/DisplayEditModal';
 import { calendarImportApi, ImportStatus, ImportLog } from '../api/calendarImport';
 
 interface DashboardStats {
@@ -41,6 +42,9 @@ export default function Dashboard() {
     enabled: true,
     expiresAt: null,
   });
+  const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
+  const [editForm, setEditForm] = useState<UpdateAnnouncementInput>({});
+  const [editingDisplay, setEditingDisplay] = useState<Display | null>(null);
 
   // Quick Action mutations
   const createHearingMutation = useMutation({
@@ -84,6 +88,20 @@ export default function Dashboard() {
     mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
       announcementsApi.update(id, { enabled }),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['dashboardAnnouncements'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboardStats'] });
+    },
+    onError: () => {
+      toast.error('Failed to update announcement');
+    },
+  });
+
+  const updateAnnouncementMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: UpdateAnnouncementInput }) =>
+      announcementsApi.update(id, data),
+    onSuccess: () => {
+      toast.success('Announcement updated');
+      setEditingAnnouncement(null);
       queryClient.invalidateQueries({ queryKey: ['dashboardAnnouncements'] });
       queryClient.invalidateQueries({ queryKey: ['dashboardStats'] });
     },
@@ -416,7 +434,12 @@ export default function Dashboard() {
                   <div className="flex items-center min-w-0">
                     <div className={`h-2.5 w-2.5 rounded-full ${getDisplayStatusColor(display)} flex-shrink-0`} />
                     <div className="ml-2 min-w-0">
-                      <p className="text-sm text-gray-900 dark:text-white truncate">{display.name}</p>
+                      <button
+                        onClick={() => setEditingDisplay(display)}
+                        className="text-sm font-medium text-gray-900 dark:text-white text-left hover:text-primary dark:hover:text-primary-light transition-colors truncate"
+                      >
+                        {display.name}
+                      </button>
                       <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{display.location}</p>
                     </div>
                   </div>
@@ -567,23 +590,32 @@ export default function Dashboard() {
           </h3>
           {announcementsData?.announcements && announcementsData.announcements.length > 0 ? (
             <div className="max-h-52 overflow-y-auto -mx-2 px-2 space-y-2">
-              {announcementsData.announcements.map((ann) => (
+              {announcementsData.announcements.map((ann) => {
+                const isExpired = ann.expiresAt && new Date(ann.expiresAt).getTime() < Date.now();
+                const isActive = ann.enabled && !isExpired;
+                return (
                 <div key={ann.id} className="flex items-start space-x-3 py-1">
                   <button
                     onClick={() => toggleAnnouncementMutation.mutate({ id: ann.id, enabled: !ann.enabled })}
                     className={`mt-0.5 relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                      ann.enabled ? 'bg-green-600 dark:bg-green-700' : 'bg-gray-300 dark:bg-gray-600'
+                      isActive ? 'bg-green-600 dark:bg-green-700' : 'bg-gray-300 dark:bg-gray-600'
                     }`}
-                    title={ann.enabled ? 'Click to disable' : 'Click to enable'}
+                    title={isExpired ? 'Expired' : ann.enabled ? 'Click to disable' : 'Click to enable'}
                   >
                     <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white dark:bg-gray-300 shadow dark:shadow-black/30 ring-0 transition duration-200 ease-in-out ${
-                      ann.enabled ? 'translate-x-4' : 'translate-x-0'
+                      isActive ? 'translate-x-4' : 'translate-x-0'
                     }`} />
                   </button>
                   <div className="flex-1 min-w-0">
-                    <p className={`text-sm truncate ${ann.enabled ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500 line-through'}`}>
+                    <button
+                      onClick={() => {
+                        setEditingAnnouncement(ann);
+                        setEditForm({ text: ann.text, enabled: ann.enabled, expiresAt: ann.expiresAt });
+                      }}
+                      className={`text-sm font-medium truncate block w-full text-left hover:text-primary dark:hover:text-primary-light transition-colors cursor-pointer ${isActive ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500 line-through'}`}
+                    >
                       {ann.text}
-                    </p>
+                    </button>
                     <div className="flex items-center space-x-2 mt-0.5">
                       {isAnnouncementExpiringSoon(ann) && (
                         <span className="text-[10px] font-medium text-amber-500 dark:text-amber-400">
@@ -598,7 +630,8 @@ export default function Dashboard() {
                     </div>
                   </div>
                 </div>
-              ))}
+              );
+              })}
             </div>
           ) : (
             <p className="text-sm text-gray-500 dark:text-gray-400">No announcements</p>
@@ -808,6 +841,111 @@ export default function Dashboard() {
           </div>
         </div>
         </ModalPortal>
+      )}
+
+      {/* Edit Announcement Modal */}
+      {editingAnnouncement && (
+        <ModalPortal>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-lg w-full mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Edit Announcement</h3>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                updateAnnouncementMutation.mutate({ id: editingAnnouncement.id, data: editForm });
+              }}
+              className="mt-4 space-y-4"
+            >
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+                  Announcement Text *
+                </label>
+                <textarea
+                  value={editForm.text || ''}
+                  onChange={(e) => setEditForm({ ...editForm, text: e.target.value })}
+                  required
+                  maxLength={500}
+                  rows={3}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 ${
+                    (editForm.text?.length || 0) >= 500
+                      ? 'border-red-500'
+                      : (editForm.text?.length || 0) >= 450
+                        ? 'border-yellow-500'
+                        : 'border-gray-300 dark:border-gray-600'
+                  }`}
+                  placeholder="Enter announcement text..."
+                />
+                <div className={`text-xs mt-1 flex justify-between ${
+                  (editForm.text?.length || 0) >= 500
+                    ? 'text-red-600'
+                    : (editForm.text?.length || 0) >= 450
+                      ? 'text-yellow-600'
+                      : 'text-gray-500 dark:text-gray-400'
+                }`}>
+                  <span>Maximum 500 characters</span>
+                  <span>{editForm.text?.length || 0}/500</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+                  Expires At
+                </label>
+                <input
+                  type="date"
+                  value={editForm.expiresAt ? editForm.expiresAt.split('T')[0] : ''}
+                  onChange={(e) => setEditForm({
+                    ...editForm,
+                    expiresAt: e.target.value ? new Date(e.target.value).toISOString() : null
+                  })}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Leave empty for no expiration
+                </p>
+              </div>
+
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="edit-announcement-enabled"
+                  checked={editForm.enabled ?? true}
+                  onChange={(e) => setEditForm({ ...editForm, enabled: e.target.checked })}
+                  className="h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700"
+                />
+                <label htmlFor="edit-announcement-enabled" className="ml-2 text-sm text-gray-700 dark:text-gray-200">
+                  Enabled (show on displays)
+                </label>
+              </div>
+
+              <div className="flex justify-end space-x-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setEditingAnnouncement(null)}
+                  className="px-4 py-2 text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={updateAnnouncementMutation.isPending}
+                  className="px-4 py-2 text-white bg-primary rounded-lg hover:bg-primary/90 disabled:opacity-50"
+                >
+                  {updateAnnouncementMutation.isPending ? 'Saving...' : 'Update'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+        </ModalPortal>
+      )}
+
+      {/* Edit Display Modal */}
+      {editingDisplay && (
+        <DisplayEditModal
+          display={editingDisplay}
+          onClose={() => setEditingDisplay(null)}
+        />
       )}
     </div>
   );
