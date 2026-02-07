@@ -413,7 +413,7 @@ export default function Settings() {
                 id="court_name"
                 value={formData.court_name}
                 onChange={(e) => handleInputChange('court_name', e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
+                className="mt-1 w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                 placeholder="e.g., U.S. Bankruptcy Court"
               />
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -430,7 +430,7 @@ export default function Settings() {
                 id="court_subtitle"
                 value={formData.court_subtitle}
                 onChange={(e) => handleInputChange('court_subtitle', e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
+                className="mt-1 w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                 placeholder="e.g., District of Utah"
               />
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -447,7 +447,7 @@ export default function Settings() {
                 id="courthouse_name"
                 value={formData.courthouse_name}
                 onChange={(e) => handleInputChange('courthouse_name', e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
+                className="mt-1 w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                 placeholder="e.g., Frank E. Moss Federal Courthouse"
               />
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -465,7 +465,7 @@ export default function Settings() {
                   id="chief_judge"
                   value={formData.chief_judge}
                   onChange={(e) => handleInputChange('chief_judge', e.target.value)}
-                  className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
+                  className="mt-1 w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                   placeholder="e.g., Honorable Peggy Hunt"
                 />
               </div>
@@ -479,7 +479,7 @@ export default function Settings() {
                   id="clerk_of_court"
                   value={formData.clerk_of_court}
                   onChange={(e) => handleInputChange('clerk_of_court', e.target.value)}
-                  className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
+                  className="mt-1 w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                   placeholder="e.g., David A. Sime"
                 />
               </div>
@@ -536,7 +536,7 @@ export default function Settings() {
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
                       disabled={isUploading || uploadLogoMutation.isPending}
-                      className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50"
+                      className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-lg text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50"
                     >
                       {isUploading || uploadLogoMutation.isPending ? (
                         <>
@@ -560,7 +560,7 @@ export default function Settings() {
                         type="button"
                         onClick={handleRemoveLogo}
                         disabled={removeLogoMutation.isPending}
-                        className="inline-flex items-center px-3 py-2 border border-red-300 dark:border-red-600 shadow-sm text-sm leading-4 font-medium rounded-md text-red-700 dark:text-red-300 bg-white dark:bg-gray-700 hover:bg-red-50 dark:hover:bg-red-900/30 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 ml-2"
+                        className="inline-flex items-center px-3 py-2 border border-red-300 dark:border-red-600 text-sm font-medium rounded-lg text-red-700 dark:text-red-300 bg-white dark:bg-gray-700 hover:bg-red-50 dark:hover:bg-red-900/30 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 ml-2"
                       >
                         {removeLogoMutation.isPending ? 'Removing...' : 'Remove'}
                       </button>
@@ -586,7 +586,7 @@ export default function Settings() {
                 id="timezone"
                 value={formData.timezone}
                 onChange={(e) => handleInputChange('timezone', e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
+                className="mt-1 w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
               >
                 {timezoneOptions.map((tz) => (
                   <option key={tz.value} value={tz.value}>
@@ -607,7 +607,7 @@ export default function Settings() {
                 id="default_theme"
                 value={formData.default_theme}
                 onChange={(e) => handleInputChange('default_theme', e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
+                className="mt-1 w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
               >
                 {themeOptions.map((theme) => (
                   <option key={theme.value} value={theme.value}>
@@ -627,14 +627,14 @@ export default function Settings() {
               type="button"
               onClick={handleReset}
               disabled={!hasChanges || saveMutation.isPending}
-              className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Reset
             </button>
             <button
               type="submit"
               disabled={!hasChanges || saveMutation.isPending}
-              className="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {saveMutation.isPending ? (
                 <span className="flex items-center">
@@ -712,7 +712,7 @@ export default function Settings() {
             type="button"
             onClick={handleExport}
             disabled={isExporting || selectedCategories.size === 0}
-            className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50"
+            className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50"
           >
             {isExporting ? 'Exporting...' : 'Export Selected'}
           </button>
@@ -726,7 +726,7 @@ export default function Settings() {
               setShowClearConfirm(true);
             }}
             disabled={isClearing || selectedCategories.size === 0}
-            className="inline-flex items-center px-4 py-2 text-sm font-medium text-red-700 dark:text-red-300 bg-white dark:bg-gray-700 border border-red-300 dark:border-red-600 rounded-md hover:bg-red-50 dark:hover:bg-red-900/30 disabled:opacity-50"
+            className="inline-flex items-center px-4 py-2 text-sm font-medium text-red-700 dark:text-red-300 bg-white dark:bg-gray-700 border border-red-300 dark:border-red-600 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 disabled:opacity-50"
           >
             {isClearing ? 'Clearing...' : 'Clear Selected'}
           </button>
@@ -734,7 +734,7 @@ export default function Settings() {
             type="button"
             onClick={() => importFileInputRef.current?.click()}
             disabled={isImporting}
-            className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50"
+            className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50"
           >
             {isImporting ? 'Importing...' : 'Import...'}
           </button>
@@ -767,7 +767,7 @@ export default function Settings() {
               <button
                 type="button"
                 onClick={() => setShowClearConfirm(false)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600"
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600"
               >
                 Cancel
               </button>
@@ -775,7 +775,7 @@ export default function Settings() {
                 type="button"
                 onClick={handleClear}
                 disabled={isClearing}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50"
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50"
               >
                 {isClearing ? 'Clearing...' : 'Clear Data'}
               </button>
@@ -808,7 +808,7 @@ export default function Settings() {
                   setShowImportConfirm(false);
                   setImportData(null);
                 }}
-                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600"
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600"
               >
                 Cancel
               </button>
@@ -816,7 +816,7 @@ export default function Settings() {
                 type="button"
                 onClick={handleImport}
                 disabled={isImporting}
-                className="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-secondary disabled:opacity-50"
+                className="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-secondary disabled:opacity-50"
               >
                 {isImporting ? 'Importing...' : 'Import Data'}
               </button>
