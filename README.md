@@ -1,192 +1,289 @@
 # Courthouse Digital Signage System
 
-A digital signage system for the Frank E. Moss U.S. Courthouse that displays daily court docket information, announcements, and real-time data on HDMI-connected displays positioned outside courtrooms.
+A digital signage system for the Frank E. Moss U.S. Courthouse (District of Utah) that displays daily court hearing calendars, announcements, and real-time weather on HDMI-connected displays positioned outside courtrooms.
 
-## Overview
+The system **automatically imports hearing calendars** by scraping PDF files published by the U.S. Bankruptcy Court for the District of Utah, parsing them into structured docket entries, and pushing updates to all connected displays in real time.
 
-This system consists of three main components:
+## How It Works
 
-1. **Backend API** - Node.js/Express REST API with WebSocket support
-2. **Admin Portal** - React-based content management interface
-3. **Display Client** - HTML5 kiosk display for courtroom screens
+### Automated Calendar Import
 
-## Technology Stack
+1. The backend scrapes the court's [aggregated calendar page](https://www.utb.uscourts.gov/anticipated-pdf/all) on a configurable schedule
+2. Individual judge PDF calendars are downloaded from `/sites/utb/files/anticipated_calendars/`
+3. Each PDF is parsed to extract hearing entries: case number, parties, chapter, time, courtroom, judge, Zoom info, and status
+4. Entries are upserted into the database (new entries created, existing entries updated)
+5. Stale entries that no longer appear in the current PDFs are automatically removed
+6. All connected displays receive a real-time WebSocket notification to refresh
 
-### Backend
-- Node.js 20+ with Express
-- TypeScript
-- Prisma ORM with SQLite (dev) / PostgreSQL (prod)
-- Socket.io for real-time updates
-- JWT authentication
+### Display Pipeline
 
-### Admin Portal
-- React 18 with TypeScript
-- Tailwind CSS
-- React Query (TanStack Query)
-- React Router v6
-- React Hook Form with Zod validation
+```
+  Court Website (PDFs)
+        |
+        v
+  Backend: Scrape + Parse
+        |
+        v
+  SQLite Database (docket_entries)
+        |
+        v
+  WebSocket: docket:update
+        |
+        v
+  Display Clients (HTML5 kiosk)
+```
 
-### Display Client
-- HTML5 + CSS3 + Vanilla JavaScript
-- Full HD (1920x1080) optimized
-- Chromium kiosk mode compatible
+Each display client is independently configured with judge/courtroom filters, column layout, orientation (landscape/portrait), theme, and weather location. Displays fetch only the docket entries relevant to their assigned courtroom.
+
+## Components
+
+| Component | Stack | Purpose |
+|-----------|-------|---------|
+| **Backend API** | Node.js, Express, Prisma (SQLite), Socket.IO | REST API, PDF import, WebSocket hub |
+| **Admin Portal** | React 18, TypeScript, Tailwind, TanStack Query | Content management, display configuration |
+| **Display Client** | HTML5, CSS3, Vanilla JS | Kiosk-mode courtroom display |
 
 ## Project Structure
 
 ```
 moss-dig-sig-2026/
-├── backend/                 # Backend API server
+├── backend/
 │   ├── src/
-│   │   ├── routes/         # API route handlers
-│   │   ├── middleware/     # Express middleware
-│   │   ├── services/       # Business logic
-│   │   ├── utils/          # Utility functions
-│   │   └── types/          # TypeScript types
-│   └── prisma/             # Database schema and migrations
-├── admin/                   # Admin portal (React)
+│   │   ├── index.ts              # Express app, all routes
+│   │   └── services/
+│   │       ├── calendarImportService.ts  # PDF scraping & import orchestration
+│   │       └── pdfParser.ts              # PDF text extraction & parsing
+│   └── prisma/
+│       └── schema.prisma         # Database schema
+├── admin/
 │   └── src/
-│       ├── components/     # React components
-│       ├── pages/          # Page components
-│       ├── hooks/          # Custom hooks
-│       ├── services/       # API services
-│       ├── types/          # TypeScript types
-│       └── utils/          # Utility functions
-├── display/                 # Display client (HTML5)
-│   ├── css/                # Stylesheets
-│   ├── js/                 # JavaScript
-│   └── assets/             # Images and icons
-├── init.sh                  # Development setup script
-└── README.md
+│       ├── pages/                # Settings, Displays, Docket, etc.
+│       ├── components/           # Shared UI components
+│       └── api/                  # API client modules
+├── display/
+│   ├── index.html                # Display layout
+│   ├── css/display.css           # Display styles (1920x1080 optimized)
+│   ├── js/display.js             # Data fetching, rendering, WebSocket
+│   └── assets/                   # Court seal, weather icons
+└── uploads/                      # User-uploaded logos
 ```
 
 ## Getting Started
 
 ### Prerequisites
 
-- Node.js 20 or higher
+- Node.js 20+
 - npm
-- SQLite3 (optional, for database inspection)
 
 ### Quick Start
 
-1. Clone the repository:
-   ```bash
-   git clone <repository-url>
-   cd moss-dig-sig-2026
-   ```
+The `init.sh` script checks prerequisites, installs dependencies, sets up the database, seeds initial data, and starts all three services:
 
-2. Run the setup script:
-   ```bash
-   ./init.sh
-   ```
+```bash
+./init.sh
+```
 
-3. Access the applications:
-   - **Backend API**: http://localhost:3000
-   - **Admin Portal**: http://localhost:5173
-   - **Display Client**: http://localhost:8080
+Press `Ctrl+C` to stop all services.
+
+### Manual Setup
+
+```bash
+# Install dependencies
+cd backend && npm install && cd ..
+cd admin && npm install && cd ..
+
+# Initialize database
+cd backend
+npx prisma generate
+npx prisma migrate deploy
+npx prisma db seed    # Creates default admin user
+cd ..
+```
+
+Then start each component in a separate terminal:
+
+```bash
+# Terminal 1: Backend API (port 3000)
+cd backend && npm run dev
+
+# Terminal 2: Admin Portal (port 5173)
+cd admin && npm run dev
+
+# Terminal 3: Display Client (port 8080)
+cd display && npx serve -l 8080 .
+```
 
 ### Default Credentials
 
-- **Email**: admin@courthouse.gov
-- **Password**: admin123
+| Field | Value |
+|-------|-------|
+| Email | `admin@courthouse.gov` |
+| Password | `admin123` |
 
-## API Endpoints
+## Features
 
-### Authentication
-- `POST /api/auth/login` - User login
-- `POST /api/auth/logout` - User logout
-- `POST /api/auth/refresh` - Refresh JWT token
-- `GET /api/auth/me` - Get current user
+### Calendar Import
+- Automatic PDF scraping from utb.uscourts.gov on a configurable interval
+- Manual import trigger from the admin portal
+- Per-judge import logging with entry counts (created, updated, skipped, removed)
+- Stale entry cleanup: removes hearings no longer in current PDFs
+- Supports all six judges: Hunt, Thurman, Anderson, Parker, Thomson, Marker
 
-### Docket
-- `GET /api/docket` - List entries (with filters)
-- `POST /api/docket` - Create entry
-- `POST /api/docket/bulk` - Bulk create entries
-- `GET /api/docket/:id` - Get entry
-- `PUT /api/docket/:id` - Update entry
-- `DELETE /api/docket/:id` - Delete entry
+### Display Management
+- Multiple independent displays with per-display configuration
+- Configurable filters: judge, courtroom, chapter
+- Column layout customization
+- Portrait and landscape orientation
+- Theme selection (Navy & Gold, Dark, Light)
+- Live admin preview with ephemeral tokens (5-minute TTL)
+- Online/offline status tracking via heartbeat
 
-### Displays
-- `GET /api/displays` - List displays
-- `POST /api/displays` - Register display
-- `GET /api/displays/:id` - Get display
-- `PUT /api/displays/:id` - Update display
-- `DELETE /api/displays/:id` - Remove display
-- `GET /api/displays/:id/docket` - Get filtered docket
-- `POST /api/displays/:id/heartbeat` - Display heartbeat
+### Docket Management
+- Full CRUD with optimistic concurrency control
+- Advanced filtering: date, judge, courtroom, status, chapter, text search
+- Bulk CSV import with downloadable template
+- Status tracking: scheduled, stricken, continued, completed, cancelled
+- Zoom meeting info display (Meeting ID, Passcode, Phone)
 
 ### Announcements
-- `GET /api/announcements` - List announcements
-- `POST /api/announcements` - Create announcement
-- `GET /api/announcements/:id` - Get announcement
-- `PUT /api/announcements/:id` - Update announcement
-- `DELETE /api/announcements/:id` - Delete announcement
+- Priority-ordered scrolling ticker on displays
+- Optional expiration dates
+- Drag-to-reorder priority
+- Enable/disable toggle
 
-### System
-- `GET /api/health` - Health check with DB status
-- `GET /api/settings` - Get global settings
-- `PUT /api/settings` - Update settings (admin)
-- `GET /api/audit-logs` - Query audit logs (admin)
+### Real-Time Updates
+- Socket.IO WebSocket connections between backend and all displays
+- Docket changes, announcement updates, and settings changes push instantly
+- Display heartbeat monitoring
+
+### Weather
+- NWS (National Weather Service) API integration
+- SVG weather icons with day/night variants
+- Per-display weather location override
+- 15-minute refresh interval with offline caching
+
+### Administration
+- Role-based access: Admin, Editor, Viewer
+- JWT authentication (30-min access, 7-day refresh tokens)
+- Comprehensive audit logging of all mutations
+- Data export/import (JSON) and selective clear
+- Court branding: name, subtitle, courthouse name, officials, logo upload
+
+## API Overview
+
+### Public (No Auth)
+- `GET /api/settings/public` - Court branding
+- `GET /api/health` - Health check
+
+### Display Client (API Key)
+- `GET /api/displays/:id/config` - Display configuration + global settings
+- `GET /api/displays/:id/docket` - Filtered docket entries for display
+- `POST /api/displays/:id/heartbeat` - Heartbeat
+
+### Admin Portal (JWT)
+- `/api/auth/*` - Login, logout, refresh, current user
+- `/api/docket/*` - Docket CRUD, bulk import, helpers
+- `/api/displays/*` - Display CRUD, key management, preview tokens
+- `/api/announcements/*` - Announcement CRUD, reorder
+- `/api/settings/*` - Settings CRUD, logo upload
+- `/api/calendar-import/*` - Import trigger, config, history
+- `/api/users/*` - User management
+- `/api/audit-logs` - Audit log queries
+- `/api/stats` - Dashboard statistics
+- `/api/export`, `/api/import`, `/api/clear` - Data management
 
 ## User Roles
 
 | Role | Permissions |
 |------|-------------|
-| **Admin** | Full access to all features |
+| **Admin** | Full access: users, settings, displays, imports, data management |
 | **Editor** | Manage docket entries and announcements |
-| **Viewer** | Read-only access to dashboard |
-
-## Display Features
-
-- Court seal and branding header
-- Weather widget with NWS integration
-- Docket table with auto-scroll
-- Zoom meeting information display
-- Notice banner
-- Scrolling announcement ticker
-- Offline mode with cached data
-- Real-time updates via WebSocket
-
-## Development
-
-### Running Individual Components
-
-**Backend only:**
-```bash
-cd backend
-npm run dev
-```
-
-**Admin portal only:**
-```bash
-cd admin
-npm run dev
-```
-
-**Display client only:**
-```bash
-cd display
-npx serve -l 8080 .
-```
-
-### Database Management
-
-```bash
-cd backend
-
-# Generate Prisma client
-npx prisma generate
-
-# Apply migrations
-npx prisma migrate deploy
-
-# Open database GUI
-npx prisma studio
-```
+| **Viewer** | Read-only dashboard access |
 
 ## Deployment
 
-See [Display Deployment Guide](docs/display-deployment.md) for instructions on deploying the display client to Raspberry Pi devices running Chromium in kiosk mode.
+### Docker (Production)
+
+The recommended production deployment uses Docker Compose with two containers: an nginx reverse proxy serving the admin SPA and display client as static files, and the backend API server.
+
+```
+  Browser
+    |
+    v
+  nginx (:80)
+    ├── /           → Admin SPA (static)
+    ├── /display/   → Display client (static)
+    ├── /uploads/   → Uploaded logos (shared volume)
+    ├── /api/*      → Proxy to backend
+    └── /socket.io/ → WebSocket proxy to backend
+
+  backend (:3000, internal only)
+    ├── Express API + Socket.IO
+    ├── Prisma + SQLite
+    └── PDF import service
+```
+
+**Quick start:**
+
+```bash
+# 1. Create .env from template
+cp .env.example .env
+
+# 2. Set a secure JWT secret
+#    Edit .env and change JWT_SECRET to a random string
+#    e.g.: openssl rand -base64 32
+
+# 3. Build and start
+docker compose up --build -d
+```
+
+The admin portal is at `http://<host>` and the display client at `http://<host>/display/`.
+
+**Environment variables** (set in `.env`):
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `JWT_SECRET` | Yes | — | Secret key for signing JWT tokens |
+| `JWT_EXPIRES_IN` | No | `30m` | Access token lifetime |
+| `JWT_REFRESH_EXPIRES_IN` | No | `7d` | Refresh token lifetime |
+| `CORS_ORIGIN` | No | — | Allowed CORS origins (comma-separated) |
+| `NWS_USER_AGENT` | No | — | User-Agent for NWS weather API requests |
+| `HOST_PORT` | No | `80` | Host port mapped to nginx |
+
+**Data persistence:** Two named Docker volumes store data across restarts:
+- `db-data` — SQLite database
+- `uploads-data` — Uploaded court logos
+
+**First run:** The backend automatically applies the database schema and seeds default users (admin/editor/viewer) if no users exist. See [Default Credentials](#default-credentials) above.
+
+**Useful commands:**
+
+```bash
+# View logs
+docker compose logs -f
+
+# Restart after config change
+docker compose restart
+
+# Rebuild after code changes
+docker compose up --build -d
+
+# Stop and remove containers (data volumes preserved)
+docker compose down
+
+# Stop and remove everything including data
+docker compose down -v
+```
+
+### Display Kiosk Setup
+
+Display clients are designed to run in Chromium kiosk mode on Raspberry Pi devices connected to courtroom monitors via HDMI. The display URL accepts query parameters:
+
+```
+http://<host>/display/?displayId=<id>&apiKey=<key>
+```
+
+For development or non-Docker setups where the backend runs on a different origin, add `&apiBase=http://<backend>:3000`.
 
 ## License
 

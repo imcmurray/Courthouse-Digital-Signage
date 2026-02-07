@@ -19,7 +19,7 @@
   // Derive API base URL: ?apiBase= param, or same host on port 3000
   function getApiBaseUrl() {
     const params = new URLSearchParams(window.location.search);
-    return params.get('apiBase') || `${window.location.protocol}//${window.location.hostname}:3000`;
+    return params.get('apiBase') || window.location.origin;
   }
 
   // State

@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { triggerSessionExpired } from '../components/SessionExpiredModal';
 
-export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+export const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 // Create axios instance
 export const apiClient = axios.create({
