@@ -165,7 +165,7 @@ export default function AuditLogs() {
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Action</label>
             <select
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
               value={filters.action || ''}
               onChange={(e) => setFilters({ ...filters, action: e.target.value || undefined, offset: 0 })}
             >
@@ -179,7 +179,7 @@ export default function AuditLogs() {
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Entity Type</label>
             <select
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
               value={filters.entityType || ''}
               onChange={(e) => setFilters({ ...filters, entityType: e.target.value || undefined, offset: 0 })}
             >
@@ -196,7 +196,7 @@ export default function AuditLogs() {
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Start Date</label>
             <input
               type="date"
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
               value={filters.startDate || ''}
               onChange={(e) => setFilters({ ...filters, startDate: e.target.value || undefined, offset: 0 })}
             />
@@ -205,7 +205,7 @@ export default function AuditLogs() {
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">End Date</label>
             <input
               type="date"
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
               value={filters.endDate || ''}
               onChange={(e) => setFilters({ ...filters, endDate: e.target.value || undefined, offset: 0 })}
             />
