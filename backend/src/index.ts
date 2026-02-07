@@ -2132,6 +2132,43 @@ app.delete('/api/users/:id', authenticateToken, requireAdmin, async (req: Authen
   }
 });
 
+// DELETE /api/users/:id/permanent - Permanently delete a deactivated user (admin only)
+app.delete('/api/users/:id/permanent', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const existingUser = await prisma.user.findUnique({
+      where: { id: req.params.id }
+    });
+
+    if (!existingUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (req.user?.userId === req.params.id) {
+      return res.status(400).json({ error: 'Cannot delete your own account' });
+    }
+
+    if (existingUser.isActive) {
+      return res.status(400).json({ error: 'User must be deactivated before permanent deletion' });
+    }
+
+    await prisma.user.delete({
+      where: { id: req.params.id }
+    });
+
+    await createAuditLog('delete', 'user', req.params.id, req.user?.userId || null, {
+      name: existingUser.name,
+      email: existingUser.email,
+      permanent: true,
+    });
+
+    console.log(`[DB] DELETE FROM users WHERE id = ${req.params.id}`);
+    res.status(204).send();
+  } catch (error) {
+    console.error('Failed to permanently delete user:', error);
+    res.status(500).json({ error: 'Failed to permanently delete user' });
+  }
+});
+
 // =========================================
 // API Key Management Endpoints (Admin Only)
 // =========================================

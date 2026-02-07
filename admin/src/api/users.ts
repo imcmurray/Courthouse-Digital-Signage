@@ -54,6 +54,10 @@ export const usersApi = {
   delete: async (id: string): Promise<void> => {
     await apiClient.delete(`/api/users/${id}`);
   },
+
+  permanentDelete: async (id: string): Promise<void> => {
+    await apiClient.delete(`/api/users/${id}/permanent`);
+  },
 };
 
 export default usersApi;

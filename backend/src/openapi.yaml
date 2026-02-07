@@ -2081,7 +2081,8 @@ paths:
                 $ref: '#/components/schemas/Error'
     delete:
       tags: [Users]
-      summary: Delete user (admin only)
+      summary: Deactivate user (admin only)
+      description: Soft-deletes the user by setting isActive to false. The user can be reactivated later or permanently deleted.
       security:
         - bearerAuth: []
       parameters:
@@ -2092,17 +2093,52 @@ paths:
             type: string
             format: uuid
       responses:
-        '200':
-          description: User deleted
+        '204':
+          description: User deactivated
+        '400':
+          description: Cannot deactivate your own account
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  message:
-                    type: string
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/users/{id}/permanent:
+    delete:
+      tags: [Users]
+      summary: Permanently delete user (admin only)
+      description: Hard-deletes a deactivated user from the database. The user must be deactivated first. This action cannot be undone.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: User permanently deleted
         '400':
-          description: Cannot delete your own account
+          description: Cannot delete your own account or user is still active
           content:
             application/json:
               schema:
