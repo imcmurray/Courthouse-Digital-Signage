@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import DatePicker from 'react-datepicker';
+import { parse, format } from 'date-fns';
 import ModalPortal from '../components/ModalPortal';
 import { auditLogsApi, AuditLog, AuditLogFilters } from '../api/auditLogs';
 
@@ -194,20 +196,26 @@ export default function AuditLogs() {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Start Date</label>
-            <input
-              type="date"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
-              value={filters.startDate || ''}
-              onChange={(e) => setFilters({ ...filters, startDate: e.target.value || undefined, offset: 0 })}
+            <DatePicker
+              selected={filters.startDate ? parse(filters.startDate, 'yyyy-MM-dd', new Date()) : null}
+              onChange={(date: Date | null) => setFilters({ ...filters, startDate: date ? format(date, 'yyyy-MM-dd') : undefined, offset: 0 })}
+              isClearable
+              placeholderText="Select start date"
+              dateFormat="yyyy-MM-dd"
+              wrapperClassName="w-full"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
             />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">End Date</label>
-            <input
-              type="date"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
-              value={filters.endDate || ''}
-              onChange={(e) => setFilters({ ...filters, endDate: e.target.value || undefined, offset: 0 })}
+            <DatePicker
+              selected={filters.endDate ? parse(filters.endDate, 'yyyy-MM-dd', new Date()) : null}
+              onChange={(date: Date | null) => setFilters({ ...filters, endDate: date ? format(date, 'yyyy-MM-dd') : undefined, offset: 0 })}
+              isClearable
+              placeholderText="Select end date"
+              dateFormat="yyyy-MM-dd"
+              wrapperClassName="w-full"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
             />
           </div>
         </div>
