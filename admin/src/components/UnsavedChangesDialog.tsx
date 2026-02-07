@@ -1,3 +1,5 @@
+import ModalPortal from './ModalPortal';
+
 interface UnsavedChangesDialogProps {
   isOpen: boolean;
   onStay: () => void;
@@ -8,6 +10,7 @@ export default function UnsavedChangesDialog({ isOpen, onStay, onLeave }: Unsave
   if (!isOpen) return null;
 
   return (
+    <ModalPortal>
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
       <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4 shadow-xl dark:shadow-gray-900/50">
         <div className="flex items-center mb-4">
@@ -40,5 +43,6 @@ export default function UnsavedChangesDialog({ isOpen, onStay, onLeave }: Unsave
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }

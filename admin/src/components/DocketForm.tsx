@@ -7,6 +7,7 @@ import { useBlocker } from 'react-router-dom';
 import { DocketEntry, CreateDocketEntryInput, UpdateDocketEntryInput, docketApi } from '../api/docket';
 import { displaysApi, Display } from '../api/displays';
 import UnsavedChangesDialog from './UnsavedChangesDialog';
+import ModalPortal from './ModalPortal';
 import AutocompleteInput from './AutocompleteInput';
 
 const caseNumberRegex = /^(\d{2,4}-\d{1,6}|\d{4,})$/;
@@ -255,6 +256,7 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
   };
 
   return (
+    <ModalPortal>
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl dark:shadow-gray-900/50 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
@@ -720,5 +722,6 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
         onLeave={handleLeave}
       />
     </div>
+    </ModalPortal>
   );
 }

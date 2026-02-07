@@ -5,6 +5,7 @@ import { displaysApi, Display, CreateDisplayInput, UpdateDisplayInput, PreviewTo
 import { API_BASE_URL } from '../api/client';
 import { docketApi } from '../api/docket';
 import AutocompleteInput from '../components/AutocompleteInput';
+import ModalPortal from '../components/ModalPortal';
 
 export default function Displays() {
   const queryClient = useQueryClient();
@@ -373,6 +374,7 @@ export default function Displays() {
 
       {/* Create/Edit Modal */}
       {(isFormOpen || editingDisplay) && (
+        <ModalPortal>
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -614,10 +616,12 @@ export default function Displays() {
             </form>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {/* API Key Modal (shown after successful creation) */}
       {newApiKey && (
+        <ModalPortal>
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-lg w-full mx-4">
             <div className="flex items-center mb-4">
@@ -664,10 +668,12 @@ export default function Displays() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {/* Delete Confirmation Modal */}
       {deleteConfirmDisplay && (
+        <ModalPortal>
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Confirm Delete</h3>
@@ -698,10 +704,12 @@ export default function Displays() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {/* Regenerate API Key Confirmation Modal */}
       {regenerateConfirmDisplay && (
+        <ModalPortal>
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
             <div className="flex items-center mb-4">
@@ -742,10 +750,12 @@ export default function Displays() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {/* Regenerated API Key Modal (shown after successful regeneration) */}
       {regeneratedApiKey && (
+        <ModalPortal>
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-lg w-full mx-4">
             <div className="flex items-center mb-4">
@@ -792,6 +802,7 @@ export default function Displays() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {/* Display Preview Modal */}
@@ -803,6 +814,7 @@ export default function Displays() {
         const iframeH = isPortrait ? 1920 : 1080;
         const scale = isPortrait ? 1/3 : 0.5;
         return (
+        <ModalPortal>
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
           <div className={`bg-gray-900 rounded-lg ${isPortrait ? 'max-w-[460px]' : 'max-w-[1060px]'} w-full mx-4 flex flex-col max-h-[90vh]`}>
             {/* Header */}
@@ -872,6 +884,7 @@ export default function Displays() {
             </div>
           </div>
         </div>
+        </ModalPortal>
         );
       })()}
     </div>

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
+import ModalPortal from '../components/ModalPortal';
 import { usersApi, User, CreateUserInput, UpdateUserInput } from '../api/users';
 import UserForm from '../components/UserForm';
 
@@ -251,6 +252,7 @@ export default function Users() {
 
       {/* Delete Confirmation Modal */}
       {deleteConfirmUser && (
+        <ModalPortal>
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Confirm Deactivation</h3>
@@ -275,6 +277,7 @@ export default function Users() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
     </div>
   );

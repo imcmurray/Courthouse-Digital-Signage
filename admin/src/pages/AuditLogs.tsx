@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import ModalPortal from '../components/ModalPortal';
 import { auditLogsApi, AuditLog, AuditLogFilters } from '../api/auditLogs';
 
 export default function AuditLogs() {
@@ -342,6 +343,7 @@ export default function AuditLogs() {
 
       {/* Detail Modal */}
       {selectedLog && (
+        <ModalPortal>
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl dark:shadow-gray-900/50 max-w-lg w-full max-h-[80vh] flex flex-col">
             <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
@@ -400,6 +402,7 @@ export default function AuditLogs() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
     </div>
   );

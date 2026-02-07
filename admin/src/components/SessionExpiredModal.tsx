@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import ModalPortal from './ModalPortal';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -88,6 +89,7 @@ export default function SessionExpiredModal({ onSessionRestored }: SessionExpire
   if (!isOpen) return null;
 
   return (
+    <ModalPortal>
     <div className="fixed inset-0 z-[100] overflow-y-auto">
       {/* Backdrop */}
       <div className="fixed inset-0 bg-black/60 transition-opacity" />
@@ -208,5 +210,6 @@ export default function SessionExpiredModal({ onSessionRestored }: SessionExpire
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }

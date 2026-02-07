@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import Breadcrumb from '../components/Breadcrumb';
+import ModalPortal from '../components/ModalPortal';
 import apiClient, { getStoredToken } from '../api/client';
 
 interface SettingsData {
@@ -750,6 +751,7 @@ export default function Settings() {
 
       {/* Clear Confirmation Modal */}
       {showClearConfirm && (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Confirm Clear Data</h3>
@@ -782,10 +784,12 @@ export default function Settings() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {/* Import Confirmation Modal */}
       {showImportConfirm && importData && (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Confirm Import</h3>
@@ -823,6 +827,7 @@ export default function Settings() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
     </div>
   );

@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../api/client';
 import DocketForm from '../components/DocketForm';
+import ModalPortal from '../components/ModalPortal';
 import { docketApi, CreateDocketEntryInput } from '../api/docket';
 import { announcementsApi, CreateAnnouncementInput } from '../api/announcements';
 import { displaysApi } from '../api/displays';
@@ -362,6 +363,7 @@ export default function Dashboard() {
 
       {/* New Announcement Modal */}
       {isNewAnnouncementOpen && (
+        <ModalPortal>
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-lg w-full mx-4">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Create Announcement</h3>
@@ -475,6 +477,7 @@ export default function Dashboard() {
             </form>
           </div>
         </div>
+        </ModalPortal>
       )}
     </div>
   );
