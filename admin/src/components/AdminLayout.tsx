@@ -3,7 +3,6 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import toast from 'react-hot-toast';
-import Breadcrumb from './Breadcrumb';
 import { API_BASE_URL } from '../api/client';
 
 interface AdminLayoutProps {
@@ -300,7 +299,6 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                 </button>
               )}
               <div>
-                <Breadcrumb />
                 <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-100">
                   {allNavItems.find(item => isActive(item.path))?.label ||
                     adminOnlyNavItems.find(item => isActive(item.path))?.label ||

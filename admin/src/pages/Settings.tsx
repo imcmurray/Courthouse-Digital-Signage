@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import Breadcrumb from '../components/Breadcrumb';
 import ModalPortal from '../components/ModalPortal';
 import apiClient, { getStoredToken } from '../api/client';
 
@@ -390,8 +389,6 @@ export default function Settings() {
 
   return (
     <div className="space-y-6">
-      <Breadcrumb />
-
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50">
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white">System Settings</h2>
