@@ -171,6 +171,8 @@ cd display && npx serve -l 8080 .
 
 ## API Overview
 
+Interactive API documentation (Swagger UI) is available at `/api-docs` — e.g. `http://localhost:3000/api-docs` in development or `http://<host>/api-docs` in Docker.
+
 ### Public (No Auth)
 - `GET /api/settings/public` - Court branding
 - `GET /api/health` - Health check
