@@ -10,6 +10,7 @@
   const CONFIG = {
     apiBaseUrl: getApiBaseUrl(),
     displayId: getDisplayId(),
+    apiKey: getApiKey(),
     refreshInterval: 30000, // 30 seconds
     clockInterval: 1000, // 1 second
     weatherRefreshInterval: 900000, // 15 minutes
@@ -625,7 +626,12 @@
     try {
       // Import socket.io client dynamically or use global
       if (typeof io !== 'undefined') {
-        socket = io(CONFIG.apiBaseUrl);
+        socket = io(CONFIG.apiBaseUrl, {
+          auth: {
+            apiKey: CONFIG.apiKey,
+            displayId: CONFIG.displayId
+          }
+        });
 
         socket.on('connect', () => {
           console.log('WebSocket connected');

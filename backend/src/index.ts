@@ -19,7 +19,11 @@ const httpServer = createServer(app);
 const prisma = new PrismaClient();
 
 // JWT configuration
-const JWT_SECRET = process.env.JWT_SECRET || 'courthouse-signage-secret-key-change-in-production';
+if (!process.env.JWT_SECRET) {
+  console.error('FATAL: JWT_SECRET environment variable is required. Set it before starting the server.');
+  process.exit(1);
+}
+const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRES_IN = '30m'; // 30 minutes session timeout
 const JWT_REFRESH_EXPIRES_IN = '7d'; // 7 days for refresh token
 
@@ -81,12 +85,11 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
-  // Accept only PNG and SVG files
-  const allowedTypes = ['image/png', 'image/svg+xml'];
-  if (allowedTypes.includes(file.mimetype)) {
+  // Accept only PNG files (SVG disallowed due to script injection risk)
+  if (file.mimetype === 'image/png') {
     cb(null, true);
   } else {
-    cb(new Error('Only PNG and SVG files are allowed'));
+    cb(new Error('Only PNG files are allowed'));
   }
 };
 
@@ -201,8 +204,7 @@ app.use((req, res, next) => {
 // =========================================
 const authenticateToken = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   const authHeader = req.headers['authorization'];
-  // Support token from Authorization header OR query parameter (for file downloads)
-  const token = (authHeader && authHeader.split(' ')[1]) || (req.query.token as string);
+  const token = authHeader && authHeader.split(' ')[1];
 
   if (!token) {
     return res.status(401).json({ error: 'Access token required' });
@@ -299,6 +301,17 @@ const authenticateApiKey = async (req: ApiKeyRequest, res: Response, next: NextF
     console.error('API key authentication error:', error);
     return res.status(500).json({ error: 'Authentication failed' });
   }
+};
+
+// Middleware to check editor or admin role
+const requireEditor = (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  if (req.user.role !== 'admin' && req.user.role !== 'editor') {
+    return res.status(403).json({ error: 'Editor or admin access required' });
+  }
+  next();
 };
 
 // Middleware to check admin role
@@ -542,7 +555,7 @@ app.get('/api/health', async (req, res) => {
 });
 
 // Schema verification endpoint - verifies all required tables exist
-app.get('/api/schema-check', async (req, res) => {
+app.get('/api/schema-check', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const tables: { name: string }[] = await prisma.$queryRaw`
       SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_prisma%'
@@ -826,7 +839,7 @@ app.get('/api/docket', authenticateToken, async (req: AuthenticatedRequest, res:
 });
 
 // POST /api/docket - Create a single docket entry
-app.post('/api/docket', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+app.post('/api/docket', authenticateToken, requireEditor, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const {
       caseNumber,
@@ -928,7 +941,7 @@ app.post('/api/docket', authenticateToken, async (req: AuthenticatedRequest, res
 });
 
 // POST /api/docket/bulk - Bulk create docket entries (CSV import)
-app.post('/api/docket/bulk', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+app.post('/api/docket/bulk', authenticateToken, requireEditor, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { entries } = req.body;
 
@@ -1140,7 +1153,7 @@ app.get('/api/docket/:id', authenticateToken, async (req: AuthenticatedRequest, 
 });
 
 // PUT /api/docket/:id - Update a docket entry
-app.put('/api/docket/:id', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+app.put('/api/docket/:id', authenticateToken, requireEditor, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const updateData: Record<string, unknown> = {};
     const allowedFields = [
@@ -1279,7 +1292,7 @@ app.delete('/api/docket/clear', authenticateToken, requireAdmin, async (req: Aut
 });
 
 // DELETE /api/docket/:id - Delete a docket entry
-app.delete('/api/docket/:id', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+app.delete('/api/docket/:id', authenticateToken, requireEditor, async (req: AuthenticatedRequest, res: Response) => {
   try {
     // Get entry info before deletion for audit log
     const entry = await prisma.docketEntry.findUnique({
@@ -1440,7 +1453,21 @@ app.get('/api/displays/:id/docket', displayLimiter, authenticateApiKey, async (r
 
 app.get('/api/announcements', async (req, res) => {
   try {
-    const activeOnly = req.query.active === 'true';
+    // Check if request is authenticated (optional auth)
+    let isAuthenticated = false;
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    if (token) {
+      try {
+        jwt.verify(token, JWT_SECRET);
+        isAuthenticated = true;
+      } catch {
+        // Invalid token - treat as unauthenticated
+      }
+    }
+
+    // Unauthenticated requests always get active-only announcements
+    const activeOnly = isAuthenticated ? req.query.active === 'true' : true;
 
     // Build where clause for filtering active announcements
     const announcements = await prisma.announcement.findMany({
@@ -1468,7 +1495,7 @@ app.get('/api/announcements', async (req, res) => {
 });
 
 // Create announcement
-app.post('/api/announcements', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+app.post('/api/announcements', authenticateToken, requireEditor, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { text, priority = 100, enabled = true, expiresAt } = req.body;
 
@@ -1526,7 +1553,7 @@ app.get('/api/announcements/:id', authenticateToken, async (req: AuthenticatedRe
 });
 
 // Update announcement
-app.put('/api/announcements/:id', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+app.put('/api/announcements/:id', authenticateToken, requireEditor, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { text, priority, enabled, expiresAt } = req.body;
 
@@ -1565,7 +1592,7 @@ app.put('/api/announcements/:id', authenticateToken, async (req: AuthenticatedRe
 });
 
 // Delete announcement
-app.delete('/api/announcements/:id', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+app.delete('/api/announcements/:id', authenticateToken, requireEditor, async (req: AuthenticatedRequest, res: Response) => {
   try {
     await prisma.announcement.delete({
       where: { id: req.params.id },
@@ -1587,7 +1614,7 @@ app.delete('/api/announcements/:id', authenticateToken, async (req: Authenticate
 });
 
 // PATCH /api/announcements/reorder - Bulk update announcement priorities
-app.patch('/api/announcements/reorder', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+app.patch('/api/announcements/reorder', authenticateToken, requireEditor, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { order } = req.body;
 
@@ -1645,7 +1672,7 @@ app.get('/api/displays', authenticateToken, async (req: AuthenticatedRequest, re
 });
 
 // POST /api/displays - Create a new display
-app.post('/api/displays', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+app.post('/api/displays', authenticateToken, requireEditor, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const {
       id,
@@ -1716,7 +1743,7 @@ app.post('/api/displays', authenticateToken, async (req: AuthenticatedRequest, r
 });
 
 // PUT /api/displays/:id - Update a display
-app.put('/api/displays/:id', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+app.put('/api/displays/:id', authenticateToken, requireEditor, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
     const {
@@ -1808,7 +1835,7 @@ app.get('/api/display-docket-entries', authenticateToken, async (req: Authentica
 });
 
 // DELETE /api/displays/:id - Delete a display
-app.delete('/api/displays/:id', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+app.delete('/api/displays/:id', authenticateToken, requireEditor, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
 
@@ -3121,16 +3148,59 @@ app.post('/api/import', authenticateToken, requireAdmin, async (req: Authenticat
 // Serve uploaded files
 app.use('/uploads', express.static(UPLOADS_DIR));
 
+// Socket.IO authentication middleware - require API key with displayId
+io.use(async (socket, next) => {
+  const apiKey = socket.handshake.auth?.apiKey as string;
+  const displayId = socket.handshake.auth?.displayId as string;
+
+  if (!apiKey || !displayId) {
+    return next(new Error('API key and display ID required'));
+  }
+
+  try {
+    // Find the display and verify the API key
+    const display = await prisma.display.findUnique({ where: { id: displayId } });
+    if (!display) {
+      return next(new Error('Display not found'));
+    }
+
+    // Check preview tokens first (O(1) Map lookup, no bcrypt)
+    const previewEntry = previewTokens.get(apiKey);
+    if (previewEntry && previewEntry.displayId === displayId && previewEntry.expiresAt > Date.now()) {
+      (socket as any).displayId = displayId;
+      return next();
+    }
+
+    // Verify the hashed API key
+    const isValid = await bcrypt.compare(apiKey, display.apiKeyHash);
+    if (!isValid) {
+      return next(new Error('Invalid API key'));
+    }
+
+    (socket as any).displayId = displayId;
+    next();
+  } catch (err) {
+    console.error('Socket.IO auth error:', err);
+    return next(new Error('Authentication failed'));
+  }
+});
+
 // Socket.io connection handling
 io.on('connection', (socket) => {
-  console.log(`Client connected: ${socket.id}`);
+  const displayId = (socket as any).displayId;
+  console.log(`Client connected: ${socket.id} (display: ${displayId})`);
 
-  // Track which display this socket belongs to
+  // Update heartbeat on connection (already authenticated)
+  if (displayId) {
+    prisma.display.update({
+      where: { id: displayId },
+      data: { lastHeartbeat: new Date(), status: 'online' }
+    }).catch(err => console.error(`Failed to update display on connect: ${displayId}`, err));
+  }
+
+  // Track display registration (re-register on reconnect)
   socket.on('display:register', async (data) => {
-    if (data?.displayId) {
-      (socket as any).displayId = data.displayId;
-      console.log(`Display registered: ${data.displayId} (socket ${socket.id})`);
-      // Update heartbeat on registration
+    if (data?.displayId && data.displayId === displayId) {
       try {
         await prisma.display.update({
           where: { id: data.displayId },

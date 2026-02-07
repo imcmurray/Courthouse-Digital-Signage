@@ -4,6 +4,7 @@ import DatePicker from 'react-datepicker';
 import { parse, format } from 'date-fns';
 import ModalPortal from '../components/ModalPortal';
 import { auditLogsApi, AuditLog, AuditLogFilters } from '../api/auditLogs';
+import apiClient from '../api/client';
 
 export default function AuditLogs() {
   const [filters, setFilters] = useState<AuditLogFilters>({
@@ -17,7 +18,6 @@ export default function AuditLogs() {
   const handleExport = async (format: 'csv' | 'json') => {
     setIsExporting(true);
     try {
-      const token = localStorage.getItem('auth_token');
       const params = new URLSearchParams();
       params.set('format', format);
       if (filters.action) params.set('action', filters.action);
@@ -25,20 +25,11 @@ export default function AuditLogs() {
       if (filters.startDate) params.set('startDate', filters.startDate);
       if (filters.endDate) params.set('endDate', filters.endDate);
 
-      // Use fetch to download the file
-      const response = await fetch(`http://localhost:3000/api/audit-logs/export?${params.toString()}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+      const response = await apiClient.get(`/api/audit-logs/export?${params.toString()}`, {
+        responseType: 'blob',
       });
 
-      if (!response.ok) {
-        throw new Error('Export failed');
-      }
-
-      // Get the blob and download it
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
+      const url = window.URL.createObjectURL(response.data);
       const a = document.createElement('a');
       a.href = url;
       a.download = `audit-logs-export.${format}`;

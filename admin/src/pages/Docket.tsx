@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import DatePicker from 'react-datepicker';
 import { parse, format } from 'date-fns';
 import { docketApi, DocketEntry, CreateDocketEntryInput, UpdateDocketEntryInput, DocketFilters } from '../api/docket';
+import apiClient from '../api/client';
 import DocketForm from '../components/DocketForm';
 import ModalPortal from '../components/ModalPortal';
 import { getErrorMessage } from '../utils/errorHandling';
@@ -442,9 +443,20 @@ export default function Docket() {
     return values;
   };
 
-  const downloadTemplate = () => {
-    const token = localStorage.getItem('auth_token');
-    window.open(`http://localhost:3000/api/docket/template?token=${token}`, '_blank');
+  const downloadTemplate = async () => {
+    try {
+      const response = await apiClient.get('/api/docket/template', { responseType: 'blob' });
+      const url = window.URL.createObjectURL(response.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'docket-template.csv';
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch {
+      toast.error('Failed to download template');
+    }
   };
 
   // Open clear modal and precompute count
