@@ -606,6 +606,8 @@ components:
           type: integer
         entriesSkipped:
           type: integer
+        entriesRemoved:
+          type: integer
         status:
           type: string
           enum: [running, success, partial, failed]
