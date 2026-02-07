@@ -618,7 +618,7 @@ export default function Docket() {
           </div>
 
           {/* Date Filter */}
-          <div>
+          <div className="min-w-[160px]">
             <label htmlFor="date-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
               Hearing Date
             </label>
@@ -630,12 +630,13 @@ export default function Docket() {
               isClearable
               placeholderText="Select date"
               dateFormat="yyyy-MM-dd"
-              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+              wrapperClassName="w-full"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
             />
           </div>
 
           {/* Status Filter */}
-          <div>
+          <div className="min-w-[140px]">
             <label htmlFor="status-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
               Status
             </label>
@@ -643,7 +644,7 @@ export default function Docket() {
               id="status-filter"
               value={statusFilter}
               onChange={(e) => updateFilter('status', e.target.value)}
-              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
             >
               <option value="">All Statuses</option>
               <option value="scheduled">Scheduled</option>
@@ -657,7 +658,7 @@ export default function Docket() {
           </div>
 
           {/* Courtroom Filter */}
-          <div>
+          <div className="min-w-[140px]">
             <label htmlFor="courtroom-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
               Courtroom
             </label>
@@ -665,7 +666,7 @@ export default function Docket() {
               id="courtroom-filter"
               value={courtroomFilter}
               onChange={(e) => updateFilter('courtroom', e.target.value)}
-              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
             >
               <option value="">All Courtrooms</option>
               {courtroomsData?.map((courtroom) => (
@@ -677,8 +678,9 @@ export default function Docket() {
           </div>
 
           {/* Hide Past Toggle */}
-          <div className="flex items-center">
-            <label htmlFor="hide-expired" className="flex items-center gap-2 cursor-pointer select-none">
+          <div>
+            <span className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">&nbsp;</span>
+            <label htmlFor="hide-expired" className="flex items-center gap-2 cursor-pointer select-none px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700">
               <input
                 type="checkbox"
                 id="hide-expired"
@@ -686,7 +688,7 @@ export default function Docket() {
                 onChange={(e) => setHideExpired(e.target.checked)}
                 className="h-4 w-4 text-primary border-gray-300 dark:border-gray-600 rounded focus:ring-primary"
               />
-              <span className="text-sm text-gray-700 dark:text-gray-200">Hide past</span>
+              <span className="text-sm text-gray-700 dark:text-gray-200 whitespace-nowrap">Hide past</span>
             </label>
           </div>
 
