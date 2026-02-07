@@ -201,6 +201,7 @@ model ImportLog {
   entriesCreated Int      @default(0) @map("entries_created")
   entriesUpdated Int      @default(0) @map("entries_updated")
   entriesSkipped Int      @default(0) @map("entries_skipped")
+  entriesRemoved Int      @default(0) @map("entries_removed")
   status         String   @default("running") // running, success, partial, failed
   errorMessage   String?  @map("error_message")
   durationMs     Int?     @map("duration_ms")

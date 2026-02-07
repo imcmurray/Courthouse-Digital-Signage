@@ -181,6 +181,7 @@ export default function CalendarImport() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Found</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Created</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Updated</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Removed</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Duration</th>
               </tr>
@@ -188,7 +189,7 @@ export default function CalendarImport() {
             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
               {history?.logs.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                  <td colSpan={8} className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
                     No import history yet. Click "Import Now" to run your first import.
                   </td>
                 </tr>
@@ -209,6 +210,9 @@ export default function CalendarImport() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600 dark:text-blue-400">
                     {log.entriesUpdated > 0 ? log.entriesUpdated : '0'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600 dark:text-red-400">
+                    {log.entriesRemoved > 0 ? `-${log.entriesRemoved}` : '0'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     {statusBadge(log.status)}
@@ -308,10 +312,10 @@ export default function CalendarImport() {
               value={configForm.sourceUrl || ''}
               onChange={(e) => handleConfigChange('sourceUrl', e.target.value)}
               className="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary text-sm"
-              placeholder="https://www.utb.uscourts.gov"
+              placeholder="https://www.utb.uscourts.gov/anticipated-pdf/all"
             />
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              Base URL of the court website. Individual judge calendar pages will be scraped for PDF links.
+              PDF links will be discovered from this page (from both links and embedded viewers).
             </p>
           </div>
 

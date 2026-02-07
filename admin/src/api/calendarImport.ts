@@ -19,6 +19,7 @@ export interface ImportLog {
   entriesCreated: number;
   entriesUpdated: number;
   entriesSkipped: number;
+  entriesRemoved: number;
   status: string;
   errorMessage: string | null;
   durationMs: number | null;

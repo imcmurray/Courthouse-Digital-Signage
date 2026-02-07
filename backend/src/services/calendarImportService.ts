@@ -5,17 +5,7 @@ import { parseCalendar, extractJudgeCode, getJudgeName, ParsedEntry } from './pd
 
 const prisma = new PrismaClient();
 
-// Known judge page paths on the court website
-const JUDGE_PAGES = [
-  '/content/public-calendar-judge-peggy-hunt',
-  '/content/public-calendar-judge-cathleen-d-parker',
-  '/content/public-calendar-judge-michael-f-thomson',
-  '/content/public-calendar-judge-william-t-thurman',
-  '/content/public-calendar-judge-kevin-r-anderson',
-  '/content/public-calendar-judge-joel-t-marker',
-];
-
-const DEFAULT_SOURCE_URL = 'https://www.utb.uscourts.gov';
+const DEFAULT_SOURCE_URL = 'https://www.utb.uscourts.gov/anticipated-pdf/all';
 
 interface ImportResult {
   judgeName: string;
@@ -25,6 +15,7 @@ interface ImportResult {
   entriesCreated: number;
   entriesUpdated: number;
   entriesSkipped: number;
+  entriesRemoved: number;
   status: 'success' | 'partial' | 'failed';
   errorMessage?: string;
   durationMs: number;
@@ -73,42 +64,53 @@ function fetchUrl(url: string, binary = false): Promise<Buffer> {
 }
 
 /**
- * Scrape a judge's individual page to find the PDF link.
- * Returns the full PDF URL or null if not found.
+ * Discover all PDF links by scraping the aggregated calendar page.
+ * Matches PDF URLs from both href and iframe src attributes, deduplicating by URL.
  */
-async function scrapePdfLink(baseUrl: string, pagePath: string): Promise<string | null> {
-  const pageUrl = `${baseUrl}${pagePath}`;
+async function discoverPdfLinks(sourceUrl: string): Promise<{ url: string; filename: string }[]> {
   try {
-    const html = (await fetchUrl(pageUrl)).toString('utf-8');
-    // Look for PDF links in anticipated_calendars directory
-    const pdfPattern = /href="([^"]*\/sites\/utb\/files\/anticipated_calendars\/[^"]*\.pdf)"/gi;
-    const match = pdfPattern.exec(html);
-    if (match) {
+    const html = (await fetchUrl(sourceUrl)).toString('utf-8');
+    // Derive base URL for resolving relative hrefs
+    const parsedUrl = new URL(sourceUrl);
+    const baseUrl = `${parsedUrl.protocol}//${parsedUrl.host}`;
+
+    const pdfPattern = /(?:href|src)="([^"]*\/sites\/utb\/files\/anticipated_calendars\/[^"]*\.pdf)"/gi;
+    const seen = new Set<string>();
+    const links: { url: string; filename: string }[] = [];
+    let match;
+
+    while ((match = pdfPattern.exec(html)) !== null) {
       const href = match[1];
-      return href.startsWith('http') ? href : `${baseUrl}${href}`;
+      const fullUrl = href.startsWith('http') ? href : `${baseUrl}${href}`;
+      if (!seen.has(fullUrl)) {
+        seen.add(fullUrl);
+        const filename = fullUrl.split('/').pop() || '';
+        links.push({ url: fullUrl, filename });
+      }
     }
-    return null;
+
+    return links;
   } catch (err) {
-    console.error(`Failed to scrape ${pageUrl}:`, err);
-    return null;
+    console.error(`Failed to scrape ${sourceUrl}:`, err);
+    return [];
   }
 }
 
 /**
- * Discover all PDF links by scraping each judge's page.
+ * Extract start and end dates from PDF filename.
+ * Pattern: {CODE}-{ID}-{YYYYMMDD}-{YYYYMMDD}-{TIMESTAMP}.pdf
  */
-async function discoverPdfLinks(baseUrl: string): Promise<{ url: string; filename: string }[]> {
-  const links: { url: string; filename: string }[] = [];
-
-  for (const pagePath of JUDGE_PAGES) {
-    const pdfUrl = await scrapePdfLink(baseUrl, pagePath);
-    if (pdfUrl) {
-      const filename = pdfUrl.split('/').pop() || '';
-      links.push({ url: pdfUrl, filename });
-    }
-  }
-
-  return links;
+function extractDateRange(filename: string): { start: Date; end: Date } | null {
+  const match = filename.match(/(\d{8})-(\d{8})-\d+\.pdf$/i);
+  if (!match) return null;
+  const start = new Date(
+    `${match[1].slice(0, 4)}-${match[1].slice(4, 6)}-${match[1].slice(6, 8)}T00:00:00.000Z`
+  );
+  const end = new Date(
+    `${match[2].slice(0, 4)}-${match[2].slice(4, 6)}-${match[2].slice(6, 8)}T23:59:59.999Z`
+  );
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) return null;
+  return { start, end };
 }
 
 /**
@@ -214,6 +216,7 @@ export async function runImport(io?: any): Promise<ImportResult[]> {
         entriesCreated: 0,
         entriesUpdated: 0,
         entriesSkipped: 0,
+        entriesRemoved: 0,
         status: 'failed',
         errorMessage: 'No PDF calendars found',
         durationMs: 0,
@@ -254,11 +257,46 @@ export async function runImport(io?: any): Promise<ImportResult[]> {
         let updated = 0;
         let skipped = 0;
 
+        // Track all imported entry keys so we can remove stale ones
+        const importedKeys = new Set<string>();
+
         for (const entry of calendar.entries) {
           const result = await upsertEntry(entry, judgeName);
           if (result === 'created') created++;
           else if (result === 'updated') updated++;
           else skipped++;
+          importedKeys.add(`${entry.caseNumber}|${entry.hearingDate}|${entry.hearingTime}`);
+        }
+
+        // Remove stale entries for this judge:
+        // 1. Entries within the PDF's date range that are no longer in the PDF
+        // 2. Entries before the PDF's start date (past hearings no longer in any calendar)
+        let removed = 0;
+        const dateRange = extractDateRange(filename);
+        if (dateRange) {
+          const existingEntries = await prisma.docketEntry.findMany({
+            where: {
+              hearingJudge: judgeName,
+              hearingDate: { lte: dateRange.end },
+            },
+            select: { id: true, caseNumber: true, hearingDate: true, hearingTime: true },
+          });
+
+          const staleIds = existingEntries
+            .filter(e => {
+              // Entries before the PDF's start date are always stale
+              if (e.hearingDate < dateRange.start) return true;
+              // Entries within the date range must still be in the PDF
+              const dateStr = e.hearingDate.toISOString().split('T')[0];
+              return !importedKeys.has(`${e.caseNumber}|${dateStr}|${e.hearingTime}`);
+            })
+            .map(e => e.id);
+
+          if (staleIds.length > 0) {
+            await prisma.docketEntry.deleteMany({ where: { id: { in: staleIds } } });
+            removed = staleIds.length;
+            console.log(`[Calendar Import] ${judgeName}: removed ${removed} stale entries`);
+          }
         }
 
         const durationMs = Date.now() - startMs;
@@ -270,6 +308,7 @@ export async function runImport(io?: any): Promise<ImportResult[]> {
             entriesCreated: created,
             entriesUpdated: updated,
             entriesSkipped: skipped,
+            entriesRemoved: removed,
             status: 'success',
             durationMs,
           },
@@ -283,11 +322,12 @@ export async function runImport(io?: any): Promise<ImportResult[]> {
           entriesCreated: created,
           entriesUpdated: updated,
           entriesSkipped: skipped,
+          entriesRemoved: removed,
           status: 'success',
           durationMs,
         });
 
-        console.log(`[Calendar Import] ${judgeName}: ${created} created, ${updated} updated, ${skipped} skipped (${durationMs}ms)`);
+        console.log(`[Calendar Import] ${judgeName}: ${created} created, ${updated} updated, ${skipped} skipped, ${removed} removed (${durationMs}ms)`);
       } catch (err: any) {
         const durationMs = Date.now() - startMs;
         const errorMessage = err.message || 'Unknown error';
@@ -309,6 +349,7 @@ export async function runImport(io?: any): Promise<ImportResult[]> {
           entriesCreated: 0,
           entriesUpdated: 0,
           entriesSkipped: 0,
+          entriesRemoved: 0,
           status: 'failed',
           errorMessage,
           durationMs,
