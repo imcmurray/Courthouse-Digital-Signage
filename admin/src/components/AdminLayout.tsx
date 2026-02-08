@@ -228,7 +228,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
             <p className="text-[10px] text-white/40 mt-0.5">Courthouse Digital Signage</p>
             <div className="flex items-center space-x-2 mt-1">
               <a
-                href="https://github.com/ianmossmon/courthouse-digital-signage"
+                href="https://github.com/imcmurray/Courthouse-Digital-Signage"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-[10px] text-white/40 hover:text-white/70 transition-colors"
@@ -237,7 +237,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
               </a>
               <span className="text-white/20">·</span>
               <a
-                href="https://github.com/ianmossmon/courthouse-digital-signage/issues"
+                href="https://github.com/imcmurray/Courthouse-Digital-Signage/issues"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-[10px] text-white/40 hover:text-white/70 transition-colors"
