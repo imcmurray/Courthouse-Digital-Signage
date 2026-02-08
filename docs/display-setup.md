@@ -1,6 +1,32 @@
-# Raspberry Pi Setup Guide
+# Display Setup Guide
 
 Step-by-step instructions for setting up a Raspberry Pi as a dedicated courthouse digital signage kiosk, from bare hardware to a fully running display.
+
+## Architecture
+
+```
+┌─────────────────────────────────┐       ┌──────────────────────┐
+│  Server (Container)             │       │  Raspberry Pi        │
+│                                 │       │                      │
+│  ┌─────────────────────────┐    │       │  Chromium (kiosk)    │
+│  │ Backend API  :3000      │◄───┼───────┼── API requests       │
+│  │  - REST endpoints       │    │       │                      │
+│  │  - WebSocket (Socket.io)│    │       │  Loads display from: │
+│  │  - SQLite/PostgreSQL    │    │       │  http://<server>:8080 │
+│  └─────────────────────────┘    │       └──────────────────────┘
+│                                 │
+│  ┌─────────────────────────┐    │
+│  │ Display Client  :8080   │    │
+│  │  - Static HTML/CSS/JS   │    │
+│  │  - Served by nginx/serve│    │
+│  └─────────────────────────┘    │
+│                                 │
+│  ┌─────────────────────────┐    │
+│  │ Admin Portal  :5173     │    │
+│  │  - React SPA            │    │
+│  └─────────────────────────┘    │
+└─────────────────────────────────┘
+```
 
 ## Recommended Hardware
 
@@ -283,6 +309,54 @@ sudo nano /etc/signage/display.conf
 sudo systemctl restart kiosk.service
 ```
 
+## Display Client URL Format
+
+The kiosk script constructs this URL automatically from `/etc/signage/display.conf`, but if you ever need to build it manually:
+
+```
+http://<server-ip>:8080/?displayId=<id>&apiKey=<key>
+```
+
+| Parameter   | Required | Description |
+|-------------|----------|-------------|
+| `displayId` | Yes      | The display ID created in the admin portal |
+| `apiKey`    | Yes      | The API key returned when the display was created |
+| `apiBase`   | No       | Override the API URL (defaults to same hostname, port 3000) |
+
+### Examples
+
+```
+# Standard setup - API on same host, port 3000
+http://192.168.1.100:8080/?displayId=display-321-main&apiKey=abc123def456...
+
+# Custom API server location
+http://192.168.1.100:8080/?apiBase=http://10.0.0.5:3000&displayId=display-321-main&apiKey=abc123...
+```
+
+### How the API URL is resolved
+
+The display client automatically derives the backend API URL:
+
+1. If `?apiBase=` is in the URL, use that
+2. Otherwise, use the same protocol and hostname as the display page, on port 3000
+
+This means `http://192.168.1.100:8080/` automatically connects to `http://192.168.1.100:3000`.
+
+## Display Features Loaded Without API Key
+
+Even without a valid API key, the display will show:
+
+- **Court branding** (name, subtitle, chief judge, clerk of court, logo) — via `/api/settings/public`
+- **Announcements** — via `/api/announcements?active=true`
+- **Clock and date**
+
+With a valid API key, it additionally loads:
+
+- **Display-specific configuration** (filters, theme, columns, weather location)
+- **Filtered docket entries** for the specific courtroom
+- **Weather data**
+- **Real-time WebSocket updates**
+
 ## Portrait Mode
 
 For vertically-mounted displays (1080x1920):
@@ -500,7 +574,15 @@ free -h
 df -h
 ```
 
+## Multiple Displays
+
+Each courtroom gets its own display configuration:
+
+1. Create a separate display in the admin portal for each screen
+2. Configure each with appropriate judge/courtroom/chapter filters
+3. Each Pi gets its own `DISPLAY_ID` and `API_KEY` in `/etc/signage/display.conf`
+4. All Pis point to the same server
+
 ## Related Documentation
 
-- [Display Deployment Guide](display-deployment.md) — Display client URL format, architecture overview, and admin portal setup
 - [HDMI Power Management](raspberry-pi-power-management.md) — Schedule-based HDMI power control and screensaver configuration

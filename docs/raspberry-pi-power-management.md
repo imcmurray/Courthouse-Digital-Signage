@@ -2,7 +2,7 @@
 
 Automatically turn Raspberry Pi HDMI output on and off based on a per-display active hours schedule configured in the admin portal. This saves energy and extends display panel life by powering off screens outside of court hours.
 
-> **Prerequisite:** Your Pi should already be running in kiosk mode. See [Display Deployment Guide](display-deployment.md) for initial setup.
+> **Prerequisite:** Your Pi should already be running in kiosk mode. See [Display Setup Guide](display-setup.md) for initial setup.
 
 ## How It Works
 
