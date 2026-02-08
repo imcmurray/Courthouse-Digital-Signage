@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { displaysApi, Display, CreateDisplayInput, PreviewTokenResponse } from '../api/displays';
+import { displaysApi, Display, CreateDisplayInput, PreviewTokenResponse, DaySchedule } from '../api/displays';
 import { API_BASE_URL } from '../api/client';
 import { docketApi } from '../api/docket';
 import AutocompleteInput from '../components/AutocompleteInput';
@@ -18,6 +18,8 @@ export default function Displays() {
   const [regeneratedApiKey, setRegeneratedApiKey] = useState<string | null>(null);
   const [previewDisplay, setPreviewDisplay] = useState<Display | null>(null);
   const [previewToken, setPreviewToken] = useState<PreviewTokenResponse | null>(null);
+
+  const DEFAULT_DAY: DaySchedule = { start: '07:00', end: '18:00' };
 
   // Form state
   const [formData, setFormData] = useState<CreateDisplayInput>({
@@ -36,6 +38,12 @@ export default function Displays() {
     noticeText: 'Please turn your phones OFF in the Courthouse',
     tickerEnabled: true,
     tickerSpeed: 'medium',
+    scheduleEnabled: false,
+    scheduleConfig: {
+      monday: { ...DEFAULT_DAY }, tuesday: { ...DEFAULT_DAY }, wednesday: { ...DEFAULT_DAY },
+      thursday: { ...DEFAULT_DAY }, friday: { ...DEFAULT_DAY }, saturday: null, sunday: null
+    },
+    screensaverType: 'black',
   });
 
   // Fetch displays
@@ -103,6 +111,18 @@ export default function Displays() {
     },
   });
 
+  // Screensaver control mutation
+  const screensaverMutation = useMutation({
+    mutationFn: ({ id, action }: { id: string; action: 'activate' | 'deactivate' }) =>
+      displaysApi.screensaverControl(id, action),
+    onSuccess: (_data, variables) => {
+      toast.success(`Screensaver ${variables.action} signal sent`);
+    },
+    onError: () => {
+      toast.error('Failed to control screensaver');
+    },
+  });
+
   // Preview token mutation
   const previewTokenMutation = useMutation({
     mutationFn: displaysApi.getPreviewToken,
@@ -149,6 +169,12 @@ export default function Displays() {
       noticeText: 'Please turn your phones OFF in the Courthouse',
       tickerEnabled: true,
       tickerSpeed: 'medium',
+      scheduleEnabled: false,
+      scheduleConfig: {
+        monday: { ...DEFAULT_DAY }, tuesday: { ...DEFAULT_DAY }, wednesday: { ...DEFAULT_DAY },
+        thursday: { ...DEFAULT_DAY }, friday: { ...DEFAULT_DAY }, saturday: null, sunday: null
+      },
+      screensaverType: 'black',
     });
   };
 
@@ -292,12 +318,28 @@ export default function Displays() {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   {display.status === 'online' && (
-                    <button
-                      onClick={() => handlePreview(display)}
-                      className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 mr-3"
-                    >
-                      Preview
-                    </button>
+                    <>
+                      <button
+                        onClick={() => handlePreview(display)}
+                        className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 mr-3"
+                      >
+                        Preview
+                      </button>
+                      <button
+                        onClick={() => screensaverMutation.mutate({ id: display.id, action: 'activate' })}
+                        disabled={screensaverMutation.isPending}
+                        className="text-purple-600 hover:text-purple-800 dark:text-purple-400 dark:hover:text-purple-300 mr-3"
+                      >
+                        Sleep
+                      </button>
+                      <button
+                        onClick={() => screensaverMutation.mutate({ id: display.id, action: 'deactivate' })}
+                        disabled={screensaverMutation.isPending}
+                        className="text-teal-600 hover:text-teal-800 dark:text-teal-400 dark:hover:text-teal-300 mr-3"
+                      >
+                        Wake
+                      </button>
+                    </>
                   )}
                   <button
                     onClick={() => setEditingDisplay(display)}

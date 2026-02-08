@@ -358,6 +358,9 @@ components:
           type: boolean
         highlightCurrent:
           type: boolean
+        orientation:
+          type: string
+          enum: [landscape, portrait]
         theme:
           type: string
         columns:
@@ -375,6 +378,16 @@ components:
         tickerSpeed:
           type: string
           enum: [slow, medium, fast]
+        scheduleEnabled:
+          type: boolean
+          description: Whether active hours schedule is enabled
+        scheduleConfig:
+          type: string
+          description: JSON object with day-of-week schedule configuration
+        screensaverType:
+          type: string
+          enum: [black, clock, logo]
+          description: Screensaver style when display is outside active hours
         status:
           type: string
           enum: [online, offline, unknown]
@@ -414,6 +427,9 @@ components:
           type: boolean
         highlightCurrent:
           type: boolean
+        orientation:
+          type: string
+          enum: [landscape, portrait]
         theme:
           type: string
         columns:
@@ -429,6 +445,14 @@ components:
         tickerSpeed:
           type: string
           enum: [slow, medium, fast]
+        scheduleEnabled:
+          type: boolean
+        scheduleConfig:
+          type: object
+          description: Day-of-week schedule with start/end times
+        screensaverType:
+          type: string
+          enum: [black, clock, logo]
       required: [id, name, location]
 
     CreateDisplayResponse:
@@ -439,6 +463,67 @@ components:
         apiKey:
           type: string
           description: Plain-text API key (only shown once at creation)
+
+    DisplayConfig:
+      type: object
+      description: Display configuration as returned to display clients (includes merged global settings)
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        location:
+          type: string
+        showWeather:
+          type: boolean
+        weatherLocation:
+          type: string
+        noticeText:
+          type: string
+        tickerEnabled:
+          type: boolean
+        tickerSpeed:
+          type: string
+          enum: [slow, medium, fast]
+        orientation:
+          type: string
+          enum: [landscape, portrait]
+        showStricken:
+          type: boolean
+        showZoomInfo:
+          type: boolean
+        highlightCurrent:
+          type: boolean
+        theme:
+          type: string
+        columns:
+          type: array
+          items:
+            type: string
+          description: Parsed array of column names
+        scheduleEnabled:
+          type: boolean
+        scheduleConfig:
+          type: object
+          description: Parsed day-of-week schedule (keys are day names, values are {start, end} or null)
+        screensaverType:
+          type: string
+          enum: [black, clock, logo]
+        courtName:
+          type: string
+        courtSubtitle:
+          type: string
+        courthouseName:
+          type: string
+        chiefJudge:
+          type: string
+        clerkOfCourt:
+          type: string
+        timezone:
+          type: string
+        courtLogo:
+          type: string
+          nullable: true
 
     Announcement:
       type: object
@@ -1608,11 +1693,11 @@ paths:
             type: string
       responses:
         '200':
-          description: Display configuration
+          description: Display configuration with merged global settings
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Display'
+                $ref: '#/components/schemas/DisplayConfig'
         '401':
           description: Invalid or missing API key
           content:
@@ -1689,6 +1774,93 @@ paths:
                     type: string
         '401':
           description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/displays/{id}/screensaver:
+    post:
+      tags: [Displays]
+      summary: Manual screensaver control (activate/deactivate)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  enum: [activate, deactivate]
+              required: [action]
+      responses:
+        '200':
+          description: Screensaver signal sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '400':
+          description: Invalid action
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Display not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/displays/{id}/schedule:
+    get:
+      tags: [Displays]
+      summary: Get display schedule (API key auth, for Pi companion script)
+      security:
+        - apiKeyAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Display schedule
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  displayId:
+                    type: string
+                  scheduleEnabled:
+                    type: boolean
+                  scheduleConfig:
+                    type: object
+                    description: Day-of-week schedule with start/end times or null
+                  screensaverType:
+                    type: string
+                    enum: [black, clock, logo]
+                  timezone:
+                    type: string
+        '404':
+          description: Display not found
           content:
             application/json:
               schema:

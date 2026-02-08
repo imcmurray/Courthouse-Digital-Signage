@@ -1388,6 +1388,9 @@ app.get('/api/displays/:id/config', displayLimiter, authenticateApiKey, async (r
       highlightCurrent: display.highlightCurrent,
       theme: display.theme,
       columns: JSON.parse(display.columns),
+      scheduleEnabled: display.scheduleEnabled,
+      scheduleConfig: JSON.parse(display.scheduleConfig || '{}'),
+      screensaverType: display.screensaverType,
       // Global settings
       courtName: settingsMap.court_name || 'U.S. Bankruptcy Court',
       courtSubtitle: settingsMap.court_subtitle || 'District of Utah',
@@ -1707,11 +1710,18 @@ app.post('/api/displays', authenticateToken, requireEditor, async (req: Authenti
       noticeText,
       tickerEnabled,
       tickerSpeed,
-      orientation
+      orientation,
+      scheduleEnabled,
+      scheduleConfig,
+      screensaverType
     } = req.body;
 
     if (!id || !name || !location) {
       return res.status(400).json({ error: 'Missing required fields: id, name, location' });
+    }
+
+    if (screensaverType && !['black', 'clock', 'logo'].includes(screensaverType)) {
+      return res.status(400).json({ error: 'screensaverType must be one of: black, clock, logo' });
     }
 
     // Generate API key and hash it with bcrypt
@@ -1737,6 +1747,9 @@ app.post('/api/displays', authenticateToken, requireEditor, async (req: Authenti
         noticeText: noticeText || 'Please turn your phones OFF in the Courthouse',
         tickerEnabled: tickerEnabled ?? true,
         tickerSpeed: tickerSpeed || 'medium',
+        scheduleEnabled: scheduleEnabled ?? false,
+        scheduleConfig: scheduleConfig ? JSON.stringify(scheduleConfig) : '{}',
+        screensaverType: screensaverType || 'black',
         apiKeyHash
       }
     });
@@ -1778,8 +1791,15 @@ app.put('/api/displays/:id', authenticateToken, requireEditor, async (req: Authe
       noticeText,
       tickerEnabled,
       tickerSpeed,
-      orientation
+      orientation,
+      scheduleEnabled,
+      scheduleConfig,
+      screensaverType
     } = req.body;
+
+    if (screensaverType !== undefined && !['black', 'clock', 'logo'].includes(screensaverType)) {
+      return res.status(400).json({ error: 'screensaverType must be one of: black, clock, logo' });
+    }
 
     // Check if display exists
     const existingDisplay = await prisma.display.findUnique({
@@ -1808,7 +1828,10 @@ app.put('/api/displays/:id', authenticateToken, requireEditor, async (req: Authe
         ...(weatherLocation !== undefined && { weatherLocation: weatherLocation || null }),
         ...(noticeText !== undefined && { noticeText }),
         ...(tickerEnabled !== undefined && { tickerEnabled }),
-        ...(tickerSpeed !== undefined && { tickerSpeed })
+        ...(tickerSpeed !== undefined && { tickerSpeed }),
+        ...(scheduleEnabled !== undefined && { scheduleEnabled }),
+        ...(scheduleConfig !== undefined && { scheduleConfig: JSON.stringify(scheduleConfig) }),
+        ...(screensaverType !== undefined && { screensaverType })
       }
     });
 
@@ -1955,6 +1978,63 @@ app.post('/api/displays/refresh', authenticateToken, requireAdmin, async (_req: 
   } catch (error) {
     console.error('Failed to send refresh signal:', error);
     res.status(500).json({ error: 'Failed to send refresh signal' });
+  }
+});
+
+// POST /api/displays/:id/screensaver - Manual screensaver control
+app.post('/api/displays/:id/screensaver', authenticateToken, requireEditor, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { action } = req.body;
+
+    if (!action || !['activate', 'deactivate'].includes(action)) {
+      return res.status(400).json({ error: 'action must be one of: activate, deactivate' });
+    }
+
+    const display = await prisma.display.findUnique({ where: { id } });
+    if (!display) {
+      return res.status(404).json({ error: 'Display not found' });
+    }
+
+    io.emit('display:screensaver', { displayId: id, action });
+    console.log(`[WS] Screensaver ${action} sent to display: ${id}`);
+
+    res.json({ success: true, message: `Screensaver ${action} signal sent to display ${id}` });
+  } catch (error) {
+    console.error('Failed to control screensaver:', error);
+    res.status(500).json({ error: 'Failed to control screensaver' });
+  }
+});
+
+// GET /api/displays/:id/schedule - Get display schedule (API key auth, for Pi script)
+app.get('/api/displays/:id/schedule', displayLimiter, authenticateApiKey, async (req: ApiKeyRequest, res: Response) => {
+  try {
+    const display = await prisma.display.findUnique({
+      where: { id: req.params.id }
+    });
+
+    if (!display) {
+      return res.status(404).json({ error: 'Display not found' });
+    }
+
+    const settings = await prisma.setting.findMany({
+      where: { key: { in: ['timezone'] } }
+    });
+    const settingsMap: Record<string, string> = {};
+    for (const setting of settings) {
+      settingsMap[setting.key] = JSON.parse(setting.value);
+    }
+
+    res.json({
+      displayId: display.id,
+      scheduleEnabled: display.scheduleEnabled,
+      scheduleConfig: JSON.parse(display.scheduleConfig || '{}'),
+      screensaverType: display.screensaverType,
+      timezone: settingsMap.timezone || 'America/Denver'
+    });
+  } catch (error) {
+    console.error('Failed to fetch display schedule:', error);
+    res.status(500).json({ error: 'Failed to fetch display schedule' });
   }
 });
 

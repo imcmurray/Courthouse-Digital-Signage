@@ -38,6 +38,11 @@
   let displayConfig = {};
   let socket = null;
 
+  // Screensaver state
+  let screensaverActive = false;
+  let screensaverManualOverride = null; // null = auto, 'on' = forced, 'off' = forced
+  let screensaverAnimationId = null;
+
   // Get display ID from URL or default
   function getDisplayId() {
     const params = new URLSearchParams(window.location.search);
@@ -69,6 +74,9 @@
     setInterval(fetchDocket, CONFIG.refreshInterval);
     setInterval(fetchAnnouncements, CONFIG.refreshInterval);
     setInterval(fetchWeather, CONFIG.weatherRefreshInterval);
+
+    // Set up schedule checker (runs every 30 seconds)
+    setInterval(checkSchedule, 30000);
 
     // Set up WebSocket connection
     setupWebSocket();
@@ -257,6 +265,9 @@
                            displayConfig.tickerSpeed === 'fast' ? 80 : 50;
       startTickerAnimation();
     }
+
+    // Check schedule after config loads
+    checkSchedule();
   }
 
   // Fetch docket entries
@@ -666,6 +677,18 @@
           console.log('Message received:', data);
           showOverlayMessage(data.message, data.duration || 5000);
         });
+
+        socket.on('display:screensaver', (data) => {
+          if (data.displayId && data.displayId !== CONFIG.displayId) return;
+          console.log('Screensaver command received:', data.action);
+          if (data.action === 'activate') {
+            screensaverManualOverride = 'on';
+            activateScreensaver();
+          } else if (data.action === 'deactivate') {
+            screensaverManualOverride = 'off';
+            deactivateScreensaver();
+          }
+        });
       }
     } catch (error) {
       console.error('WebSocket setup failed:', error);
@@ -735,6 +758,153 @@
     const ampm = h >= 12 ? 'PM' : 'AM';
     const h12 = h % 12 || 12;
     return `${h12}:${minutes} ${ampm}`;
+  }
+
+  // =============================================
+  // Screensaver Logic
+  // =============================================
+
+  // Check if current time is within active hours
+  function isWithinActiveHours() {
+    if (!displayConfig.scheduleEnabled) return true;
+
+    const schedule = displayConfig.scheduleConfig;
+    if (!schedule || typeof schedule !== 'object') return true;
+
+    const now = new Date();
+    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    const todayName = dayNames[now.getDay()];
+    const dayConfig = schedule[todayName];
+
+    // null = inactive all day
+    if (dayConfig === null || dayConfig === undefined) return false;
+    if (!dayConfig.start || !dayConfig.end) return true;
+
+    const [startH, startM] = dayConfig.start.split(':').map(Number);
+    const [endH, endM] = dayConfig.end.split(':').map(Number);
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    const startMinutes = startH * 60 + startM;
+    const endMinutes = endH * 60 + endM;
+
+    return currentMinutes >= startMinutes && currentMinutes < endMinutes;
+  }
+
+  // Check schedule and activate/deactivate screensaver
+  function checkSchedule() {
+    // Manual override takes precedence
+    if (screensaverManualOverride === 'on') {
+      if (!screensaverActive) activateScreensaver();
+      return;
+    }
+    if (screensaverManualOverride === 'off') {
+      if (screensaverActive) deactivateScreensaver();
+      return;
+    }
+
+    // Auto mode based on schedule
+    const active = isWithinActiveHours();
+    if (!active && !screensaverActive) {
+      activateScreensaver();
+    } else if (active && screensaverActive) {
+      deactivateScreensaver();
+    }
+  }
+
+  function activateScreensaver() {
+    const overlay = document.getElementById('screensaver-overlay');
+    const content = document.getElementById('screensaver-content');
+    if (!overlay || !content) return;
+
+    screensaverActive = true;
+    content.innerHTML = '';
+
+    const type = displayConfig.screensaverType || 'black';
+
+    if (type === 'clock') {
+      const clockEl = document.createElement('div');
+      clockEl.className = 'screensaver-clock';
+      content.appendChild(clockEl);
+      startBouncingAnimation(clockEl, function() {
+        clockEl.textContent = new Date().toLocaleTimeString('en-US', {
+          hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
+        });
+      });
+    } else if (type === 'logo') {
+      const logoEl = document.createElement('img');
+      logoEl.className = 'screensaver-logo';
+      logoEl.src = displayConfig.courtLogo
+        ? CONFIG.apiBaseUrl + displayConfig.courtLogo
+        : 'assets/court-seal.svg';
+      logoEl.alt = 'Court Seal';
+      content.appendChild(logoEl);
+      startBouncingAnimation(logoEl);
+    }
+    // 'black' mode: just show the overlay, no content
+
+    overlay.style.display = 'block';
+    console.log('Screensaver activated (type: ' + type + ')');
+  }
+
+  function deactivateScreensaver() {
+    var overlay = document.getElementById('screensaver-overlay');
+    var content = document.getElementById('screensaver-content');
+    if (overlay) overlay.style.display = 'none';
+    if (content) content.innerHTML = '';
+
+    if (screensaverAnimationId) {
+      cancelAnimationFrame(screensaverAnimationId);
+      screensaverAnimationId = null;
+    }
+
+    screensaverActive = false;
+    screensaverManualOverride = null;
+
+    // Refresh all data on wake
+    fetchDisplayConfig();
+    fetchDocket();
+    fetchAnnouncements();
+    fetchWeather();
+
+    console.log('Screensaver deactivated, refreshing data');
+  }
+
+  function startBouncingAnimation(element, updateFn) {
+    // Initial position and velocity
+    var x = Math.random() * 300 + 100;
+    var y = Math.random() * 200 + 100;
+    var vx = 1.5;
+    var vy = 1.0;
+
+    function animate() {
+      var overlay = document.getElementById('screensaver-overlay');
+      if (!overlay || overlay.style.display === 'none') return;
+
+      if (updateFn) updateFn();
+
+      // Get bounds
+      var ow = overlay.offsetWidth || 1920;
+      var oh = overlay.offsetHeight || 1080;
+      var ew = element.offsetWidth || 200;
+      var eh = element.offsetHeight || 60;
+
+      x += vx;
+      y += vy;
+
+      // Bounce off edges
+      if (x <= 0 || x + ew >= ow) { vx = -vx; x = Math.max(0, Math.min(x, ow - ew)); }
+      if (y <= 0 || y + eh >= oh) { vy = -vy; y = Math.max(0, Math.min(y, oh - eh)); }
+
+      element.style.left = x + 'px';
+      element.style.top = y + 'px';
+
+      screensaverAnimationId = requestAnimationFrame(animate);
+    }
+
+    // Initial position set
+    element.style.left = x + 'px';
+    element.style.top = y + 'px';
+
+    screensaverAnimationId = requestAnimationFrame(animate);
   }
 
   // Send heartbeat

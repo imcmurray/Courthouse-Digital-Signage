@@ -1,10 +1,28 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { displaysApi, Display, UpdateDisplayInput } from '../api/displays';
+import { displaysApi, Display, UpdateDisplayInput, WeekSchedule, DaySchedule } from '../api/displays';
 import { docketApi } from '../api/docket';
 import AutocompleteInput from './AutocompleteInput';
 import ModalPortal from './ModalPortal';
+
+const DAYS_OF_WEEK = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const;
+const DAY_LABELS: Record<string, string> = {
+  monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu',
+  friday: 'Fri', saturday: 'Sat', sunday: 'Sun'
+};
+const DEFAULT_DAY: DaySchedule = { start: '07:00', end: '18:00' };
+
+function parseScheduleConfig(raw: string): WeekSchedule {
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) return parsed;
+  } catch { /* ignore */ }
+  return {
+    monday: { ...DEFAULT_DAY }, tuesday: { ...DEFAULT_DAY }, wednesday: { ...DEFAULT_DAY },
+    thursday: { ...DEFAULT_DAY }, friday: { ...DEFAULT_DAY }, saturday: null, sunday: null
+  };
+}
 
 interface DisplayEditModalProps {
   display: Display;
@@ -29,6 +47,9 @@ export default function DisplayEditModal({ display, onClose, onSaved }: DisplayE
     noticeText: display.noticeText,
     tickerEnabled: display.tickerEnabled,
     tickerSpeed: display.tickerSpeed,
+    scheduleEnabled: display.scheduleEnabled,
+    scheduleConfig: parseScheduleConfig(display.scheduleConfig),
+    screensaverType: display.screensaverType || 'black',
   });
 
   const { data: judges = [] } = useQuery({
@@ -272,6 +293,92 @@ export default function DisplayEditModal({ display, onClose, onSaved }: DisplayE
                 placeholder="Please turn your phones OFF in the Courthouse"
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
               />
+            </div>
+
+            {/* Schedule & Screensaver */}
+            <div className="border-t dark:border-gray-700 pt-4 mt-4">
+              <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-3">Schedule & Screensaver</h4>
+              <div className="flex items-center mb-3">
+                <input
+                  type="checkbox"
+                  id="edit-scheduleEnabled"
+                  checked={formData.scheduleEnabled ?? false}
+                  onChange={(e) => setFormData({ ...formData, scheduleEnabled: e.target.checked })}
+                  className="h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600 rounded"
+                />
+                <label htmlFor="edit-scheduleEnabled" className="ml-2 text-sm text-gray-700 dark:text-gray-200">
+                  Enable Active Hours Schedule
+                </label>
+              </div>
+
+              {formData.scheduleEnabled && (
+                <div className="space-y-2 mb-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+                  {DAYS_OF_WEEK.map((day) => {
+                    const schedule = formData.scheduleConfig as WeekSchedule | undefined;
+                    const dayConfig = schedule?.[day] ?? null;
+                    const isActive = dayConfig !== null;
+                    return (
+                      <div key={day} className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          checked={isActive}
+                          onChange={(e) => {
+                            const newSchedule = { ...(schedule || {}) } as WeekSchedule;
+                            newSchedule[day] = e.target.checked ? { ...DEFAULT_DAY } : null;
+                            setFormData({ ...formData, scheduleConfig: newSchedule });
+                          }}
+                          className="h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600 rounded"
+                        />
+                        <span className="w-10 text-sm font-medium text-gray-700 dark:text-gray-200">
+                          {DAY_LABELS[day]}
+                        </span>
+                        {isActive ? (
+                          <>
+                            <input
+                              type="time"
+                              value={dayConfig.start}
+                              onChange={(e) => {
+                                const newSchedule = { ...(schedule || {}) } as WeekSchedule;
+                                newSchedule[day] = { ...dayConfig, start: e.target.value };
+                                setFormData({ ...formData, scheduleConfig: newSchedule });
+                              }}
+                              className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white"
+                            />
+                            <span className="text-sm text-gray-500 dark:text-gray-400">to</span>
+                            <input
+                              type="time"
+                              value={dayConfig.end}
+                              onChange={(e) => {
+                                const newSchedule = { ...(schedule || {}) } as WeekSchedule;
+                                newSchedule[day] = { ...dayConfig, end: e.target.value };
+                                setFormData({ ...formData, scheduleConfig: newSchedule });
+                              }}
+                              className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white"
+                            />
+                          </>
+                        ) : (
+                          <span className="text-sm text-gray-400 dark:text-gray-500 italic">Inactive</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+                  Screensaver Style
+                </label>
+                <select
+                  value={formData.screensaverType}
+                  onChange={(e) => setFormData({ ...formData, screensaverType: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                >
+                  <option value="black">Black Screen</option>
+                  <option value="clock">Moving Clock</option>
+                  <option value="logo">Bouncing Court Logo</option>
+                </select>
+              </div>
             </div>
 
             <div className="flex justify-end space-x-3 pt-4">

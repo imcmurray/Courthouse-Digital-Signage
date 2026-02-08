@@ -420,6 +420,46 @@ html, body {
 }
 
 /* =============================================
+   Screensaver Overlay
+   ============================================= */
+
+.screensaver-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: var(--black);
+  z-index: 99999;
+  cursor: none;
+}
+
+.screensaver-content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.screensaver-clock {
+  position: absolute;
+  font-size: 72px;
+  font-weight: bold;
+  color: var(--white);
+  text-shadow: 0 0 20px var(--primary-yellow), 0 0 40px rgba(255, 215, 0, 0.3);
+  white-space: nowrap;
+  font-family: var(--font-family);
+}
+
+.screensaver-logo {
+  position: absolute;
+  width: 150px;
+  height: 150px;
+  object-fit: contain;
+}
+
+/* =============================================
    Portrait Mode Overrides (1080x1920)
    ============================================= */
 
@@ -521,4 +561,14 @@ body.portrait .ticker-text {
 /* Adjust padding-bottom for shorter bottom bar */
 body.portrait {
   padding-bottom: 94px; /* 50px notice + 44px ticker */
+}
+
+/* Portrait screensaver adjustments */
+body.portrait .screensaver-clock {
+  font-size: 56px;
+}
+
+body.portrait .screensaver-logo {
+  width: 120px;
+  height: 120px;
 }

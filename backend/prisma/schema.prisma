@@ -84,6 +84,9 @@ model Display {
   status           String    @default("unknown") // online, offline, unknown
   lastHeartbeat    DateTime? @map("last_heartbeat")
   ipAddress        String?   @map("ip_address")
+  scheduleEnabled  Boolean   @default(false) @map("schedule_enabled")
+  scheduleConfig   String    @default("{}") @map("schedule_config")
+  screensaverType  String    @default("black") @map("screensaver_type")
   apiKeyHash       String    @map("api_key_hash")
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")

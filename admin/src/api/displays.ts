@@ -1,5 +1,14 @@
 import apiClient from './client';
 
+export interface DaySchedule {
+  start: string;
+  end: string;
+}
+
+export type WeekSchedule = {
+  [key in 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday']: DaySchedule | null;
+};
+
 export interface Display {
   id: string;
   name: string;
@@ -18,6 +27,9 @@ export interface Display {
   noticeText: string;
   tickerEnabled: boolean;
   tickerSpeed: string;
+  scheduleEnabled: boolean;
+  scheduleConfig: string;
+  screensaverType: string;
   status: string;
   lastHeartbeat: string | null;
   ipAddress: string | null;
@@ -42,6 +54,9 @@ export interface CreateDisplayInput {
   noticeText?: string;
   tickerEnabled?: boolean;
   tickerSpeed?: string;
+  scheduleEnabled?: boolean;
+  scheduleConfig?: WeekSchedule;
+  screensaverType?: string;
 }
 
 export interface UpdateDisplayInput extends Partial<Omit<CreateDisplayInput, 'id'>> {}
@@ -94,6 +109,10 @@ export const displaysApi = {
 
   refreshAll: async (): Promise<void> => {
     await apiClient.post('/api/displays/refresh');
+  },
+
+  screensaverControl: async (id: string, action: 'activate' | 'deactivate'): Promise<void> => {
+    await apiClient.post(`/api/displays/${id}/screensaver`, { action });
   },
 };
 
