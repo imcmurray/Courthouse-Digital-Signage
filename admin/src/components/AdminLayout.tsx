@@ -223,7 +223,15 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           <div className="px-4 py-3 border-t border-white/10">
             <p className="text-xs font-semibold text-white/70">
               CDS <span className="font-normal text-white/50">v{__APP_VERSION__}</span>
-              <span className="text-white/30"> ({__COMMIT_HASH__})</span>
+              {' '}
+              <a
+                href={`https://github.com/imcmurray/Courthouse-Digital-Signage/commit/${__COMMIT_HASH__}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-white/30 hover:text-white/50 transition-colors"
+              >
+                ({__COMMIT_HASH__})
+              </a>
             </p>
             <p className="text-[10px] text-white/40 mt-0.5">Courthouse Digital Signage</p>
             <div className="flex items-center space-x-2 mt-1">
