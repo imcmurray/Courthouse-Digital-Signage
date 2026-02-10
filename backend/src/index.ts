@@ -639,11 +639,10 @@ app.get('/api/schema-check', authenticateToken, requireAdmin, async (req: Authen
 // GET /api/stats - Get dashboard statistics
 app.get('/api/stats', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    // Get today's date range for querying DateTime fields
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const todayEnd = new Date();
-    todayEnd.setHours(23, 59, 59, 999);
+    // Get today's date range in UTC (hearing dates are stored as UTC midnight)
+    const now = new Date();
+    const todayStart = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0));
+    const todayEnd = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999));
 
     // Count today's hearings
     const todaysHearings = await prisma.docketEntry.count({
@@ -750,12 +749,11 @@ app.get('/api/docket', authenticateToken, async (req: AuthenticatedRequest, res:
     // Build filter conditions
     const where: Record<string, unknown> = {};
 
-    // Filter by date (default to today)
+    // Filter by date (hearing dates are stored as UTC midnight)
     if (date) {
-      const filterDate = new Date(date as string);
-      filterDate.setHours(0, 0, 0, 0);
-      const nextDay = new Date(filterDate);
-      nextDay.setDate(nextDay.getDate() + 1);
+      const [year, month, day] = (date as string).split('-').map(Number);
+      const filterDate = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+      const nextDay = new Date(Date.UTC(year, month - 1, day + 1, 0, 0, 0, 0));
       where.hearingDate = {
         gte: filterDate,
         lt: nextDay
@@ -782,9 +780,9 @@ app.get('/api/docket', authenticateToken, async (req: AuthenticatedRequest, res:
     // Hide entries whose hearing date+time have passed
     if (hidePast === 'true') {
       const now = new Date();
-      const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const todayMidnight = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
       const tomorrowMidnight = new Date(todayMidnight);
-      tomorrowMidnight.setDate(tomorrowMidnight.getDate() + 1);
+      tomorrowMidnight.setUTCDate(tomorrowMidnight.getUTCDate() + 1);
       const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
       // Wrap existing conditions + "not expired" in an AND
@@ -1251,11 +1249,10 @@ app.delete('/api/docket/clear', authenticateToken, requireAdmin, async (req: Aut
       return res.status(400).json({ error: 'Date is required to clear docket entries' });
     }
 
-    // Parse the date
-    const filterDate = new Date(date);
-    filterDate.setHours(0, 0, 0, 0);
-    const nextDay = new Date(filterDate);
-    nextDay.setDate(nextDay.getDate() + 1);
+    // Parse the date (hearing dates are stored as UTC midnight)
+    const [year, month, day] = date.split('-').map(Number);
+    const filterDate = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+    const nextDay = new Date(Date.UTC(year, month - 1, day + 1, 0, 0, 0, 0));
 
     // Build where clause
     const where: Record<string, unknown> = {

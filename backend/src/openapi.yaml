@@ -193,6 +193,7 @@ components:
         hearingDate:
           type: string
           format: date-time
+          description: Stored as UTC midnight (e.g. 2026-02-10T00:00:00.000Z)
         hearingTime:
           type: string
           description: 24hr format HH:MM
@@ -732,6 +733,7 @@ components:
       properties:
         todaysHearings:
           type: integer
+          description: Count of all docket entries for today (UTC date range)
         activeDisplays:
           type: integer
         totalDisplays:
@@ -934,6 +936,9 @@ paths:
     get:
       tags: [Dashboard]
       summary: Get dashboard statistics
+      description: |
+        Returns aggregate counts for the dashboard. Hearing counts use UTC date
+        boundaries to match the UTC-midnight storage format of hearingDate.
       security:
         - bearerAuth: []
       responses:
@@ -992,7 +997,7 @@ paths:
           schema:
             type: string
             format: date
-          description: Filter by hearing date (YYYY-MM-DD)
+          description: Filter by hearing date (YYYY-MM-DD). Compared against UTC date boundaries since hearingDate is stored as UTC midnight.
         - name: courtroom
           in: query
           schema:
@@ -1038,7 +1043,7 @@ paths:
             enum: [asc, desc]
         - name: hidePast
           in: query
-          description: When 'true', excludes entries whose hearing date+time have already passed
+          description: When 'true', excludes entries whose hearing date+time have already passed. Uses UTC date boundaries.
           schema:
             type: string
             enum: ['true']
@@ -1421,6 +1426,7 @@ paths:
     delete:
       tags: [Docket]
       summary: Clear docket entries by date range or all
+      description: Date parameters are compared against UTC date boundaries to match the UTC-midnight storage format of hearingDate.
       security:
         - bearerAuth: []
       parameters:
@@ -1429,7 +1435,7 @@ paths:
           schema:
             type: string
             format: date
-          description: Clear entries for a specific date
+          description: Clear entries for a specific date (YYYY-MM-DD, matched as UTC)
         - name: before
           in: query
           schema:
