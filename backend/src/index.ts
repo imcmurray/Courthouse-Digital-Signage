@@ -668,7 +668,6 @@ app.get('/api/stats', authenticateToken, async (req: AuthenticatedRequest, res: 
     const totalDisplays = await prisma.display.count();
 
     // Count active announcements (enabled and not expired)
-    const now = new Date();
     const activeAnnouncements = await prisma.announcement.count({
       where: {
         enabled: true,
