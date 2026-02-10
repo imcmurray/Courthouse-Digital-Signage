@@ -316,7 +316,6 @@ export default function Dashboard() {
 
   // Widget 5: Group hearings by courtroom/judge
   const hearingsByJudge = (todaysHearings?.entries || [])
-    .filter(e => e.status === 'scheduled' || e.status === 'in_progress')
     .reduce<Record<string, DocketEntry[]>>((acc, entry) => {
       const key = entry.hearingJudge || 'Unassigned';
       if (!acc[key]) acc[key] = [];
@@ -720,13 +719,15 @@ export default function Dashboard() {
           </h3>
           {Object.keys(hearingsByJudge).length > 0 ? (
             <div className="max-h-48 overflow-y-auto -mx-2 px-2 space-y-3">
-              {Object.entries(hearingsByJudge).map(([judge, entries]) => (
+              {Object.entries(hearingsByJudge).map(([judge, entries]) => {
+                const judgeActive = entries.filter(e => e.status !== 'stricken').length;
+                const judgeStricken = entries.length - judgeActive;
+                return (
                 <div key={judge}>
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{judge}</p>
-                    <span className="text-xs text-gray-400 dark:text-gray-500 flex-shrink-0 ml-2">
-                      {entries.length} hearing{entries.length !== 1 ? 's' : ''}
-                    </span>
+                  <div className="mb-1">
+                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                      {judge} <span className="text-xs font-normal text-gray-400 dark:text-gray-500">({judgeActive}/{judgeStricken}/{entries.length})</span>
+                    </p>
                   </div>
                   <div className="flex flex-wrap gap-1">
                     {Object.entries(
@@ -739,7 +740,8 @@ export default function Dashboard() {
                     ).map(([time, groupEntries]) => {
                       const hasSoon = groupEntries.some(e => isHearingSoon(e));
                       const hasInProgress = groupEntries.some(e => e.status === 'in_progress');
-                      const rooms = [...new Set(groupEntries.map(e => e.courtroom).filter(Boolean))];
+                      const groupActive = groupEntries.filter(e => e.status !== 'stricken').length;
+                      const groupStricken = groupEntries.length - groupActive;
                       return (
                         <span
                           key={time}
@@ -750,17 +752,19 @@ export default function Dashboard() {
                                 ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
                                 : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
                           }`}
-                          title={groupEntries.map(e => `${e.caseNumber} - ${e.courtroom || 'No room'}`).join('\n')}
+                          title={groupEntries.map(e => `${e.caseNumber} - ${e.status} - ${e.courtroom || 'No room'}`).join('\n')}
                         >
                           {time}
-                          {groupEntries.length > 1 && <span className="ml-1 opacity-70">x{groupEntries.length}</span>}
-                          {rooms.length > 0 && <span className="ml-1 text-gray-400">Rm {rooms.join(', ')}</span>}
+                          {groupEntries.length > 1 && (
+                            <span className="ml-1 opacity-70">{groupActive}/{groupStricken}/{groupEntries.length}</span>
+                          )}
                         </span>
                       );
                     })}
                   </div>
                 </div>
-              ))}
+              );
+              })}
             </div>
           ) : (
             <p className="text-sm text-gray-500 dark:text-gray-400">No hearings scheduled for today</p>
