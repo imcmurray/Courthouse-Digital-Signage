@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 import api from '../api/client';
 import DocketForm from '../components/DocketForm';
 import ModalPortal from '../components/ModalPortal';
-import { docketApi, DocketEntry, CreateDocketEntryInput } from '../api/docket';
+import { docketApi, DocketEntry, CreateDocketEntryInput, UpdateDocketEntryInput } from '../api/docket';
 import { announcementsApi, Announcement, CreateAnnouncementInput, UpdateAnnouncementInput } from '../api/announcements';
 import { displaysApi, Display } from '../api/displays';
 import DisplayEditModal from '../components/DisplayEditModal';
@@ -45,6 +45,8 @@ export default function Dashboard() {
   const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
   const [editForm, setEditForm] = useState<UpdateAnnouncementInput>({});
   const [editingDisplay, setEditingDisplay] = useState<Display | null>(null);
+  const [editingDocketEntry, setEditingDocketEntry] = useState<DocketEntry | null>(null);
+  const [selectedJudge, setSelectedJudge] = useState<string | null>(null);
 
   // Quick Action mutations
   const createHearingMutation = useMutation({
@@ -122,6 +124,19 @@ export default function Dashboard() {
     },
   });
 
+  const updateDocketMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: UpdateDocketEntryInput }) => docketApi.update(id, data),
+    onSuccess: () => {
+      toast.success('Docket entry updated');
+      setEditingDocketEntry(null);
+      queryClient.invalidateQueries({ queryKey: ['dashboardStats'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboardHearings'] });
+    },
+    onError: () => {
+      toast.error('Failed to update docket entry');
+    },
+  });
+
   // Queries
   const { data: stats, isLoading: statsLoading } = useQuery<DashboardStats>({
     queryKey: ['dashboardStats'],
@@ -147,6 +162,13 @@ export default function Dashboard() {
   const { data: todaysHearings } = useQuery({
     queryKey: ['dashboardHearings', todayStr],
     queryFn: () => docketApi.getAll({ date: todayStr, limit: 100, sortBy: 'hearingTime', sortOrder: 'asc' }),
+    refetchInterval: 60000,
+  });
+
+  // Stricken count for today (exact from server)
+  const { data: strickenData } = useQuery({
+    queryKey: ['dashboardHearingsStricken', todayStr],
+    queryFn: () => docketApi.getAll({ date: todayStr, status: 'stricken', limit: 1 }),
     refetchInterval: 60000,
   });
 
@@ -302,6 +324,21 @@ export default function Dashboard() {
       return acc;
     }, {});
 
+  const judgeCounts = (todaysHearings?.entries || []).reduce<Record<string, number>>((acc, entry) => {
+    const judge = entry.hearingJudge || 'Unassigned';
+    acc[judge] = (acc[judge] || 0) + 1;
+    return acc;
+  }, {});
+
+  const getLastName = (fullName: string) => {
+    const parts = fullName.trim().split(/\s+/);
+    return parts[parts.length - 1];
+  };
+
+  const totalCount = todaysHearings?.total || 0;
+  const strickenCount = strickenData?.total || 0;
+  const activeCount = totalCount - strickenCount;
+
   const lastImport: ImportLog | undefined = importHistory?.logs?.[0];
 
   return (
@@ -329,8 +366,12 @@ export default function Dashboard() {
             </div>
             <div className="ml-3">
               <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Today's Hearings</p>
-              <p className="text-xl font-semibold text-gray-900 dark:text-white" data-testid="todays-hearings">
-                {formatStat(stats?.todaysHearings, statsLoading)}
+              <p className="text-sm text-gray-900 dark:text-white whitespace-nowrap" data-testid="todays-hearings">
+                {todaysHearings && totalCount > 0 ? (
+                  <><span className="font-semibold">{activeCount}</span> <span className="text-gray-400">active /</span> <span className="font-semibold">{strickenCount}</span> <span className="text-gray-400">stricken /</span> <span className="font-semibold">{totalCount}</span> <span className="text-gray-400">total</span></>
+                ) : (
+                  <span className="text-xl font-semibold">{formatStat(stats?.todaysHearings, statsLoading)}</span>
+                )}
               </p>
             </div>
           </div>
@@ -530,12 +571,31 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Today's Hearings Preview */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm dark:shadow-gray-900/50 p-4">
-          <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
-            Today's Hearings
-            {todaysHearings && todaysHearings.total > 0 && (
-              <span className="ml-2 text-gray-400">({todaysHearings.total})</span>
+          <div className="flex items-center justify-between mb-3 gap-2">
+            <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider flex-shrink-0">
+              Today's Hearings
+              {todaysHearings && todaysHearings.total > 0 && (
+                <span className="ml-2 text-gray-400">({todaysHearings.total})</span>
+              )}
+            </h3>
+            {Object.keys(judgeCounts).length > 1 && (
+              <div className="flex flex-wrap justify-end gap-1">
+                {Object.entries(judgeCounts).map(([judge, count]) => (
+                  <button
+                    key={judge}
+                    onClick={() => setSelectedJudge(prev => prev === judge ? null : judge)}
+                    className={`inline-flex items-center px-2 py-0.5 rounded text-xs transition-colors ${
+                      selectedJudge === judge
+                        ? 'bg-primary text-white'
+                        : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                    }`}
+                  >
+                    {getLastName(judge)} ({count})
+                  </button>
+                ))}
+              </div>
             )}
-          </h3>
+          </div>
           {todaysHearings?.entries && todaysHearings.entries.length > 0 ? (
             <div className="max-h-52 overflow-y-auto -mx-2 px-2">
               <table className="w-full text-sm">
@@ -543,12 +603,16 @@ export default function Dashboard() {
                   <tr className="text-left text-xs text-gray-500 dark:text-gray-400">
                     <th className="pb-2 font-medium">Time</th>
                     <th className="pb-2 font-medium">Case</th>
+                    <th className="pb-2 font-medium hidden lg:table-cell">Name</th>
                     <th className="pb-2 font-medium hidden md:table-cell">Judge</th>
                     <th className="pb-2 font-medium">Room</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                  {todaysHearings.entries.slice(0, 15).map((entry) => (
+                  {todaysHearings.entries
+                    .filter(entry => !selectedJudge || entry.hearingJudge === selectedJudge)
+                    .slice(0, 15)
+                    .map((entry) => (
                     <tr
                       key={entry.id}
                       className={isHearingSoon(entry) ? 'bg-amber-50 dark:bg-amber-900/10' : ''}
@@ -561,11 +625,19 @@ export default function Dashboard() {
                           <span className="ml-1 text-[10px] text-amber-500 font-medium">SOON</span>
                         )}
                       </td>
-                      <td className="py-1.5 pr-2 text-gray-900 dark:text-white truncate max-w-[180px]" title={entry.caseNumber}>
-                        {entry.caseNumber}
+                      <td className="py-1.5 pr-2 truncate max-w-[180px]" title={entry.caseNumber}>
+                        <button
+                          onClick={() => setEditingDocketEntry(entry)}
+                          className="text-sm font-medium truncate block w-full text-left hover:text-primary dark:hover:text-primary-light transition-colors cursor-pointer text-gray-900 dark:text-white"
+                        >
+                          {entry.caseNumber}
+                        </button>
+                      </td>
+                      <td className="py-1.5 pr-2 text-gray-600 dark:text-gray-300 truncate max-w-[150px] hidden lg:table-cell" title={entry.caseTitle}>
+                        {entry.caseTitle}
                       </td>
                       <td className="py-1.5 pr-2 text-gray-600 dark:text-gray-300 truncate max-w-[120px] hidden md:table-cell">
-                        {entry.hearingJudge}
+                        {getLastName(entry.hearingJudge)}
                       </td>
                       <td className="py-1.5 text-gray-600 dark:text-gray-300 whitespace-nowrap">
                         {entry.courtroom || '--'}
@@ -657,22 +729,35 @@ export default function Dashboard() {
                     </span>
                   </div>
                   <div className="flex flex-wrap gap-1">
-                    {entries.map((entry) => (
-                      <span
-                        key={entry.id}
-                        className={`inline-flex items-center px-2 py-0.5 rounded text-xs ${
-                          isHearingSoon(entry)
-                            ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
-                            : entry.status === 'in_progress'
-                              ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                              : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
-                        }`}
-                        title={`${entry.caseNumber} - ${entry.courtroom || 'No room'}`}
-                      >
-                        {formatTime12h(entry.hearingTime)}
-                        {entry.courtroom && <span className="ml-1 text-gray-400">Rm {entry.courtroom}</span>}
-                      </span>
-                    ))}
+                    {Object.entries(
+                      entries.reduce((acc, entry) => {
+                        const time = formatTime12h(entry.hearingTime);
+                        if (!acc[time]) acc[time] = [];
+                        acc[time].push(entry);
+                        return acc;
+                      }, {} as Record<string, typeof entries>)
+                    ).map(([time, groupEntries]) => {
+                      const hasSoon = groupEntries.some(e => isHearingSoon(e));
+                      const hasInProgress = groupEntries.some(e => e.status === 'in_progress');
+                      const rooms = [...new Set(groupEntries.map(e => e.courtroom).filter(Boolean))];
+                      return (
+                        <span
+                          key={time}
+                          className={`inline-flex items-center px-2 py-0.5 rounded text-xs ${
+                            hasSoon
+                              ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
+                              : hasInProgress
+                                ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                                : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
+                          }`}
+                          title={groupEntries.map(e => `${e.caseNumber} - ${e.courtroom || 'No room'}`).join('\n')}
+                        >
+                          {time}
+                          {groupEntries.length > 1 && <span className="ml-1 opacity-70">x{groupEntries.length}</span>}
+                          {rooms.length > 0 && <span className="ml-1 text-gray-400">Rm {rooms.join(', ')}</span>}
+                        </span>
+                      );
+                    })}
                   </div>
                 </div>
               ))}
@@ -945,6 +1030,22 @@ export default function Dashboard() {
         <DisplayEditModal
           display={editingDisplay}
           onClose={() => setEditingDisplay(null)}
+        />
+      )}
+
+      {/* Edit Docket Entry Modal */}
+      {editingDocketEntry && (
+        <DocketForm
+          entry={editingDocketEntry}
+          onSubmit={(data) => {
+            const dataWithVersion = {
+              ...data,
+              updatedAt: editingDocketEntry.updatedAt,
+            };
+            updateDocketMutation.mutate({ id: editingDocketEntry.id, data: dataWithVersion as UpdateDocketEntryInput });
+          }}
+          onClose={() => setEditingDocketEntry(null)}
+          isLoading={updateDocketMutation.isPending}
         />
       )}
     </div>
