@@ -30,6 +30,7 @@ export interface Display {
   scheduleEnabled: boolean;
   scheduleConfig: string;
   screensaverType: string;
+  docketViewMode: string;
   status: string;
   lastHeartbeat: string | null;
   ipAddress: string | null;
@@ -57,6 +58,7 @@ export interface CreateDisplayInput {
   scheduleEnabled?: boolean;
   scheduleConfig?: WeekSchedule;
   screensaverType?: string;
+  docketViewMode?: string;
 }
 
 export interface UpdateDisplayInput extends Partial<Omit<CreateDisplayInput, 'id'>> {}

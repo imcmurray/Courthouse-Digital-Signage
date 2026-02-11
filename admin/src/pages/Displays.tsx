@@ -44,6 +44,7 @@ export default function Displays() {
       thursday: { ...DEFAULT_DAY }, friday: { ...DEFAULT_DAY }, saturday: null, sunday: null
     },
     screensaverType: 'black',
+    docketViewMode: 'all',
   });
 
   // Fetch displays

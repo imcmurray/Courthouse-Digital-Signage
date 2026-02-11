@@ -295,6 +295,167 @@
     }
   }
 
+  // Zoom pill color palette
+  const ZOOM_COLORS = ['#2D8CFF', '#00897B', '#7B1FA2', '#E65100', '#C2185B', '#00ACC1'];
+
+  // Classify docket entries by time relevance for smart view mode
+  function classifyEntries(entries, now) {
+    const inProgress = [];
+    const upcomingSoon = [];
+    const upcomingLater = [];
+    const pastRecent = [];
+
+    entries.forEach(entry => {
+      // Parse hearing time
+      const [h, m] = (entry.hearingTime || '').split(':').map(Number);
+      let minutesDiff = null;
+      if (!isNaN(h) && !isNaN(m)) {
+        const hearingTime = new Date(now);
+        hearingTime.setHours(h, m, 0, 0);
+        minutesDiff = (hearingTime - now) / 60000;
+      }
+
+      if (entry.status === 'in_progress') {
+        inProgress.push({ entry, category: 'in_progress' });
+      } else if (entry.status === 'completed' || entry.status === 'cancelled') {
+        // Past entry -- check if recent (within 30 min)
+        if (minutesDiff !== null && minutesDiff >= -30) {
+          pastRecent.push({ entry, category: 'past_recent' });
+        }
+        // Past old: hidden entirely (not added to any bucket)
+      } else if (entry.status === 'scheduled' || entry.status === 'reserved') {
+        if (minutesDiff !== null && minutesDiff <= 30 && minutesDiff > 0) {
+          upcomingSoon.push({ entry, category: 'upcoming_soon' });
+        } else if (minutesDiff !== null && minutesDiff > 30 && minutesDiff <= 120) {
+          upcomingLater.push({ entry, category: 'upcoming_later' });
+        } else if (minutesDiff !== null && minutesDiff <= 0) {
+          // Scheduled but time has passed -- treat as upcoming soon (clock drift / not yet started)
+          upcomingSoon.push({ entry, category: 'upcoming_soon' });
+        } else if (minutesDiff !== null && minutesDiff > 120) {
+          upcomingLater.push({ entry, category: 'upcoming_later' });
+        } else {
+          // No valid time -- show in upcoming later
+          upcomingLater.push({ entry, category: 'upcoming_later' });
+        }
+      } else if (entry.status === 'stricken') {
+        // Stricken entries follow same time logic if showStricken is on
+        if (minutesDiff !== null && minutesDiff >= -30) {
+          pastRecent.push({ entry, category: 'past_recent' });
+        }
+      } else {
+        // Any other status -- show in upcoming later
+        upcomingLater.push({ entry, category: 'upcoming_later' });
+      }
+    });
+
+    return { inProgress, upcomingSoon, upcomingLater, pastRecent };
+  }
+
+  // Collect unique Zoom meetings and assign colors
+  function collectZoomMeetings(entries, now) {
+    const zoomMap = new Map(); // meetingId -> { color, meetingId, passcode, phone }
+    let colorIndex = 0;
+
+    entries.forEach(entry => {
+      if (!entry.isZoom || !shouldShowZoom(entry, now)) return;
+      if (!entry.zoomMeetingId) return;
+
+      if (!zoomMap.has(entry.zoomMeetingId)) {
+        zoomMap.set(entry.zoomMeetingId, {
+          color: ZOOM_COLORS[colorIndex % ZOOM_COLORS.length],
+          meetingId: entry.zoomMeetingId,
+          passcode: entry.zoomPasscode || '---',
+          phone: entry.zoomPhone || '---',
+        });
+        colorIndex++;
+      }
+    });
+
+    return zoomMap;
+  }
+
+  // Render zoom connection legend at bottom
+  function renderZoomLegend(zoomMap) {
+    const legendEl = document.getElementById('zoom-legend');
+    if (!legendEl) return;
+
+    if (!zoomMap || zoomMap.size === 0) {
+      legendEl.innerHTML = '';
+      legendEl.style.display = 'none';
+      return;
+    }
+
+    let html = '<div class="zoom-legend-title">ZOOM CONNECTIONS</div><div class="zoom-legend-entries">';
+    zoomMap.forEach(info => {
+      html += `
+        <div class="zoom-legend-entry">
+          <span class="zoom-legend-dot" style="background: ${info.color}"></span>
+          <span class="zoom-legend-field">Meeting ID</span>
+          <span class="zoom-legend-value">${escapeHtml(info.meetingId)}</span>
+          <span class="zoom-legend-sep"></span>
+          <span class="zoom-legend-field">Passcode</span>
+          <span class="zoom-legend-value">${escapeHtml(info.passcode)}</span>
+          <span class="zoom-legend-sep"></span>
+          <span class="zoom-legend-field">Phone</span>
+          <span class="zoom-legend-value">${escapeHtml(info.phone)}</span>
+        </div>
+      `;
+    });
+    html += '</div>';
+
+    legendEl.innerHTML = html;
+    legendEl.style.display = 'block';
+  }
+
+  // Build HTML for a single hearing row (shared between both modes)
+  function buildEntryRow(entry, rowIndex, now, zoomMap, extraClasses) {
+    const rowParity = rowIndex % 2 === 0 ? 'row-odd' : 'row-even';
+    const classes = [rowParity];
+    if (extraClasses) classes.push(...extraClasses);
+    if (entry.status === 'in_progress') classes.push('current');
+    if (entry.status === 'stricken') classes.push('stricken');
+
+    const showZoom = entry.isZoom && shouldShowZoom(entry, now);
+    const useZoomPill = showZoom && displayConfig.showZoomInfo !== false;
+
+    const adversaryMarker = entry.adversaryNumber
+      ? '<span class="adversary-marker">&#8224;</span>'
+      : '';
+
+    // Room column: use colored pill if zoom dedup is active, else plain text
+    let roomContent;
+    if (useZoomPill && entry.zoomMeetingId && zoomMap && zoomMap.has(entry.zoomMeetingId)) {
+      const zoomInfo = zoomMap.get(entry.zoomMeetingId);
+      roomContent = `<span class="zoom-pill" style="background: ${zoomInfo.color}">Zoom</span>`;
+    } else if (useZoomPill && !entry.zoomMeetingId) {
+      // Zoom hearing without a meetingId -- plain text
+      roomContent = 'Zoom';
+    } else {
+      roomContent = entry.isZoom && !entry.courtroom ? 'Zoom' : escapeHtml(entry.courtroom || '--');
+    }
+
+    return `
+      <tr class="${escapeHtml(classes.join(' '))}">
+        <td>${escapeHtml(entry.caseTitle)}${adversaryMarker}</td>
+        <td>${escapeHtml(entry.caseChapter)}</td>
+        <td>${formatTime(entry.hearingTime)}</td>
+        <td>${escapeHtml(entry.caseNumber)}</td>
+        <td>${escapeHtml(truncateText(entry.hearingMatter, 80))}</td>
+        <td>${roomContent}</td>
+        <td>${escapeHtml(entry.hearingJudge ? entry.hearingJudge.split(' ').pop() : '--')}</td>
+      </tr>
+    `;
+  }
+
+  // Build a separator row for smart mode
+  function buildSeparatorRow(label) {
+    return `
+      <tr class="time-separator">
+        <td colspan="7"><span class="separator-label">${escapeHtml(label)}</span><span class="separator-line"></span></td>
+      </tr>
+    `;
+  }
+
   // Render docket table
   function renderDocket() {
     const tbody = document.getElementById('docket-body');
@@ -306,68 +467,132 @@
           <td colspan="7">No hearings scheduled for today</td>
         </tr>
       `;
+      renderZoomLegend(null);
       return;
     }
 
     const now = new Date();
-    let rowIndex = 0;
+    const isSmartMode = displayConfig.docketViewMode === 'smart';
+    const showZoomInfo = displayConfig.showZoomInfo !== false;
 
-    tbody.innerHTML = docketData.map(entry => {
-      const rowParity = rowIndex % 2 === 0 ? 'row-odd' : 'row-even';
-      rowIndex++;
+    // Collect zoom meetings for dedup (applies in both modes when showZoomInfo is on)
+    const visibleEntries = isSmartMode ? getSmartEntries(docketData, now) : docketData;
+    const zoomMap = showZoomInfo ? collectZoomMeetings(visibleEntries, now) : null;
 
-      const classes = [rowParity];
-      if (entry.status === 'in_progress') classes.push('current');
-      if (entry.status === 'stricken') classes.push('stricken');
+    if (isSmartMode) {
+      renderSmartDocket(tbody, docketData, now, zoomMap);
+    } else {
+      renderAllDocket(tbody, docketData, now, zoomMap);
+    }
 
-      const hasZoom = entry.isZoom && shouldShowZoom(entry, now);
-      if (hasZoom) classes.push('has-zoom-detail');
-
-      const adversaryMarker = entry.adversaryNumber
-        ? '<span class="adversary-marker">&#8224;</span>'
-        : '';
-
-      let html = `
-        <tr class="${escapeHtml(classes.join(' '))}">
-          <td>${escapeHtml(entry.caseTitle)}${adversaryMarker}</td>
-          <td>${escapeHtml(entry.caseChapter)}</td>
-          <td>${formatTime(entry.hearingTime)}</td>
-          <td>${escapeHtml(entry.caseNumber)}</td>
-          <td>${escapeHtml(truncateText(entry.hearingMatter, 80))}</td>
-          <td>${entry.isZoom && !entry.courtroom ? 'Zoom' : escapeHtml(entry.courtroom || '--')}</td>
-          <td>${escapeHtml(entry.hearingJudge ? entry.hearingJudge.split(' ').pop() : '--')}</td>
-        </tr>
-      `;
-
-      if (hasZoom) {
-        html += `
-          <tr class="zoom-detail-row ${escapeHtml(rowParity)}">
-            <td colspan="7">
-              <div class="zoom-inline">
-                <span class="zoom-badge">Zoom</span>
-                <span class="zoom-separator"></span>
-                <span><span class="zoom-field">Meeting ID</span> <span class="zoom-value">${escapeHtml(entry.zoomMeetingId || '---')}</span></span>
-                <span class="zoom-separator"></span>
-                <span><span class="zoom-field">Passcode</span> <span class="zoom-value">${escapeHtml(entry.zoomPasscode || '---')}</span></span>
-                <span class="zoom-separator"></span>
-                <span><span class="zoom-field">Phone</span> <span class="zoom-value">${escapeHtml(entry.zoomPhone || '---')}</span></span>
-              </div>
-            </td>
-          </tr>
-        `;
-      }
-
-      return html;
-    }).join('');
+    // Render zoom legend
+    if (showZoomInfo) {
+      renderZoomLegend(zoomMap);
+    } else {
+      renderZoomLegend(null);
+    }
 
     // Enable auto-scroll if needed
     const container = document.getElementById('docket-container');
     const scrollThreshold = document.body.classList.contains('portrait') ? 18 : 8;
-    if (container && docketData.length > scrollThreshold) {
+    const rowCount = tbody.querySelectorAll('tr:not(.time-separator)').length;
+    if (container && rowCount > scrollThreshold) {
       container.classList.add('scrolling');
     } else if (container) {
       container.classList.remove('scrolling');
     }
+  }
+
+  // Get flat list of visible entries for smart mode (for zoom map collection)
+  function getSmartEntries(entries, now) {
+    const { inProgress, upcomingSoon, upcomingLater, pastRecent } = classifyEntries(entries, now);
+    return [
+      ...inProgress.map(c => c.entry),
+      ...upcomingSoon.map(c => c.entry),
+      ...upcomingLater.map(c => c.entry),
+      ...pastRecent.map(c => c.entry),
+    ];
+  }
+
+  // Render all-mode docket (legacy behavior, but with zoom pill dedup)
+  function renderAllDocket(tbody, entries, now, zoomMap) {
+    let rowIndex = 0;
+
+    tbody.innerHTML = entries.map(entry => {
+      const html = buildEntryRow(entry, rowIndex, now, zoomMap, []);
+      rowIndex++;
+      return html;
+    }).join('');
+  }
+
+  // Render smart-mode docket with time-priority filtering
+  function renderSmartDocket(tbody, entries, now, zoomMap) {
+    const { inProgress, upcomingSoon, upcomingLater, pastRecent } = classifyEntries(entries, now);
+    const totalVisible = inProgress.length + upcomingSoon.length + upcomingLater.length + pastRecent.length;
+
+    // Light day: 8 or fewer entries total -- show everything without filtering
+    if (entries.length <= 8) {
+      let rowIndex = 0;
+      tbody.innerHTML = entries.map(entry => {
+        const html = buildEntryRow(entry, rowIndex, now, zoomMap, []);
+        rowIndex++;
+        return html;
+      }).join('');
+      return;
+    }
+
+    // End of day: nothing visible
+    if (totalVisible === 0) {
+      tbody.innerHTML = `
+        <tr class="placeholder-row">
+          <td colspan="7">All hearings completed for today</td>
+        </tr>
+      `;
+      return;
+    }
+
+    let html = '';
+    let rowIndex = 0;
+
+    // In-progress section
+    if (inProgress.length > 0) {
+      html += buildSeparatorRow('NOW');
+      inProgress.forEach(({ entry }) => {
+        html += buildEntryRow(entry, rowIndex, now, zoomMap, []);
+        rowIndex++;
+      });
+    }
+
+    // Upcoming soon section
+    if (upcomingSoon.length > 0) {
+      html += buildSeparatorRow('COMING UP');
+      upcomingSoon.forEach(({ entry }) => {
+        html += buildEntryRow(entry, rowIndex, now, zoomMap, ['upcoming-soon']);
+        rowIndex++;
+      });
+    }
+
+    // Upcoming later section
+    if (upcomingLater.length > 0) {
+      if (inProgress.length > 0 || upcomingSoon.length > 0) {
+        html += buildSeparatorRow('LATER');
+      }
+      upcomingLater.forEach(({ entry }) => {
+        html += buildEntryRow(entry, rowIndex, now, zoomMap, []);
+        rowIndex++;
+      });
+    }
+
+    // Past recent section
+    if (pastRecent.length > 0) {
+      html += buildSeparatorRow('EARLIER');
+      pastRecent.forEach(({ entry }) => {
+        html += buildEntryRow(entry, rowIndex, now, zoomMap, ['past-recent']);
+        rowIndex++;
+      });
+    }
+
+    tbody.innerHTML = html;
   }
 
   // Determine if Zoom info should be shown for a hearing entry

@@ -50,6 +50,7 @@ export default function DisplayEditModal({ display, onClose, onSaved }: DisplayE
     scheduleEnabled: display.scheduleEnabled,
     scheduleConfig: parseScheduleConfig(display.scheduleConfig),
     screensaverType: display.screensaverType || 'black',
+    docketViewMode: display.docketViewMode || 'all',
   });
 
   const { data: judges = [] } = useQuery({
@@ -185,6 +186,22 @@ export default function DisplayEditModal({ display, onClose, onSaved }: DisplayE
                     <option value="landscape">Landscape (1920x1080)</option>
                     <option value="portrait">Portrait (1080x1920)</option>
                   </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+                    Docket View Mode
+                  </label>
+                  <select
+                    value={formData.docketViewMode}
+                    onChange={(e) => setFormData({ ...formData, docketViewMode: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                  >
+                    <option value="all">Show All Hearings</option>
+                    <option value="smart">Smart Time Priority</option>
+                  </select>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Smart mode filters by time relevance, showing nearby hearings first
+                  </p>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">

@@ -87,6 +87,7 @@ model Display {
   scheduleEnabled  Boolean   @default(false) @map("schedule_enabled")
   scheduleConfig   String    @default("{}") @map("schedule_config")
   screensaverType  String    @default("black") @map("screensaver_type")
+  docketViewMode   String    @default("all") @map("docket_view_mode")
   apiKeyHash       String    @map("api_key_hash")
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")

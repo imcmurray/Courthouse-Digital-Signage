@@ -389,6 +389,11 @@ components:
           type: string
           enum: [black, clock, logo]
           description: Screensaver style when display is outside active hours
+        docketViewMode:
+          type: string
+          enum: [all, smart]
+          default: all
+          description: '"all" shows every hearing; "smart" filters by time relevance'
         status:
           type: string
           enum: [online, offline, unknown]
@@ -454,6 +459,10 @@ components:
         screensaverType:
           type: string
           enum: [black, clock, logo]
+        docketViewMode:
+          type: string
+          enum: [all, smart]
+          default: all
       required: [id, name, location]
 
     CreateDisplayResponse:
@@ -510,6 +519,11 @@ components:
         screensaverType:
           type: string
           enum: [black, clock, logo]
+        docketViewMode:
+          type: string
+          enum: [all, smart]
+          default: all
+          description: '"all" shows every hearing; "smart" filters by time relevance'
         courtName:
           type: string
         courtSubtitle:

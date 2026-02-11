@@ -1387,6 +1387,7 @@ app.get('/api/displays/:id/config', displayLimiter, authenticateApiKey, async (r
       scheduleEnabled: display.scheduleEnabled,
       scheduleConfig: JSON.parse(display.scheduleConfig || '{}'),
       screensaverType: display.screensaverType,
+      docketViewMode: display.docketViewMode,
       // Global settings
       courtName: settingsMap.court_name || 'U.S. Bankruptcy Court',
       courtSubtitle: settingsMap.court_subtitle || 'District of Utah',
@@ -1709,7 +1710,8 @@ app.post('/api/displays', authenticateToken, requireEditor, async (req: Authenti
       orientation,
       scheduleEnabled,
       scheduleConfig,
-      screensaverType
+      screensaverType,
+      docketViewMode
     } = req.body;
 
     if (!id || !name || !location) {
@@ -1746,6 +1748,7 @@ app.post('/api/displays', authenticateToken, requireEditor, async (req: Authenti
         scheduleEnabled: scheduleEnabled ?? false,
         scheduleConfig: scheduleConfig ? JSON.stringify(scheduleConfig) : '{}',
         screensaverType: screensaverType || 'black',
+        docketViewMode: docketViewMode || 'all',
         apiKeyHash
       }
     });
@@ -1790,7 +1793,8 @@ app.put('/api/displays/:id', authenticateToken, requireEditor, async (req: Authe
       orientation,
       scheduleEnabled,
       scheduleConfig,
-      screensaverType
+      screensaverType,
+      docketViewMode
     } = req.body;
 
     if (screensaverType !== undefined && !['black', 'clock', 'logo'].includes(screensaverType)) {
@@ -1827,7 +1831,8 @@ app.put('/api/displays/:id', authenticateToken, requireEditor, async (req: Authe
         ...(tickerSpeed !== undefined && { tickerSpeed }),
         ...(scheduleEnabled !== undefined && { scheduleEnabled }),
         ...(scheduleConfig !== undefined && { scheduleConfig: JSON.stringify(scheduleConfig) }),
-        ...(screensaverType !== undefined && { screensaverType })
+        ...(screensaverType !== undefined && { screensaverType }),
+        ...(docketViewMode !== undefined && { docketViewMode })
       }
     });
 
