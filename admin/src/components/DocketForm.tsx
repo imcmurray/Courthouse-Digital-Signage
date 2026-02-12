@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { useQuery } from '@tanstack/react-query';
 import { useBlocker } from 'react-router-dom';
 import { DocketEntry, CreateDocketEntryInput, UpdateDocketEntryInput, docketApi } from '../api/docket';
+import { getLocalDateString } from '../utils/dateUtils';
 import { displaysApi, Display } from '../api/displays';
 import UnsavedChangesDialog from './UnsavedChangesDialog';
 import ModalPortal from './ModalPortal';
@@ -74,7 +75,7 @@ export default function DocketForm({ entry, onSubmit, onClose, isLoading }: Dock
     caseChapter: entry?.caseChapter || '7',
     adversaryNumber: entry?.adversaryNumber || '',
     adversaryTitle: entry?.adversaryTitle || '',
-    hearingDate: formatDateForInput(entry?.hearingDate) || new Date().toISOString().split('T')[0],
+    hearingDate: formatDateForInput(entry?.hearingDate) || getLocalDateString(),
     hearingTime: entry?.hearingTime || '09:00',
     hearingMatter: entry?.hearingMatter || '',
     hearingJudge: entry?.hearingJudge || '',

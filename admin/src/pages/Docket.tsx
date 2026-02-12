@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import DatePicker from 'react-datepicker';
 import { parse, format } from 'date-fns';
 import { docketApi, DocketEntry, CreateDocketEntryInput, UpdateDocketEntryInput, DocketFilters } from '../api/docket';
+import { getLocalDateString } from '../utils/dateUtils';
 import apiClient from '../api/client';
 import DocketForm from '../components/DocketForm';
 import ModalPortal from '../components/ModalPortal';
@@ -462,7 +463,7 @@ export default function Docket() {
   // Open clear modal and precompute count
   const openClearModal = () => {
     // Set default to today if no date filter
-    const defaultDate = dateFilter || new Date().toISOString().split('T')[0];
+    const defaultDate = dateFilter || getLocalDateString();
     setClearDate(defaultDate);
     setArchiveOnClear(false);
     setIsClearModalOpen(true);

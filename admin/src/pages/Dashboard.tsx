@@ -6,6 +6,7 @@ import api from '../api/client';
 import DocketForm from '../components/DocketForm';
 import ModalPortal from '../components/ModalPortal';
 import { docketApi, DocketEntry, CreateDocketEntryInput, UpdateDocketEntryInput } from '../api/docket';
+import { getLocalDateString } from '../utils/dateUtils';
 import { announcementsApi, Announcement, CreateAnnouncementInput, UpdateAnnouncementInput } from '../api/announcements';
 import { displaysApi, Display } from '../api/displays';
 import DisplayEditModal from '../components/DisplayEditModal';
@@ -156,7 +157,7 @@ export default function Dashboard() {
     refetchInterval: 30000,
   });
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getLocalDateString();
 
   // Widget 1: Today's hearings
   const { data: todaysHearings } = useQuery({

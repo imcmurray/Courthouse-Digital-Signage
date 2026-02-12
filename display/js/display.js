@@ -351,7 +351,7 @@
     return { inProgress, upcomingSoon, upcomingLater, pastRecent };
   }
 
-  // Collect unique Zoom meetings and assign colors
+  // Collect unique Zoom meetings and assign colors (time-gated, for pill rendering)
   function collectZoomMeetings(entries, now) {
     const zoomMap = new Map(); // meetingId -> { color, meetingId, passcode, phone }
     let colorIndex = 0;
@@ -359,6 +359,28 @@
     entries.forEach(entry => {
       if (!entry.isZoom || !shouldShowZoom(entry, now)) return;
       if (!entry.zoomMeetingId) return;
+
+      if (!zoomMap.has(entry.zoomMeetingId)) {
+        zoomMap.set(entry.zoomMeetingId, {
+          color: ZOOM_COLORS[colorIndex % ZOOM_COLORS.length],
+          meetingId: entry.zoomMeetingId,
+          passcode: entry.zoomPasscode || '---',
+          phone: entry.zoomPhone || '---',
+        });
+        colorIndex++;
+      }
+    });
+
+    return zoomMap;
+  }
+
+  // Collect ALL unique Zoom meetings for the legend (no time gate)
+  function collectAllZoomMeetings(entries) {
+    const zoomMap = new Map();
+    let colorIndex = 0;
+
+    entries.forEach(entry => {
+      if (!entry.isZoom || !entry.zoomMeetingId) return;
 
       if (!zoomMap.has(entry.zoomMeetingId)) {
         zoomMap.set(entry.zoomMeetingId, {
@@ -475,9 +497,10 @@
     const isSmartMode = displayConfig.docketViewMode === 'smart';
     const showZoomInfo = displayConfig.showZoomInfo !== false;
 
-    // Collect zoom meetings for dedup (applies in both modes when showZoomInfo is on)
+    // Collect zoom meetings for pill rendering (time-gated) and legend (all)
     const visibleEntries = isSmartMode ? getSmartEntries(docketData, now) : docketData;
     const zoomMap = showZoomInfo ? collectZoomMeetings(visibleEntries, now) : null;
+    const legendMap = showZoomInfo ? collectAllZoomMeetings(docketData) : null;
 
     if (isSmartMode) {
       renderSmartDocket(tbody, docketData, now, zoomMap);
@@ -485,12 +508,8 @@
       renderAllDocket(tbody, docketData, now, zoomMap);
     }
 
-    // Render zoom legend
-    if (showZoomInfo) {
-      renderZoomLegend(zoomMap);
-    } else {
-      renderZoomLegend(null);
-    }
+    // Render zoom legend (always shows for any zoom hearing today, not time-gated)
+    renderZoomLegend(legendMap);
 
     // Enable auto-scroll if needed
     const container = document.getElementById('docket-container');
