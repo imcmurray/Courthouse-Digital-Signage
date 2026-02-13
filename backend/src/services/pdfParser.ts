@@ -148,7 +148,7 @@ function parseText(text: string, judgeName: string): ParsedEntry[] {
   const opposingPattern = /^\s*Opposing:\s+(.*)/i;
   const matterPattern = /^\s*Matter:\s*(.*)/i;
   const commentPattern = /^\s*Comment:\s*(.*)/i;
-  const strickenPattern = /Stricken\s+from\s+the\s+calendar/i;
+  const strickenPattern = /\bStricken\b/i;
   const continuedPattern = /Continued\s+to\s+/i;
   const pageFooterPattern = /^\s*Page\s+\d+\s+of\s+\d+/i;
   const parametersPattern = /^\s*Parameters:/i;
@@ -166,13 +166,37 @@ function parseText(text: string, judgeName: string): ParsedEntry[] {
 
   function finalizeEntry() {
     if (currentEntry && currentEntry.caseNumber && currentEntry.hearingDate && currentEntry.hearingTime) {
+      // Safety net: scan all text fields for stricken/continued indicators
+      // that may have been absorbed into the wrong field during PDF text extraction
+      if (currentEntry.status === 'scheduled' || !currentEntry.status) {
+        const allText = [
+          currentEntry.caseTitle,
+          currentEntry.hearingMatter,
+          currentEntry.comment,
+        ].filter(Boolean).join(' ');
+        if (strickenPattern.test(allText)) {
+          currentEntry.status = 'stricken';
+        } else if (continuedPattern.test(allText)) {
+          currentEntry.status = 'continued';
+        }
+      }
+
+      // Strip stricken/continued text from display fields
+      const cleanStatus = (text: string | undefined | null): string => {
+        if (!text) return '';
+        return text
+          .replace(/\*?\*?\s*\bStricken\b[\s\S]*$/gi, '')
+          .replace(/\*?\*?\s*\bContinued\s+to\b[\s\S]*$/gi, '')
+          .trim();
+      };
+
       entries.push({
         hearingDate: currentEntry.hearingDate!,
         hearingTime: currentEntry.hearingTime!,
         caseNumber: currentEntry.caseNumber!,
         caseChapter: currentEntry.caseChapter || '',
-        caseTitle: (currentEntry.caseTitle || '').trim(),
-        hearingMatter: (currentEntry.hearingMatter || '').trim(),
+        caseTitle: cleanStatus(currentEntry.caseTitle),
+        hearingMatter: cleanStatus(currentEntry.hearingMatter),
         adversaryNumber: currentEntry.adversaryNumber || null,
         adversaryTitle: (currentEntry.adversaryTitle || '').trim() || null,
         movingParty: (currentEntry.movingParty || '').trim() || null,
@@ -341,12 +365,28 @@ function parseText(text: string, judgeName: string): ParsedEntry[] {
     // Stricken
     if (strickenPattern.test(line)) {
       currentEntry.status = 'stricken';
+      // Capture the reason after "Stricken" (e.g., "- Rescheduled", "from the calendar")
+      const reasonMatch = line.match(/\bStricken\b[\s\-]*(.+)/i);
+      if (reasonMatch) {
+        const reason = reasonMatch[1].replace(/^[-–—\s]+/, '').trim();
+        if (reason && reason.toLowerCase() !== 'from the calendar') {
+          currentEntry.comment = reason;
+        }
+      }
       continue;
     }
 
     // Continued
     if (continuedPattern.test(line)) {
       currentEntry.status = 'continued';
+      // Capture the continued-to date as a comment
+      const contMatch = line.match(/Continued\s+to\s+(.+)/i);
+      if (contMatch) {
+        const contDetail = contMatch[1].trim();
+        if (contDetail) {
+          currentEntry.comment = `Continued to ${contDetail}`;
+        }
+      }
       continue;
     }
 

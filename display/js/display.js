@@ -351,30 +351,7 @@
     return { inProgress, upcomingSoon, upcomingLater, pastRecent };
   }
 
-  // Collect unique Zoom meetings and assign colors (time-gated, for pill rendering)
-  function collectZoomMeetings(entries, now) {
-    const zoomMap = new Map(); // meetingId -> { color, meetingId, passcode, phone }
-    let colorIndex = 0;
-
-    entries.forEach(entry => {
-      if (!entry.isZoom || !shouldShowZoom(entry, now)) return;
-      if (!entry.zoomMeetingId) return;
-
-      if (!zoomMap.has(entry.zoomMeetingId)) {
-        zoomMap.set(entry.zoomMeetingId, {
-          color: ZOOM_COLORS[colorIndex % ZOOM_COLORS.length],
-          meetingId: entry.zoomMeetingId,
-          passcode: entry.zoomPasscode || '---',
-          phone: entry.zoomPhone || '---',
-        });
-        colorIndex++;
-      }
-    });
-
-    return zoomMap;
-  }
-
-  // Collect ALL unique Zoom meetings for the legend (no time gate)
+  // Collect unique Zoom meetings and assign colors (for pills and legend)
   function collectAllZoomMeetings(entries) {
     const zoomMap = new Map();
     let colorIndex = 0;
@@ -437,8 +414,7 @@
     if (entry.status === 'in_progress') classes.push('current');
     if (entry.status === 'stricken') classes.push('stricken');
 
-    const showZoom = entry.isZoom && shouldShowZoom(entry, now);
-    const useZoomPill = showZoom && displayConfig.showZoomInfo !== false;
+    const useZoomPill = entry.isZoom && displayConfig.showZoomInfo !== false;
 
     const adversaryMarker = entry.adversaryNumber
       ? '<span class="adversary-marker">&#8224;</span>'
@@ -497,15 +473,13 @@
     const isSmartMode = displayConfig.docketViewMode === 'smart';
     const showZoomInfo = displayConfig.showZoomInfo !== false;
 
-    // Collect zoom meetings for pill rendering (time-gated) and legend (all)
-    const visibleEntries = isSmartMode ? getSmartEntries(docketData, now) : docketData;
-    const zoomMap = showZoomInfo ? collectZoomMeetings(visibleEntries, now) : null;
+    // Collect zoom meetings for pill rendering and legend (no time gate)
     const legendMap = showZoomInfo ? collectAllZoomMeetings(docketData) : null;
 
     if (isSmartMode) {
-      renderSmartDocket(tbody, docketData, now, zoomMap);
+      renderSmartDocket(tbody, docketData, now, legendMap);
     } else {
-      renderAllDocket(tbody, docketData, now, zoomMap);
+      renderAllDocket(tbody, docketData, now, legendMap);
     }
 
     // Render zoom legend (always shows for any zoom hearing today, not time-gated)
@@ -520,17 +494,6 @@
     } else if (container) {
       container.classList.remove('scrolling');
     }
-  }
-
-  // Get flat list of visible entries for smart mode (for zoom map collection)
-  function getSmartEntries(entries, now) {
-    const { inProgress, upcomingSoon, upcomingLater, pastRecent } = classifyEntries(entries, now);
-    return [
-      ...inProgress.map(c => c.entry),
-      ...upcomingSoon.map(c => c.entry),
-      ...upcomingLater.map(c => c.entry),
-      ...pastRecent.map(c => c.entry),
-    ];
   }
 
   // Render all-mode docket (legacy behavior, but with zoom pill dedup)
@@ -612,18 +575,6 @@
     }
 
     tbody.innerHTML = html;
-  }
-
-  // Determine if Zoom info should be shown for a hearing entry
-  function shouldShowZoom(entry, now) {
-    if (entry.status === 'in_progress') return true;
-    if (entry.status !== 'scheduled') return false;
-    const [h, m] = (entry.hearingTime || '').split(':').map(Number);
-    if (isNaN(h) || isNaN(m)) return false;
-    const hearingTime = new Date(now);
-    hearingTime.setHours(h, m, 0, 0);
-    const minutesUntil = (hearingTime - now) / 60000;
-    return minutesUntil <= 15 && minutesUntil >= -60;
   }
 
   // Track current ticker animation

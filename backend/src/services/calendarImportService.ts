@@ -21,26 +21,48 @@ interface ImportResult {
   durationMs: number;
 }
 
+interface ImportProgress {
+  currentJudge: string | null;
+  currentStep: string | null;
+  completedCalendars: number;
+  totalCalendars: number;
+  lastError: string | null;
+}
+
 interface ImportStatus {
   isRunning: boolean;
   lastRunAt: string | null;
   lastRunStatus: string | null;
   autoImportEnabled: boolean;
   intervalMinutes: number;
+  progress: ImportProgress | null;
 }
 
 let isImportRunning = false;
 let lastRunAt: string | null = null;
 let lastRunStatus: string | null = null;
+let importProgress: ImportProgress | null = null;
 let pollingTimer: ReturnType<typeof setInterval> | null = null;
 
 /**
  * Fetch a URL and return the response body as a string or Buffer.
+ * Sends cache-busting headers so proxies/CDNs return fresh content.
  */
 function fetchUrl(url: string, binary = false): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    const client = url.startsWith('https') ? https : http;
-    const req = client.get(url, { timeout: 30000 }, (res) => {
+    const parsed = new URL(url);
+    const client = parsed.protocol === 'https:' ? https : http;
+    const options = {
+      hostname: parsed.hostname,
+      port: parsed.port,
+      path: parsed.pathname + parsed.search,
+      timeout: 30000,
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+      },
+    };
+    const req = client.get(options, (res) => {
       // Follow redirects
       if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         const redirectUrl = res.headers.location.startsWith('http')
@@ -66,10 +88,14 @@ function fetchUrl(url: string, binary = false): Promise<Buffer> {
 /**
  * Discover all PDF links by scraping the aggregated calendar page.
  * Matches PDF URLs from both href and iframe src attributes, deduplicating by URL.
+ * Appends a cache-busting parameter to ensure we always get the latest page.
  */
 async function discoverPdfLinks(sourceUrl: string): Promise<{ url: string; filename: string }[]> {
   try {
-    const html = (await fetchUrl(sourceUrl)).toString('utf-8');
+    // Add cache-busting query param so we never get a stale page with old PDF filenames
+    const bustUrl = new URL(sourceUrl);
+    bustUrl.searchParams.set('_cb', Date.now().toString());
+    const html = (await fetchUrl(bustUrl.toString())).toString('utf-8');
     // Derive base URL for resolving relative hrefs
     const parsedUrl = new URL(sourceUrl);
     const baseUrl = `${parsedUrl.protocol}//${parsedUrl.host}`;
@@ -151,6 +177,9 @@ async function upsertEntry(entry: ParsedEntry, judgeName: string): Promise<'crea
     };
 
     if (existing) {
+      if (existing.status !== data.status) {
+        console.log(`[Calendar Import] Status change: ${entry.caseNumber} ${entry.hearingDate} ${entry.hearingTime} — ${existing.status} → ${data.status}`);
+      }
       await prisma.docketEntry.update({
         where: { id: existing.id },
         data,
@@ -183,6 +212,7 @@ export async function runImport(io?: any): Promise<ImportResult[]> {
   }
 
   isImportRunning = true;
+  importProgress = { currentJudge: null, currentStep: 'Discovering calendars...', completedCalendars: 0, totalCalendars: 0, lastError: null };
   const results: ImportResult[] = [];
 
   try {
@@ -199,6 +229,7 @@ export async function runImport(io?: any): Promise<ImportResult[]> {
     // Discover PDF links
     const pdfLinks = await discoverPdfLinks(baseUrl);
     console.log(`[Calendar Import] Found ${pdfLinks.length} PDF calendars`);
+    importProgress.totalCalendars = pdfLinks.length;
 
     if (pdfLinks.length === 0) {
       const log = await prisma.importLog.create({
@@ -222,6 +253,7 @@ export async function runImport(io?: any): Promise<ImportResult[]> {
         durationMs: 0,
       });
       isImportRunning = false;
+      importProgress = null;
       lastRunAt = new Date().toISOString();
       lastRunStatus = 'failed';
       return results;
@@ -245,12 +277,17 @@ export async function runImport(io?: any): Promise<ImportResult[]> {
       });
 
       try {
+        importProgress!.currentJudge = judgeName;
+        importProgress!.currentStep = `Downloading ${filename}`;
+
         console.log(`[Calendar Import] Downloading ${filename}...`);
         const pdfBuffer = await fetchUrl(url, true);
 
+        importProgress!.currentStep = `Parsing calendar for ${judgeName}`;
         console.log(`[Calendar Import] Parsing ${filename} (${pdfBuffer.length} bytes)...`);
         const calendar = await parseCalendar(pdfBuffer, filename);
 
+        importProgress!.currentStep = `Processing ${calendar.entries.length} entries for ${judgeName}`;
         console.log(`[Calendar Import] Found ${calendar.entries.length} entries for ${judgeName}`);
 
         let created = 0;
@@ -327,6 +364,7 @@ export async function runImport(io?: any): Promise<ImportResult[]> {
           durationMs,
         });
 
+        importProgress!.completedCalendars++;
         console.log(`[Calendar Import] ${judgeName}: ${created} created, ${updated} updated, ${skipped} skipped, ${removed} removed (${durationMs}ms)`);
       } catch (err: any) {
         const durationMs = Date.now() - startMs;
@@ -355,6 +393,8 @@ export async function runImport(io?: any): Promise<ImportResult[]> {
           durationMs,
         });
 
+        importProgress!.completedCalendars++;
+        importProgress!.lastError = `${judgeName}: ${errorMessage}`;
         console.error(`[Calendar Import] Failed for ${judgeName}:`, errorMessage);
       }
     }
@@ -375,6 +415,7 @@ export async function runImport(io?: any): Promise<ImportResult[]> {
     lastRunStatus = 'failed';
   } finally {
     isImportRunning = false;
+    importProgress = null;
   }
 
   return results;
@@ -397,6 +438,7 @@ export async function getImportStatus(): Promise<ImportStatus> {
     lastRunStatus,
     autoImportEnabled: enabledSetting?.value ? JSON.parse(enabledSetting.value) === true : false,
     intervalMinutes: intervalSetting?.value ? parseInt(JSON.parse(intervalSetting.value), 10) : 30,
+    progress: isImportRunning ? importProgress : null,
   };
 }
 

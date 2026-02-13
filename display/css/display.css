@@ -398,6 +398,7 @@ html, body {
   background-color: var(--navy-dark);
   border-top: 2px solid var(--primary-yellow);
   padding: 8px 30px;
+  text-align: right;
 }
 
 .zoom-legend-title {
@@ -411,6 +412,7 @@ html, body {
 .zoom-legend-entries {
   display: flex;
   flex-direction: column;
+  align-items: flex-end;
   gap: 3px;
 }
 

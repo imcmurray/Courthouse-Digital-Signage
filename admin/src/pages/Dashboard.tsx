@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
@@ -10,7 +10,7 @@ import { getLocalDateString } from '../utils/dateUtils';
 import { announcementsApi, Announcement, CreateAnnouncementInput, UpdateAnnouncementInput } from '../api/announcements';
 import { displaysApi, Display } from '../api/displays';
 import DisplayEditModal from '../components/DisplayEditModal';
-import { calendarImportApi, ImportStatus, ImportLog } from '../api/calendarImport';
+import { calendarImportApi, ImportStatus } from '../api/calendarImport';
 
 interface DashboardStats {
   todaysHearings: number;
@@ -117,11 +117,13 @@ export default function Dashboard() {
     mutationFn: () => calendarImportApi.runImport(),
     onSuccess: () => {
       toast.success('Calendar import started');
+      // Immediately refetch status to pick up progress
       queryClient.invalidateQueries({ queryKey: ['dashboardImportStatus'] });
       queryClient.invalidateQueries({ queryKey: ['dashboardImportHistory'] });
     },
-    onError: () => {
-      toast.error('Failed to start import');
+    onError: (error: any) => {
+      const message = error?.response?.data?.error || 'Failed to start import';
+      toast.error(message);
     },
   });
 
@@ -187,20 +189,33 @@ export default function Dashboard() {
     refetchInterval: 30000,
   });
 
-  // Widget 4: Import status
+  // Widget 4: Import status (poll faster while running)
   const { data: importStatus } = useQuery<ImportStatus>({
     queryKey: ['dashboardImportStatus'],
     queryFn: () => calendarImportApi.getStatus(),
-    refetchInterval: 15000,
+    refetchInterval: (query) => query.state.data?.isRunning ? 2000 : 15000,
     enabled: user?.role === 'admin',
   });
 
   const { data: importHistory } = useQuery({
     queryKey: ['dashboardImportHistory'],
-    queryFn: () => calendarImportApi.getHistory(1, 1),
-    refetchInterval: 30000,
+    queryFn: () => calendarImportApi.getHistory(1, 10),
+    refetchInterval: () => importStatus?.isRunning ? 3000 : 30000,
     enabled: user?.role === 'admin',
   });
+
+  // Refresh hearings & stats when import finishes
+  const wasRunning = useRef(false);
+  useEffect(() => {
+    if (importStatus?.isRunning) {
+      wasRunning.current = true;
+    } else if (wasRunning.current) {
+      wasRunning.current = false;
+      queryClient.invalidateQueries({ queryKey: ['dashboardHearings'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboardHearingsStricken'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboardStats'] });
+    }
+  }, [importStatus?.isRunning, queryClient]);
 
   // Helpers
   const formatStat = (value: number | undefined, loading: boolean) => {
@@ -339,7 +354,26 @@ export default function Dashboard() {
   const strickenCount = strickenData?.total || 0;
   const activeCount = totalCount - strickenCount;
 
-  const lastImport: ImportLog | undefined = importHistory?.logs?.[0];
+  // Aggregate all logs from the most recent import run.
+  // Each run creates one log per judge, so we group logs within 10 minutes of the latest.
+  const lastImport = useMemo(() => {
+    const logs = importHistory?.logs;
+    if (!logs || logs.length === 0) return undefined;
+    const latest = logs[0];
+    const latestTime = new Date(latest.createdAt).getTime();
+    const runLogs = logs.filter(
+      (l) => latestTime - new Date(l.createdAt).getTime() < 10 * 60 * 1000
+    );
+    return {
+      ...latest,
+      entriesCreated: runLogs.reduce((s, l) => s + (l.entriesCreated || 0), 0),
+      entriesUpdated: runLogs.reduce((s, l) => s + (l.entriesUpdated || 0), 0),
+      entriesRemoved: runLogs.reduce((s, l) => s + (l.entriesRemoved || 0), 0),
+      status: runLogs.some((l) => l.status === 'failed')
+        ? runLogs.some((l) => l.status === 'success') ? 'partial' : 'failed'
+        : runLogs.some((l) => l.status === 'running') ? 'running' : 'success',
+    };
+  }, [importHistory]);
 
   return (
     <div className="space-y-4">
@@ -510,6 +544,29 @@ export default function Dashboard() {
                   {importStatus?.autoImportEnabled ? `Every ${importStatus.intervalMinutes}m` : 'Disabled'}
                 </span>
               </div>
+              {/* Live progress while running */}
+              {importStatus?.isRunning && importStatus.progress && (
+                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg px-3 py-2 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-blue-700 dark:text-blue-300">
+                      {importStatus.progress.currentStep || 'Starting...'}
+                    </span>
+                  </div>
+                  {importStatus.progress.totalCalendars > 0 && (
+                    <>
+                      <div className="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-1.5">
+                        <div
+                          className="bg-blue-600 dark:bg-blue-400 h-1.5 rounded-full transition-all duration-300"
+                          style={{ width: `${Math.round((importStatus.progress.completedCalendars / importStatus.progress.totalCalendars) * 100)}%` }}
+                        />
+                      </div>
+                      <div className="text-xs text-blue-600 dark:text-blue-400">
+                        {importStatus.progress.completedCalendars} / {importStatus.progress.totalCalendars} calendars
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
               {lastImport && (
                 <>
                   <div className="flex items-center justify-between">
@@ -535,6 +592,11 @@ export default function Dashboard() {
                       {lastImport.status === 'failed' && 'Failed'}
                     </span>
                   </div>
+                  {lastImport.status === 'failed' && lastImport.errorMessage && (
+                    <div className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded px-2 py-1">
+                      {lastImport.errorMessage}
+                    </div>
+                  )}
                 </>
               )}
               <button
@@ -612,38 +674,49 @@ export default function Dashboard() {
                   {todaysHearings.entries
                     .filter(entry => !selectedJudge || entry.hearingJudge === selectedJudge)
                     .slice(0, 15)
-                    .map((entry) => (
+                    .map((entry) => {
+                      const isStricken = entry.status === 'stricken';
+                      const isContinued = entry.status === 'continued';
+                      const isInactive = isStricken || isContinued;
+                      return (
                     <tr
                       key={entry.id}
-                      className={isHearingSoon(entry) ? 'bg-amber-50 dark:bg-amber-900/10' : ''}
+                      className={isStricken ? 'opacity-50' : isHearingSoon(entry) ? 'bg-amber-50 dark:bg-amber-900/10' : ''}
                     >
                       <td className="py-1.5 pr-2 whitespace-nowrap">
-                        <span className={`${isHearingSoon(entry) ? 'text-amber-600 dark:text-amber-400 font-medium' : 'text-gray-900 dark:text-white'}`}>
+                        <span className={`${isInactive ? 'line-through text-gray-400 dark:text-gray-500' : isHearingSoon(entry) ? 'text-amber-600 dark:text-amber-400 font-medium' : 'text-gray-900 dark:text-white'}`}>
                           {formatTime12h(entry.hearingTime)}
                         </span>
-                        {isHearingSoon(entry) && (
+                        {isStricken && (
+                          <span className="ml-1 text-[10px] text-red-500 dark:text-red-400 font-medium">STRICKEN</span>
+                        )}
+                        {isContinued && (
+                          <span className="ml-1 text-[10px] text-yellow-600 dark:text-yellow-400 font-medium">CONT'D</span>
+                        )}
+                        {!isInactive && isHearingSoon(entry) && (
                           <span className="ml-1 text-[10px] text-amber-500 font-medium">SOON</span>
                         )}
                       </td>
                       <td className="py-1.5 pr-2 truncate max-w-[180px]" title={entry.caseNumber}>
                         <button
                           onClick={() => setEditingDocketEntry(entry)}
-                          className="text-sm font-medium truncate block w-full text-left hover:text-primary dark:hover:text-primary-light transition-colors cursor-pointer text-gray-900 dark:text-white"
+                          className={`text-sm font-medium truncate block w-full text-left hover:text-primary dark:hover:text-primary-light transition-colors cursor-pointer ${isInactive ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-900 dark:text-white'}`}
                         >
                           {entry.caseNumber}
                         </button>
                       </td>
-                      <td className="py-1.5 pr-2 text-gray-600 dark:text-gray-300 truncate max-w-[150px] hidden lg:table-cell" title={entry.caseTitle}>
+                      <td className={`py-1.5 pr-2 truncate max-w-[150px] hidden lg:table-cell ${isInactive ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-600 dark:text-gray-300'}`} title={entry.caseTitle}>
                         {entry.caseTitle}
                       </td>
-                      <td className="py-1.5 pr-2 text-gray-600 dark:text-gray-300 truncate max-w-[120px] hidden md:table-cell">
+                      <td className={`py-1.5 pr-2 truncate max-w-[120px] hidden md:table-cell ${isInactive ? 'text-gray-400 dark:text-gray-500' : 'text-gray-600 dark:text-gray-300'}`}>
                         {getLastName(entry.hearingJudge)}
                       </td>
-                      <td className="py-1.5 text-gray-600 dark:text-gray-300 whitespace-nowrap">
+                      <td className={`py-1.5 whitespace-nowrap ${isInactive ? 'text-gray-400 dark:text-gray-500' : 'text-gray-600 dark:text-gray-300'}`}>
                         {entry.courtroom || '--'}
                       </td>
                     </tr>
-                  ))}
+                      );
+                    })}
                 </tbody>
               </table>
             </div>

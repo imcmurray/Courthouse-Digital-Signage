@@ -1,11 +1,20 @@
 import apiClient from './client';
 
+export interface ImportProgress {
+  currentJudge: string | null;
+  currentStep: string | null;
+  completedCalendars: number;
+  totalCalendars: number;
+  lastError: string | null;
+}
+
 export interface ImportStatus {
   isRunning: boolean;
   lastRunAt: string | null;
   lastRunStatus: string | null;
   autoImportEnabled: boolean;
   intervalMinutes: number;
+  progress: ImportProgress | null;
 }
 
 export interface ImportLog {
