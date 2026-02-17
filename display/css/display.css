@@ -901,6 +901,19 @@ body.portrait .screensaver-logo {
   white-space: nowrap;
 }
 
+.wayfinding-time-pill.time-past {
+  opacity: 0.35;
+}
+
+@keyframes pill-flash {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.wayfinding-time-pill.time-imminent {
+  animation: pill-flash 1.5s ease-in-out infinite;
+}
+
 .wayfinding-directions {
   background-color: var(--navy-mid);
   padding: 30px;

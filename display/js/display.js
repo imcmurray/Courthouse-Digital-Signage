@@ -1380,7 +1380,7 @@
   // =============================================
 
   // Build judge-grouped schedule HTML (shared between wayfinding and IT status)
-  function buildJudgeScheduleHtml(entries) {
+  function buildJudgeScheduleHtml(entries, now) {
     var judgeGroups = {};
     var hearingCounts = {};
     entries.forEach(function(entry) {
@@ -1431,13 +1431,25 @@
         var timeCounts = {};
         group.entries.forEach(function(entry) {
           var t = formatTime(entry.hearingTime);
-          if (!timeCounts[t]) timeCounts[t] = 0;
-          timeCounts[t]++;
+          if (!timeCounts[t]) timeCounts[t] = { raw: entry.hearingTime, count: 0 };
+          timeCounts[t].count++;
         });
+        var nowMinutes = now ? now.getHours() * 60 + now.getMinutes() : null;
         html += '<div class="wayfinding-time-pills">';
         Object.keys(timeCounts).forEach(function(time) {
-          var count = timeCounts[time];
-          html += '<span class="wayfinding-time-pill">' + time + (count > 1 ? ' (' + count + ')' : '') + '</span>';
+          var info = timeCounts[time];
+          var pillClass = 'wayfinding-time-pill';
+          if (nowMinutes !== null && info.raw) {
+            var parts = info.raw.split(':');
+            var hearingMinutes = parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
+            var diffMin = hearingMinutes - nowMinutes;
+            if (diffMin >= -15 && diffMin <= 15) {
+              pillClass += ' time-imminent';
+            } else if (diffMin < -15) {
+              pillClass += ' time-past';
+            }
+          }
+          html += '<span class="' + pillClass + '">' + time + (info.count > 1 ? ' (' + info.count + ')' : '') + '</span>';
         });
         html += '</div>';
 
@@ -1453,7 +1465,7 @@
     var directionsEl = document.getElementById('wayfinding-directions');
     if (!hearingsEl || !directionsEl) return;
 
-    var result = buildJudgeScheduleHtml(docketData);
+    var result = buildJudgeScheduleHtml(docketData, new Date());
     hearingsEl.innerHTML = result.html;
     var hearingCounts = result.hearingCounts;
 
@@ -1778,7 +1790,7 @@
     var scheduleEl = document.getElementById('it-schedule-panel');
     if (!scheduleEl) return;
 
-    var result = buildJudgeScheduleHtml(docketData);
+    var result = buildJudgeScheduleHtml(docketData, new Date());
     scheduleEl.innerHTML = result.html;
   }
 
