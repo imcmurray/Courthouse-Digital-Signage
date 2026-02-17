@@ -832,3 +832,299 @@ body.portrait .screensaver-logo {
   width: 120px;
   height: 120px;
 }
+
+/* =============================================
+   Wayfinding Directory Layout
+   ============================================= */
+
+.wayfinding-container {
+  display: grid;
+  grid-template-columns: 40% 60%;
+  height: calc(100vh - var(--header-height) - var(--notice-height) - var(--ticker-height));
+  overflow: hidden;
+}
+
+.wayfinding-hearings {
+  background-color: var(--navy-dark);
+  padding: 20px;
+  overflow-y: auto;
+  border-right: 3px solid var(--primary-yellow);
+}
+
+.wayfinding-hearings h4 {
+  color: var(--primary-yellow);
+  font-size: 22px;
+  font-weight: bold;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 16px;
+}
+
+.wayfinding-room-group {
+  margin-bottom: 20px;
+}
+
+.wayfinding-room-name {
+  color: var(--primary-yellow);
+  font-size: 18px;
+  font-weight: bold;
+  letter-spacing: 1px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 215, 0, 0.3);
+  margin-bottom: 8px;
+}
+
+.wayfinding-hearing-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0;
+  color: var(--white);
+  font-size: 20px;
+}
+
+.wayfinding-hearing-time {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 18px;
+  min-width: 90px;
+}
+
+.wayfinding-hearing-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wayfinding-directions {
+  background-color: var(--navy-mid);
+  padding: 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  overflow-y: auto;
+}
+
+.wayfinding-direction-card {
+  background: linear-gradient(135deg, var(--navy-light), var(--navy-dark));
+  border-radius: 12px;
+  padding: 24px 30px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  border-left: 5px solid var(--primary-yellow);
+}
+
+.wayfinding-arrow {
+  flex-shrink: 0;
+  width: 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wayfinding-arrow svg {
+  width: 48px;
+  height: 48px;
+  color: var(--primary-yellow);
+}
+
+.wayfinding-card-info {
+  flex: 1;
+}
+
+.wayfinding-card-name {
+  color: var(--white);
+  font-size: 28px;
+  font-weight: bold;
+  margin-bottom: 4px;
+}
+
+.wayfinding-card-desc {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 20px;
+}
+
+.wayfinding-card-badge {
+  background-color: var(--primary-yellow);
+  color: var(--navy-dark);
+  font-size: 16px;
+  font-weight: bold;
+  padding: 4px 12px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+/* Portrait wayfinding */
+body.portrait .wayfinding-container {
+  grid-template-columns: 1fr;
+  grid-template-rows: 45% 55%;
+}
+
+body.portrait .wayfinding-hearings {
+  border-right: none;
+  border-bottom: 3px solid var(--primary-yellow);
+  padding: 15px;
+}
+
+body.portrait .wayfinding-directions {
+  padding: 20px;
+  gap: 15px;
+}
+
+body.portrait .wayfinding-direction-card {
+  padding: 18px 20px;
+  gap: 16px;
+}
+
+body.portrait .wayfinding-card-name {
+  font-size: 24px;
+}
+
+body.portrait .wayfinding-card-desc {
+  font-size: 18px;
+}
+
+/* =============================================
+   IT Status Monitor Layout
+   ============================================= */
+
+.it-status-container {
+  display: grid;
+  grid-template-columns: 60% 40%;
+  height: calc(100vh - var(--header-height) - var(--notice-height) - var(--ticker-height));
+  overflow: hidden;
+}
+
+.it-video-panel {
+  background-color: var(--black);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.it-video-panel video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.camera-label {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  background-color: rgba(0, 0, 0, 0.7);
+  color: var(--white);
+  padding: 6px 16px;
+  border-radius: 6px;
+  font-size: 20px;
+  font-weight: bold;
+  z-index: 10;
+  letter-spacing: 1px;
+}
+
+.camera-offline {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 36px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 4px;
+}
+
+.it-info-panel {
+  background-color: var(--navy-dark);
+  padding: 24px;
+  overflow-y: auto;
+  border-left: 3px solid var(--primary-yellow);
+}
+
+.it-hearing-card {
+  background: linear-gradient(135deg, var(--navy-light), var(--navy-mid));
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin-bottom: 12px;
+  border-left: 4px solid rgba(255, 255, 255, 0.2);
+}
+
+.it-hearing-card.current {
+  border-left-color: #4CAF50;
+  background: linear-gradient(135deg, #3a5a2a, #2a4a1a);
+}
+
+.it-hearing-card.upcoming {
+  border-left-color: var(--primary-yellow);
+}
+
+.it-hearing-label {
+  color: var(--primary-yellow);
+  font-size: 14px;
+  font-weight: bold;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.it-hearing-time {
+  color: var(--white);
+  font-size: 28px;
+  font-weight: bold;
+  margin-bottom: 4px;
+}
+
+.it-hearing-case {
+  color: var(--white);
+  font-size: 22px;
+  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.it-hearing-detail {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 18px;
+}
+
+.it-section-title {
+  color: var(--primary-yellow);
+  font-size: 18px;
+  font-weight: bold;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin: 20px 0 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 215, 0, 0.3);
+}
+
+/* Portrait IT status */
+body.portrait .it-status-container {
+  grid-template-columns: 1fr;
+  grid-template-rows: 50% 50%;
+}
+
+body.portrait .it-info-panel {
+  border-left: none;
+  border-top: 3px solid var(--primary-yellow);
+  padding: 16px;
+}
+
+/* =============================================
+   Chambers Display Tweaks
+   ============================================= */
+
+.chambers-mode .docket-table th:nth-child(7),
+.chambers-mode .docket-table td:nth-child(7) {
+  display: none;
+}
+
+/* Widen MATTER column when JUDGE is hidden */
+.chambers-mode .docket-table th:nth-child(5),
+.chambers-mode .docket-table td:nth-child(5) {
+  width: 48%;
+}

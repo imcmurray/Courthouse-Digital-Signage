@@ -31,6 +31,13 @@ export interface Display {
   scheduleConfig: string;
   screensaverType: string;
   docketViewMode: string;
+  displayType: string;
+  wayfindingConfig: string | object | null;
+  rtspUrl1: string | null;
+  rtspUrl2: string | null;
+  cameraLabel1: string | null;
+  cameraLabel2: string | null;
+  cameraRotateInterval: number | null;
   status: string;
   lastHeartbeat: string | null;
   ipAddress: string | null;
@@ -59,6 +66,13 @@ export interface CreateDisplayInput {
   scheduleConfig?: WeekSchedule;
   screensaverType?: string;
   docketViewMode?: string;
+  displayType?: string;
+  wayfindingConfig?: object | string | null;
+  rtspUrl1?: string | null;
+  rtspUrl2?: string | null;
+  cameraLabel1?: string | null;
+  cameraLabel2?: string | null;
+  cameraRotateInterval?: number | null;
 }
 
 export interface UpdateDisplayInput extends Partial<Omit<CreateDisplayInput, 'id'>> {}

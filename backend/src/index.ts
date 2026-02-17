@@ -1374,7 +1374,7 @@ app.get('/api/displays/:id/config', displayLimiter, authenticateApiKey, async (r
       name: display.name,
       location: display.location,
       showWeather: display.showWeather,
-      weatherLocation: display.weatherLocation || display.location,
+      weatherLocation: display.weatherLocation || null,
       noticeText: display.noticeText,
       tickerEnabled: display.tickerEnabled,
       tickerSpeed: display.tickerSpeed,
@@ -1388,6 +1388,18 @@ app.get('/api/displays/:id/config', displayLimiter, authenticateApiKey, async (r
       scheduleConfig: JSON.parse(display.scheduleConfig || '{}'),
       screensaverType: display.screensaverType,
       docketViewMode: display.docketViewMode,
+      displayType: display.displayType,
+      wayfindingConfig: (() => {
+        if (!display.wayfindingConfig) return null;
+        let parsed = JSON.parse(display.wayfindingConfig);
+        if (typeof parsed === 'string') parsed = JSON.parse(parsed);
+        return parsed;
+      })(),
+      rtspUrl1: display.rtspUrl1,
+      rtspUrl2: display.rtspUrl2,
+      cameraLabel1: display.cameraLabel1,
+      cameraLabel2: display.cameraLabel2,
+      cameraRotateInterval: display.cameraRotateInterval,
       // Global settings
       courtName: settingsMap.court_name || 'U.S. Bankruptcy Court',
       courtSubtitle: settingsMap.court_subtitle || 'District of Utah',
@@ -1433,7 +1445,8 @@ app.get('/api/displays/:id/docket', displayLimiter, authenticateApiKey, async (r
     if (display.judgeFilter) {
       where.hearingJudge = display.judgeFilter;
     }
-    if (display.courtroomFilter) {
+    // Chambers type: filter by judge only (skip courtroom filter to show all rooms)
+    if (display.courtroomFilter && display.displayType !== 'chambers') {
       where.OR = [
         { courtroom: display.courtroomFilter },
         { courtroom: null }
@@ -1711,7 +1724,14 @@ app.post('/api/displays', authenticateToken, requireEditor, async (req: Authenti
       scheduleEnabled,
       scheduleConfig,
       screensaverType,
-      docketViewMode
+      docketViewMode,
+      displayType,
+      wayfindingConfig,
+      rtspUrl1,
+      rtspUrl2,
+      cameraLabel1,
+      cameraLabel2,
+      cameraRotateInterval
     } = req.body;
 
     if (!id || !name || !location) {
@@ -1720,6 +1740,11 @@ app.post('/api/displays', authenticateToken, requireEditor, async (req: Authenti
 
     if (screensaverType && !['black', 'clock', 'logo'].includes(screensaverType)) {
       return res.status(400).json({ error: 'screensaverType must be one of: black, clock, logo' });
+    }
+
+    const validDisplayTypes = ['courtroom', 'combined', 'wayfinding', 'it-status', 'chambers'];
+    if (displayType && !validDisplayTypes.includes(displayType)) {
+      return res.status(400).json({ error: `displayType must be one of: ${validDisplayTypes.join(', ')}` });
     }
 
     // Generate API key and hash it with bcrypt
@@ -1749,6 +1774,15 @@ app.post('/api/displays', authenticateToken, requireEditor, async (req: Authenti
         scheduleConfig: scheduleConfig ? JSON.stringify(scheduleConfig) : '{}',
         screensaverType: screensaverType || 'black',
         docketViewMode: docketViewMode || 'all',
+        displayType: displayType || 'courtroom',
+        wayfindingConfig: wayfindingConfig
+          ? (typeof wayfindingConfig === 'string' ? wayfindingConfig : JSON.stringify(wayfindingConfig))
+          : null,
+        rtspUrl1: rtspUrl1 || null,
+        rtspUrl2: rtspUrl2 || null,
+        cameraLabel1: cameraLabel1 || null,
+        cameraLabel2: cameraLabel2 || null,
+        cameraRotateInterval: cameraRotateInterval ?? null,
         apiKeyHash
       }
     });
@@ -1794,11 +1828,23 @@ app.put('/api/displays/:id', authenticateToken, requireEditor, async (req: Authe
       scheduleEnabled,
       scheduleConfig,
       screensaverType,
-      docketViewMode
+      docketViewMode,
+      displayType,
+      wayfindingConfig,
+      rtspUrl1,
+      rtspUrl2,
+      cameraLabel1,
+      cameraLabel2,
+      cameraRotateInterval
     } = req.body;
 
     if (screensaverType !== undefined && !['black', 'clock', 'logo'].includes(screensaverType)) {
       return res.status(400).json({ error: 'screensaverType must be one of: black, clock, logo' });
+    }
+
+    const validDisplayTypes = ['courtroom', 'combined', 'wayfinding', 'it-status', 'chambers'];
+    if (displayType !== undefined && !validDisplayTypes.includes(displayType)) {
+      return res.status(400).json({ error: `displayType must be one of: ${validDisplayTypes.join(', ')}` });
     }
 
     // Check if display exists
@@ -1832,7 +1878,16 @@ app.put('/api/displays/:id', authenticateToken, requireEditor, async (req: Authe
         ...(scheduleEnabled !== undefined && { scheduleEnabled }),
         ...(scheduleConfig !== undefined && { scheduleConfig: JSON.stringify(scheduleConfig) }),
         ...(screensaverType !== undefined && { screensaverType }),
-        ...(docketViewMode !== undefined && { docketViewMode })
+        ...(docketViewMode !== undefined && { docketViewMode }),
+        ...(displayType !== undefined && { displayType }),
+        ...(wayfindingConfig !== undefined && { wayfindingConfig: wayfindingConfig
+          ? (typeof wayfindingConfig === 'string' ? wayfindingConfig : JSON.stringify(wayfindingConfig))
+          : null }),
+        ...(rtspUrl1 !== undefined && { rtspUrl1: rtspUrl1 || null }),
+        ...(rtspUrl2 !== undefined && { rtspUrl2: rtspUrl2 || null }),
+        ...(cameraLabel1 !== undefined && { cameraLabel1: cameraLabel1 || null }),
+        ...(cameraLabel2 !== undefined && { cameraLabel2: cameraLabel2 || null }),
+        ...(cameraRotateInterval !== undefined && { cameraRotateInterval: cameraRotateInterval ?? null })
       }
     });
 

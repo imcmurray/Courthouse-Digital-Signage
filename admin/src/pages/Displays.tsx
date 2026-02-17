@@ -45,6 +45,7 @@ export default function Displays() {
     },
     screensaverType: 'black',
     docketViewMode: 'all',
+    displayType: 'courtroom',
   });
 
   // Fetch displays
@@ -176,7 +177,26 @@ export default function Displays() {
         thursday: { ...DEFAULT_DAY }, friday: { ...DEFAULT_DAY }, saturday: null, sunday: null
       },
       screensaverType: 'black',
+      docketViewMode: 'all',
+      displayType: 'courtroom',
     });
+  };
+
+  const getDisplayTypeBadge = (type: string) => {
+    if (!type || type === 'courtroom') return null;
+    const labels: Record<string, { label: string; color: string }> = {
+      combined: { label: 'Combined', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' },
+      wayfinding: { label: 'Wayfinding', color: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' },
+      'it-status': { label: 'IT Status', color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300' },
+      chambers: { label: 'Chambers', color: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300' },
+    };
+    const info = labels[type];
+    if (!info) return null;
+    return (
+      <span className={`ml-2 inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded ${info.color}`}>
+        {info.label}
+      </span>
+    );
   };
 
   const handleCreate = (e: React.FormEvent) => {
@@ -293,6 +313,7 @@ export default function Displays() {
                   </button>
                   <div className="text-xs text-gray-500 dark:text-gray-400 font-mono">
                     {display.id}
+                    {getDisplayTypeBadge(display.displayType)}
                     {display.orientation === 'portrait' && (
                       <span className="ml-2 inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
                         Portrait
@@ -425,6 +446,24 @@ export default function Displays() {
                   placeholder="e.g., Third Floor, Outside Courtroom 321"
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                 />
+              </div>
+
+              {/* Display Type */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+                  Display Type
+                </label>
+                <select
+                  value={formData.displayType || 'courtroom'}
+                  onChange={(e) => setFormData({ ...formData, displayType: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                >
+                  <option value="courtroom">Courtroom Calendar</option>
+                  <option value="combined">Combined / All Hearings</option>
+                  <option value="wayfinding">Wayfinding Directory</option>
+                  <option value="it-status">IT Status Monitor</option>
+                  <option value="chambers">Judge's Chambers</option>
+                </select>
               </div>
 
               {/* Filters */}

@@ -37,39 +37,70 @@
     </div>
   </header>
 
-  <!-- Docket Table -->
-  <section class="docket-section">
-    <div class="docket-header">
-      <h3 id="docket-title">TODAY'S HEARING CALENDAR</h3>
-    </div>
-    <div class="docket-table-container" id="docket-container">
-      <table class="docket-table">
-        <thead>
-          <tr>
-            <th>NAME</th>
-            <th>CH</th>
-            <th>TIME</th>
-            <th>CASE #</th>
-            <th>MATTER</th>
-            <th>ROOM</th>
-            <th>JUDGE</th>
-          </tr>
-        </thead>
-        <tbody id="docket-body">
-          <!-- Docket entries will be populated here -->
-          <tr class="placeholder-row">
-            <td colspan="7">Loading docket entries...</td>
-          </tr>
-        </tbody>
-      </table>
+  <!-- Docket Table (courtroom, combined, chambers) -->
+  <section id="display-docket" class="display-type-section">
+    <section class="docket-section">
+      <div class="docket-header">
+        <h3 id="docket-title">TODAY'S HEARING CALENDAR</h3>
+      </div>
+      <div class="docket-table-container" id="docket-container">
+        <table class="docket-table">
+          <thead>
+            <tr>
+              <th>NAME</th>
+              <th>CH</th>
+              <th>TIME</th>
+              <th>CASE #</th>
+              <th>MATTER</th>
+              <th>ROOM</th>
+              <th>JUDGE</th>
+            </tr>
+          </thead>
+          <tbody id="docket-body">
+            <!-- Docket entries will be populated here -->
+            <tr class="placeholder-row">
+              <td colspan="7">Loading docket entries...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Legend Bar: pagination info (left) + Zoom connection details (right) -->
+    <div id="zoom-legend">
+      <div class="legend-bar-left" id="pagination-info"></div>
+      <div class="legend-bar-right" id="zoom-legend-content"></div>
     </div>
   </section>
 
-  <!-- Legend Bar: pagination info (left) + Zoom connection details (right) -->
-  <div id="zoom-legend">
-    <div class="legend-bar-left" id="pagination-info"></div>
-    <div class="legend-bar-right" id="zoom-legend-content"></div>
-  </div>
+  <!-- Wayfinding Directory -->
+  <section id="display-wayfinding" class="display-type-section" style="display: none;">
+    <div class="wayfinding-container">
+      <div class="wayfinding-hearings" id="wayfinding-hearings">
+        <!-- Simplified hearing list grouped by location -->
+      </div>
+      <div class="wayfinding-directions" id="wayfinding-directions">
+        <!-- Directional cards -->
+      </div>
+    </div>
+  </section>
+
+  <!-- IT Status Monitor -->
+  <section id="display-it-status" class="display-type-section" style="display: none;">
+    <div class="it-status-container">
+      <div class="it-video-panel">
+        <div class="camera-label" id="camera-label"></div>
+        <video id="camera-feed" autoplay muted playsinline></video>
+        <div class="camera-offline" id="camera-offline" style="display:none;">
+          Camera Offline
+        </div>
+      </div>
+      <div class="it-info-panel">
+        <div id="it-current-hearing"></div>
+        <div id="it-upcoming-hearings"></div>
+      </div>
+    </div>
+  </section>
 
   <!-- Bottom Bar: Notice Banner + Announcement Ticker -->
   <footer class="bottom-bar">
@@ -94,6 +125,9 @@
   <div id="screensaver-overlay" class="screensaver-overlay" style="display: none;">
     <div id="screensaver-content" class="screensaver-content"></div>
   </div>
+
+  <!-- HLS.js for camera feeds (IT Status display type) -->
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 
   <!-- Socket.io client for real-time updates -->
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js" integrity="sha384-mZLF4UVrpi/QTWPA7BjNPEnkIfRFn4ZEO3Qt/HFklTJBj/gBOV8G3HcKn4NfQblz" crossorigin="anonymous"></script>
