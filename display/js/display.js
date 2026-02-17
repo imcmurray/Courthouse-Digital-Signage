@@ -376,11 +376,13 @@
       if (!entry.isZoom || !entry.zoomMeetingId) return;
 
       if (!zoomMap.has(entry.zoomMeetingId)) {
+        const lastName = entry.hearingJudge ? entry.hearingJudge.split(' ').pop() : '';
         zoomMap.set(entry.zoomMeetingId, {
           color: ZOOM_COLORS[colorIndex % ZOOM_COLORS.length],
           meetingId: entry.zoomMeetingId,
           passcode: entry.zoomPasscode || '---',
           phone: entry.zoomPhone || '---',
+          judgeName: lastName,
         });
         colorIndex++;
       }
@@ -404,6 +406,7 @@
     zoomMap.forEach(info => {
       html += `
         <div class="zoom-legend-entry">
+          ${info.judgeName ? '<span class="zoom-legend-field">Judge </span><span class="zoom-legend-value">' + escapeHtml(info.judgeName) + '</span>' : ''}
           <span class="zoom-legend-dot" style="background: ${info.color}"></span>
           <span class="zoom-legend-field">Meeting ID</span>
           <span class="zoom-legend-value">${escapeHtml(info.meetingId)}</span>
