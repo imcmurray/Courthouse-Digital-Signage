@@ -1395,11 +1395,22 @@ app.get('/api/displays/:id/config', displayLimiter, authenticateApiKey, async (r
         if (typeof parsed === 'string') parsed = JSON.parse(parsed);
         return parsed;
       })(),
-      rtspUrl1: display.rtspUrl1,
-      rtspUrl2: display.rtspUrl2,
-      cameraLabel1: display.cameraLabel1,
-      cameraLabel2: display.cameraLabel2,
-      cameraRotateInterval: display.cameraRotateInterval,
+      cameraConfig: (() => {
+        if (display.cameraConfig) {
+          let parsed = JSON.parse(display.cameraConfig);
+          if (typeof parsed === 'string') parsed = JSON.parse(parsed);
+          return parsed;
+        }
+        // Backward compat: construct from old fields
+        const cameras: { name: string; url: string }[] = [];
+        if (display.rtspUrl1 || display.cameraLabel1) {
+          cameras.push({ name: display.cameraLabel1 || 'Camera 1', url: display.rtspUrl1 || '' });
+        }
+        if (display.rtspUrl2 || display.cameraLabel2) {
+          cameras.push({ name: display.cameraLabel2 || 'Camera 2', url: display.rtspUrl2 || '' });
+        }
+        return cameras.length > 0 ? { cameras } : null;
+      })(),
       // Global settings
       courtName: settingsMap.court_name || 'U.S. Bankruptcy Court',
       courtSubtitle: settingsMap.court_subtitle || 'District of Utah',
@@ -1441,12 +1452,12 @@ app.get('/api/displays/:id/docket', displayLimiter, authenticateApiKey, async (r
       lt: tomorrowUTC
     };
 
-    // Apply display filters (wayfinding shows all hearings — skip judge/courtroom filters)
-    if (display.judgeFilter && display.displayType !== 'wayfinding') {
+    // Apply display filters (wayfinding/it-status show all hearings — skip judge/courtroom filters)
+    if (display.judgeFilter && display.displayType !== 'wayfinding' && display.displayType !== 'it-status') {
       where.hearingJudge = display.judgeFilter;
     }
     // Chambers type: filter by judge only (skip courtroom filter to show all rooms)
-    if (display.courtroomFilter && display.displayType !== 'chambers' && display.displayType !== 'wayfinding') {
+    if (display.courtroomFilter && display.displayType !== 'chambers' && display.displayType !== 'wayfinding' && display.displayType !== 'it-status') {
       where.OR = [
         { courtroom: display.courtroomFilter },
         { courtroom: null }
@@ -1477,6 +1488,45 @@ app.get('/api/displays/:id/docket', displayLimiter, authenticateApiKey, async (r
   } catch (error) {
     console.error('Failed to fetch display docket:', error);
     res.status(500).json({ error: 'Failed to fetch display docket' });
+  }
+});
+
+// GET /api/displays/:id/system-status - System health, display statuses, and calendar sync info
+app.get('/api/displays/:id/system-status', displayLimiter, authenticateApiKey, async (req: ApiKeyRequest, res: Response) => {
+  try {
+    // Health: test database connection + uptime
+    let health;
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      health = { status: 'ok', database: 'connected', uptime: process.uptime() };
+    } catch {
+      health = { status: 'degraded', database: 'disconnected', uptime: process.uptime() };
+    }
+
+    // Displays: query all, compute online/offline from 2-min heartbeat threshold
+    const allDisplays = await prisma.display.findMany({ orderBy: { name: 'asc' } });
+    const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
+    const displays = allDisplays.map(d => ({
+      name: d.name,
+      location: d.location,
+      displayType: d.displayType,
+      status: d.lastHeartbeat && d.lastHeartbeat >= twoMinutesAgo ? 'online' : 'offline',
+      lastHeartbeat: d.lastHeartbeat ? d.lastHeartbeat.toISOString() : null,
+    }));
+
+    // Calendar sync status
+    const importStatus = await calendarImportService.getImportStatus();
+    const calendarSync = {
+      lastRunAt: importStatus.lastRunAt,
+      lastRunStatus: importStatus.lastRunStatus,
+      autoImportEnabled: importStatus.autoImportEnabled,
+      intervalMinutes: importStatus.intervalMinutes,
+    };
+
+    res.json({ health, displays, calendarSync });
+  } catch (error) {
+    console.error('Failed to fetch system status:', error);
+    res.status(500).json({ error: 'Failed to fetch system status' });
   }
 });
 
@@ -1731,7 +1781,8 @@ app.post('/api/displays', authenticateToken, requireEditor, async (req: Authenti
       rtspUrl2,
       cameraLabel1,
       cameraLabel2,
-      cameraRotateInterval
+      cameraRotateInterval,
+      cameraConfig
     } = req.body;
 
     if (!id || !name || !location) {
@@ -1783,6 +1834,9 @@ app.post('/api/displays', authenticateToken, requireEditor, async (req: Authenti
         cameraLabel1: cameraLabel1 || null,
         cameraLabel2: cameraLabel2 || null,
         cameraRotateInterval: cameraRotateInterval ?? null,
+        cameraConfig: cameraConfig
+          ? (typeof cameraConfig === 'string' ? cameraConfig : JSON.stringify(cameraConfig))
+          : null,
         apiKeyHash
       }
     });
@@ -1835,7 +1889,8 @@ app.put('/api/displays/:id', authenticateToken, requireEditor, async (req: Authe
       rtspUrl2,
       cameraLabel1,
       cameraLabel2,
-      cameraRotateInterval
+      cameraRotateInterval,
+      cameraConfig
     } = req.body;
 
     if (screensaverType !== undefined && !['black', 'clock', 'logo'].includes(screensaverType)) {
@@ -1887,7 +1942,10 @@ app.put('/api/displays/:id', authenticateToken, requireEditor, async (req: Authe
         ...(rtspUrl2 !== undefined && { rtspUrl2: rtspUrl2 || null }),
         ...(cameraLabel1 !== undefined && { cameraLabel1: cameraLabel1 || null }),
         ...(cameraLabel2 !== undefined && { cameraLabel2: cameraLabel2 || null }),
-        ...(cameraRotateInterval !== undefined && { cameraRotateInterval: cameraRotateInterval ?? null })
+        ...(cameraRotateInterval !== undefined && { cameraRotateInterval: cameraRotateInterval ?? null }),
+        ...(cameraConfig !== undefined && { cameraConfig: cameraConfig
+          ? (typeof cameraConfig === 'string' ? cameraConfig : JSON.stringify(cameraConfig))
+          : null }),
       }
     });
 

@@ -1321,9 +1321,8 @@
   // =============================================
 
   // IT Status state
-  let hlsPlayer = null;
-  let cameraRotateTimer = null;
-  let currentCameraIndex = 0;
+  let hlsPlayers = [];
+  let testPatternTimers = [];
 
   // Show/hide sections based on display type
   function applyDisplayType() {
@@ -1380,16 +1379,11 @@
   // Wayfinding Directory
   // =============================================
 
-  function renderWayfinding() {
-    var hearingsEl = document.getElementById('wayfinding-hearings');
-    var directionsEl = document.getElementById('wayfinding-directions');
-    if (!hearingsEl || !directionsEl) return;
-
-    // Group hearings by judge (for left panel) and count by room (for direction badges)
+  // Build judge-grouped schedule HTML (shared between wayfinding and IT status)
+  function buildJudgeScheduleHtml(entries) {
     var judgeGroups = {};
     var hearingCounts = {};
-    docketData.forEach(function(entry) {
-      // Judge grouping for left panel
+    entries.forEach(function(entry) {
       var judge = entry.hearingJudge || 'Unassigned';
       if (!judgeGroups[judge]) judgeGroups[judge] = { entries: [], courtroom: null, zoom: null };
       judgeGroups[judge].entries.push(entry);
@@ -1404,58 +1398,64 @@
         };
       }
 
-      // Room counting for direction badge logic
       var room = entry.courtroom || 'Unassigned';
       if (!hearingCounts[room]) hearingCounts[room] = 0;
       hearingCounts[room]++;
     });
 
-    // Render hearing list (left panel) — grouped by judge
-    var hearingsHtml = '<h4>Today\'s Schedule by Judge</h4>';
+    var html = '<h4>Today\'s Schedule by Judge</h4>';
     var judgeNames = Object.keys(judgeGroups).sort();
     if (judgeNames.length === 0) {
-      hearingsHtml += '<p style="color: rgba(255,255,255,0.5); font-style: italic;">No hearings scheduled</p>';
+      html += '<p style="color: rgba(255,255,255,0.5); font-style: italic;">No hearings scheduled</p>';
     } else {
       judgeNames.forEach(function(judge) {
         var group = judgeGroups[judge];
-        hearingsHtml += '<div class="wayfinding-judge-group">';
-        hearingsHtml += '<div class="wayfinding-judge-name">' + escapeHtml(judge) + '</div>';
+        html += '<div class="wayfinding-judge-group">';
+        html += '<div class="wayfinding-judge-name">' + escapeHtml(judge) + '</div>';
 
-        // Courtroom + Zoom indicator line
         var metaParts = [];
         if (group.courtroom) metaParts.push(escapeHtml(group.courtroom));
         if (group.zoom) metaParts.push('Zoom');
         if (metaParts.length > 0) {
-          hearingsHtml += '<div class="wayfinding-judge-meta">' + metaParts.join(' &middot; ') + '</div>';
+          html += '<div class="wayfinding-judge-meta">' + metaParts.join(' &middot; ') + '</div>';
         }
 
-        // Zoom details (styled like docket zoom legend)
         if (group.zoom) {
-          hearingsHtml += '<div class="wayfinding-zoom-details">';
-          if (group.zoom.meetingId) hearingsHtml += '<span class="zoom-legend-field">Meeting ID</span> <span class="zoom-legend-value">' + escapeHtml(group.zoom.meetingId) + '</span>';
-          if (group.zoom.passcode) hearingsHtml += ' <span class="zoom-legend-sep"></span> <span class="zoom-legend-field">Passcode</span> <span class="zoom-legend-value">' + escapeHtml(group.zoom.passcode) + '</span>';
-          if (group.zoom.phone) hearingsHtml += ' <span class="zoom-legend-sep"></span> <span class="zoom-legend-field">Phone</span> <span class="zoom-legend-value">' + escapeHtml(group.zoom.phone) + '</span>';
-          hearingsHtml += '</div>';
+          html += '<div class="wayfinding-zoom-details">';
+          if (group.zoom.meetingId) html += '<span class="zoom-legend-field">Meeting ID</span> <span class="zoom-legend-value">' + escapeHtml(group.zoom.meetingId) + '</span>';
+          if (group.zoom.passcode) html += ' <span class="zoom-legend-sep"></span> <span class="zoom-legend-field">Passcode</span> <span class="zoom-legend-value">' + escapeHtml(group.zoom.passcode) + '</span>';
+          if (group.zoom.phone) html += ' <span class="zoom-legend-sep"></span> <span class="zoom-legend-field">Phone</span> <span class="zoom-legend-value">' + escapeHtml(group.zoom.phone) + '</span>';
+          html += '</div>';
         }
 
-        // Time pills — group by time with count
         var timeCounts = {};
         group.entries.forEach(function(entry) {
           var t = formatTime(entry.hearingTime);
           if (!timeCounts[t]) timeCounts[t] = 0;
           timeCounts[t]++;
         });
-        hearingsHtml += '<div class="wayfinding-time-pills">';
+        html += '<div class="wayfinding-time-pills">';
         Object.keys(timeCounts).forEach(function(time) {
           var count = timeCounts[time];
-          hearingsHtml += '<span class="wayfinding-time-pill">' + time + (count > 1 ? ' (' + count + ')' : '') + '</span>';
+          html += '<span class="wayfinding-time-pill">' + time + (count > 1 ? ' (' + count + ')' : '') + '</span>';
         });
-        hearingsHtml += '</div>';
+        html += '</div>';
 
-        hearingsHtml += '</div>';
+        html += '</div>';
       });
     }
-    hearingsEl.innerHTML = hearingsHtml;
+
+    return { html: html, hearingCounts: hearingCounts };
+  }
+
+  function renderWayfinding() {
+    var hearingsEl = document.getElementById('wayfinding-hearings');
+    var directionsEl = document.getElementById('wayfinding-directions');
+    if (!hearingsEl || !directionsEl) return;
+
+    var result = buildJudgeScheduleHtml(docketData);
+    hearingsEl.innerHTML = result.html;
+    var hearingCounts = result.hearingCounts;
 
     // Render direction cards (right panel)
     var directions = (displayConfig.wayfindingConfig && displayConfig.wayfindingConfig.directions) || [];
@@ -1527,141 +1527,259 @@
   // IT Status Monitor
   // =============================================
 
+  var systemStatusTimer = null;
+
+  // Parse cameras from config (with backward compat for old fields)
+  function parseCamerasFromConfig() {
+    if (displayConfig.cameraConfig && displayConfig.cameraConfig.cameras) {
+      return displayConfig.cameraConfig.cameras;
+    }
+    // Backward compat: construct from old fields
+    var cameras = [];
+    if (displayConfig.rtspUrl1 || displayConfig.cameraLabel1) {
+      cameras.push({ name: displayConfig.cameraLabel1 || 'Camera 1', url: displayConfig.rtspUrl1 || '' });
+    }
+    if (displayConfig.rtspUrl2 || displayConfig.cameraLabel2) {
+      cameras.push({ name: displayConfig.cameraLabel2 || 'Camera 2', url: displayConfig.rtspUrl2 || '' });
+    }
+    return cameras;
+  }
+
   function initItStatus() {
-    var videoEl = document.getElementById('camera-feed');
-    var offlineEl = document.getElementById('camera-offline');
-    if (!videoEl) return;
+    var gridEl = document.getElementById('it-camera-grid');
+    if (!gridEl) return;
 
-    var urls = [displayConfig.rtspUrl1, displayConfig.rtspUrl2].filter(Boolean);
-    var labels = [displayConfig.cameraLabel1 || 'Camera 1', displayConfig.cameraLabel2 || 'Camera 2'];
+    // Clean up previous state
+    hlsPlayers.forEach(function(p) { if (p) p.destroy(); });
+    hlsPlayers = [];
+    testPatternTimers.forEach(function(t) { if (t) clearInterval(t); });
+    testPatternTimers = [];
+    gridEl.innerHTML = '';
 
-    if (urls.length === 0) {
-      videoEl.style.display = 'none';
-      if (offlineEl) offlineEl.style.display = 'block';
-      return;
-    }
+    var cameras = parseCamerasFromConfig();
 
-    currentCameraIndex = 0;
-    loadCameraFeed(urls[0], labels[0]);
-
-    // Set up rotation if two cameras
-    if (urls.length > 1) {
-      var interval = (displayConfig.cameraRotateInterval || 30) * 1000;
-      if (cameraRotateTimer) clearInterval(cameraRotateTimer);
-      cameraRotateTimer = setInterval(function() {
-        rotateCamera(urls, labels);
-      }, interval);
-    }
-  }
-
-  function loadCameraFeed(url, label) {
-    var videoEl = document.getElementById('camera-feed');
-    var offlineEl = document.getElementById('camera-offline');
-    var labelEl = document.getElementById('camera-label');
-    if (!videoEl) return;
-
-    if (labelEl) labelEl.textContent = label || '';
-
-    // Clean up previous HLS instance
-    if (hlsPlayer) {
-      hlsPlayer.destroy();
-      hlsPlayer = null;
-    }
-
-    if (!url) {
-      videoEl.style.display = 'none';
-      if (offlineEl) offlineEl.style.display = 'block';
-      return;
-    }
-
-    videoEl.style.display = 'block';
-    if (offlineEl) offlineEl.style.display = 'none';
-
-    if (typeof Hls !== 'undefined' && Hls.isSupported()) {
-      hlsPlayer = new Hls({
-        enableWorker: true,
-        lowLatencyMode: true,
-      });
-      hlsPlayer.loadSource(url);
-      hlsPlayer.attachMedia(videoEl);
-      hlsPlayer.on(Hls.Events.ERROR, function(event, data) {
-        if (data.fatal) {
-          console.error('HLS fatal error:', data.type);
-          videoEl.style.display = 'none';
-          if (offlineEl) offlineEl.style.display = 'block';
-        }
-      });
-    } else if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
-      // Native HLS support (Safari)
-      videoEl.src = url;
-      videoEl.addEventListener('error', function() {
-        videoEl.style.display = 'none';
-        if (offlineEl) offlineEl.style.display = 'block';
-      }, { once: true });
+    if (cameras.length === 0) {
+      // Show a single test pattern tile
+      var tile = createCameraTile('No Camera Configured', '');
+      gridEl.appendChild(tile);
     } else {
-      videoEl.style.display = 'none';
-      if (offlineEl) offlineEl.style.display = 'block';
+      cameras.forEach(function(cam) {
+        var tile = createCameraTile(cam.name || '', cam.url || '');
+        gridEl.appendChild(tile);
+      });
+    }
+
+    // Start system status polling
+    fetchSystemStatus();
+    if (systemStatusTimer) clearInterval(systemStatusTimer);
+    systemStatusTimer = setInterval(fetchSystemStatus, 30000);
+  }
+
+  function createCameraTile(name, url) {
+    var tile = document.createElement('div');
+    tile.className = 'camera-tile';
+
+    // Label overlay
+    if (name) {
+      var labelEl = document.createElement('div');
+      labelEl.className = 'camera-label';
+      labelEl.textContent = name;
+      tile.appendChild(labelEl);
+    }
+
+    if (url) {
+      // Create video element and init HLS
+      var videoEl = document.createElement('video');
+      videoEl.autoplay = true;
+      videoEl.muted = true;
+      videoEl.playsInline = true;
+      tile.appendChild(videoEl);
+
+      var canvas = document.createElement('canvas');
+      canvas.style.display = 'none';
+      tile.appendChild(canvas);
+
+      if (typeof Hls !== 'undefined' && Hls.isSupported()) {
+        var hls = new Hls({ enableWorker: true, lowLatencyMode: true });
+        hls.loadSource(url);
+        hls.attachMedia(videoEl);
+        hls.on(Hls.Events.ERROR, function(event, data) {
+          if (data.fatal) {
+            console.error('HLS fatal error for ' + name + ':', data.type);
+            videoEl.style.display = 'none';
+            canvas.style.display = 'block';
+            showTestPatternOnCanvas(canvas, name || 'Camera Offline');
+          }
+        });
+        hlsPlayers.push(hls);
+      } else if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
+        videoEl.src = url;
+        videoEl.addEventListener('error', function() {
+          videoEl.style.display = 'none';
+          canvas.style.display = 'block';
+          showTestPatternOnCanvas(canvas, name || 'Camera Offline');
+        }, { once: true });
+      } else {
+        videoEl.style.display = 'none';
+        canvas.style.display = 'block';
+        showTestPatternOnCanvas(canvas, name || 'Camera Offline');
+      }
+    } else {
+      // No URL — show test pattern
+      var canvas = document.createElement('canvas');
+      tile.appendChild(canvas);
+      showTestPatternOnCanvas(canvas, name || 'Test Pattern');
+    }
+
+    return tile;
+  }
+
+  // Canvas test pattern (SMPTE color bars + label + clock)
+  // Always renders at native 1080p; CSS object-fit scales it to the tile.
+  function showTestPatternOnCanvas(canvas, label) {
+    var w = 1920;
+    var h = 1080;
+    canvas.width = w;
+    canvas.height = h;
+    var ctx = canvas.getContext('2d');
+
+    function draw() {
+
+      // SMPTE color bars (top 2/3)
+      var colors = ['#C0C0C0', '#C0C000', '#00C0C0', '#00C000', '#C000C0', '#C00000', '#0000C0'];
+      var barW = w / colors.length;
+      var barH = h * 0.67;
+      colors.forEach(function(color, i) {
+        ctx.fillStyle = color;
+        ctx.fillRect(i * barW, 0, barW + 1, barH);
+      });
+
+      // Bottom stripe (dark bars)
+      var darkColors = ['#0000C0', '#000000', '#C000C0', '#000000', '#00C0C0', '#000000', '#C0C0C0'];
+      var stripH = h * 0.08;
+      darkColors.forEach(function(color, i) {
+        ctx.fillStyle = color;
+        ctx.fillRect(i * barW, barH, barW + 1, stripH);
+      });
+
+      // Black bottom section
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, barH + stripH, w, h - barH - stripH);
+
+      // "TEST PATTERN" text
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold ' + Math.max(24, Math.floor(h * 0.05)) + 'px Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('TEST PATTERN', w / 2, barH + stripH + (h - barH - stripH) * 0.35);
+
+      // Label text
+      if (label) {
+        ctx.font = Math.max(16, Math.floor(h * 0.03)) + 'px Arial, sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.7)';
+        ctx.fillText(label, w / 2, barH + stripH + (h - barH - stripH) * 0.55);
+      }
+
+      // Clock
+      var now = new Date();
+      var timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+      ctx.font = 'bold ' + Math.max(20, Math.floor(h * 0.04)) + 'px Arial, sans-serif';
+      ctx.fillStyle = '#FFD700';
+      ctx.fillText(timeStr, w / 2, barH + stripH + (h - barH - stripH) * 0.78);
+    }
+
+    draw();
+    var timer = setInterval(draw, 1000);
+    testPatternTimers.push(timer);
+  }
+
+  // System status fetching and rendering
+  async function fetchSystemStatus() {
+    try {
+      var response = await fetch(
+        CONFIG.apiBaseUrl + '/api/displays/' + CONFIG.displayId + '/system-status',
+        { headers: { 'X-API-Key': getApiKey() } }
+      );
+      if (response.ok) {
+        var data = await response.json();
+        renderSystemStatus(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch system status:', error);
     }
   }
 
-  function rotateCamera(urls, labels) {
-    currentCameraIndex = (currentCameraIndex + 1) % urls.length;
-    loadCameraFeed(urls[currentCameraIndex], labels[currentCameraIndex]);
+  function renderSystemStatus(data) {
+    var el = document.getElementById('it-system-status');
+    if (!el) return;
+
+    var html = '';
+
+    // Health status
+    var healthOk = data.health && data.health.status === 'ok';
+    var uptimeStr = '';
+    if (data.health && data.health.uptime) {
+      var secs = Math.floor(data.health.uptime);
+      var hrs = Math.floor(secs / 3600);
+      var mins = Math.floor((secs % 3600) / 60);
+      uptimeStr = hrs + 'h ' + mins + 'm';
+    }
+    html += '<div class="it-status-item">';
+    html += '<span class="it-status-dot" style="background:' + (healthOk ? '#4CAF50' : '#E53E3E') + '"></span>';
+    html += '<span class="it-status-label">System</span>';
+    html += '<span class="it-status-value">' + (healthOk ? 'OK' : 'Database Disconnected') + '</span>';
+    if (uptimeStr) html += '<span class="it-status-label" style="margin-left:8px">Uptime</span><span class="it-status-value">' + uptimeStr + '</span>';
+    html += '</div>';
+
+    // Displays
+    if (data.displays) {
+      var online = data.displays.filter(function(d) { return d.status === 'online'; }).length;
+      var total = data.displays.length;
+      html += '<div class="it-status-item">';
+      html += '<span class="it-status-dot" style="background:' + (online > 0 ? '#4CAF50' : '#E53E3E') + '"></span>';
+      html += '<span class="it-status-label">Displays</span>';
+      html += '<span class="it-status-value">' + online + '/' + total + ' online</span>';
+      html += '</div>';
+
+      // Individual display pills
+      html += '<div class="it-status-item it-status-displays-list">';
+      data.displays.forEach(function(d) {
+        var isOn = d.status === 'online';
+        html += '<span class="it-status-display-pill ' + (isOn ? 'online' : 'offline') + '">';
+        html += escapeHtml(d.name);
+        html += '</span>';
+      });
+      html += '</div>';
+    }
+
+    // Calendar sync
+    if (data.calendarSync) {
+      var sync = data.calendarSync;
+      var syncOk = sync.lastRunStatus === 'success';
+      var syncText = 'Never';
+      if (sync.lastRunAt) {
+        var ago = Math.floor((Date.now() - new Date(sync.lastRunAt).getTime()) / 60000);
+        if (ago < 1) syncText = 'Just now';
+        else if (ago < 60) syncText = ago + ' min ago';
+        else syncText = Math.floor(ago / 60) + 'h ' + (ago % 60) + 'm ago';
+        syncText += ' \u2014 ' + (syncOk ? 'Success' : 'Failed');
+      }
+      html += '<div class="it-status-item">';
+      html += '<span class="it-status-dot" style="background:' + (sync.lastRunAt ? (syncOk ? '#4CAF50' : '#E53E3E') : '#999') + '"></span>';
+      html += '<span class="it-status-label">Calendar Sync</span>';
+      html += '<span class="it-status-value">' + syncText + '</span>';
+      html += '</div>';
+    }
+
+    el.innerHTML = html;
   }
 
   function renderItHearings() {
-    var currentEl = document.getElementById('it-current-hearing');
-    var upcomingEl = document.getElementById('it-upcoming-hearings');
-    if (!currentEl || !upcomingEl) return;
+    var scheduleEl = document.getElementById('it-schedule-panel');
+    if (!scheduleEl) return;
 
-    var now = new Date();
-    var currentHearing = null;
-    var upcoming = [];
-
-    docketData.forEach(function(entry) {
-      if (entry.status === 'in_progress') {
-        currentHearing = entry;
-      } else if (entry.status === 'scheduled' || entry.status === 'reserved') {
-        var parts = (entry.hearingTime || '').split(':').map(Number);
-        if (!isNaN(parts[0]) && !isNaN(parts[1])) {
-          var hearingTime = new Date(now);
-          hearingTime.setHours(parts[0], parts[1], 0, 0);
-          if (hearingTime > now) {
-            upcoming.push(entry);
-          }
-        }
-      }
-    });
-
-    // Render current hearing
-    if (currentHearing) {
-      currentEl.innerHTML =
-        '<div class="it-hearing-label">NOW IN SESSION</div>' +
-        '<div class="it-hearing-card current">' +
-          '<div class="it-hearing-time">' + formatTime(currentHearing.hearingTime) + '</div>' +
-          '<div class="it-hearing-case">' + escapeHtml(currentHearing.caseTitle) + '</div>' +
-          '<div class="it-hearing-detail">' + escapeHtml(currentHearing.caseNumber) + '</div>' +
-          '<div class="it-hearing-detail">' + escapeHtml(currentHearing.hearingJudge || '') + ' &mdash; ' + escapeHtml(currentHearing.courtroom || 'Zoom') + '</div>' +
-        '</div>';
-    } else {
-      currentEl.innerHTML = '<div class="it-hearing-label">NO HEARING IN SESSION</div>';
-    }
-
-    // Render upcoming
-    if (upcoming.length > 0) {
-      var html = '<div class="it-section-title">UPCOMING</div>';
-      upcoming.slice(0, 6).forEach(function(entry) {
-        html +=
-          '<div class="it-hearing-card upcoming">' +
-            '<div class="it-hearing-time">' + formatTime(entry.hearingTime) + '</div>' +
-            '<div class="it-hearing-case">' + escapeHtml(entry.caseTitle) + '</div>' +
-            '<div class="it-hearing-detail">' + escapeHtml(entry.hearingJudge || '') + ' &mdash; ' + escapeHtml(entry.courtroom || 'Zoom') + '</div>' +
-          '</div>';
-      });
-      upcomingEl.innerHTML = html;
-    } else {
-      upcomingEl.innerHTML = '';
-    }
+    var result = buildJudgeScheduleHtml(docketData);
+    scheduleEl.innerHTML = result.html;
   }
 
   // =============================================

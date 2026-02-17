@@ -49,6 +49,11 @@ const ARROW_LABELS: Record<string, string> = {
 };
 const ICON_OPTIONS = ['courtroom', 'intake', 'restroom', 'conference'];
 
+interface CameraEntry {
+  name: string;
+  url: string;
+}
+
 interface WayfindingDirection {
   name: string;
   direction: string;
@@ -68,13 +73,33 @@ function parseScheduleConfig(raw: string): WeekSchedule {
   };
 }
 
-function parseWayfindingConfig(raw: string | null): WayfindingDirection[] {
+function parseWayfindingConfig(raw: string | object | null): WayfindingDirection[] {
   if (!raw) return [];
   try {
     let parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
     if (typeof parsed === 'string') parsed = JSON.parse(parsed); // double-encoded repair
     return parsed?.directions || [];
   } catch { return []; }
+}
+
+function parseCameraConfig(display: Display): CameraEntry[] {
+  // Try new cameraConfig field first
+  if (display.cameraConfig) {
+    try {
+      let parsed = typeof display.cameraConfig === 'string' ? JSON.parse(display.cameraConfig) : display.cameraConfig;
+      if (typeof parsed === 'string') parsed = JSON.parse(parsed);
+      if (parsed?.cameras && Array.isArray(parsed.cameras)) return parsed.cameras;
+    } catch { /* fall through */ }
+  }
+  // Fall back to old rtspUrl1/2 fields
+  const cameras: CameraEntry[] = [];
+  if (display.rtspUrl1 || display.cameraLabel1) {
+    cameras.push({ name: display.cameraLabel1 || 'Camera 1', url: display.rtspUrl1 || '' });
+  }
+  if (display.rtspUrl2 || display.cameraLabel2) {
+    cameras.push({ name: display.cameraLabel2 || 'Camera 2', url: display.rtspUrl2 || '' });
+  }
+  return cameras;
 }
 
 interface DisplayEditModalProps {
@@ -105,15 +130,14 @@ export default function DisplayEditModal({ display, onClose, onSaved }: DisplayE
     screensaverType: display.screensaverType || 'black',
     docketViewMode: display.docketViewMode || 'all',
     displayType: display.displayType || 'courtroom',
-    rtspUrl1: display.rtspUrl1,
-    rtspUrl2: display.rtspUrl2,
-    cameraLabel1: display.cameraLabel1,
-    cameraLabel2: display.cameraLabel2,
-    cameraRotateInterval: display.cameraRotateInterval,
   });
 
   const [wayfindingDirections, setWayfindingDirections] = useState<WayfindingDirection[]>(
     parseWayfindingConfig(display.wayfindingConfig)
+  );
+
+  const [cameras, setCameras] = useState<CameraEntry[]>(
+    parseCameraConfig(display)
   );
 
   const displayType = formData.displayType || 'courtroom';
@@ -159,7 +183,24 @@ export default function DisplayEditModal({ display, onClose, onSaved }: DisplayE
     if (showWayfindingConfig) {
       submitData.wayfindingConfig = { directions: wayfindingDirections };
     }
+    if (showCameraConfig) {
+      submitData.cameraConfig = { cameras };
+    }
     updateMutation.mutate(submitData);
+  };
+
+  const addCamera = () => {
+    setCameras([...cameras, { name: '', url: '' }]);
+  };
+
+  const updateCamera = (index: number, field: keyof CameraEntry, value: string) => {
+    const updated = [...cameras];
+    updated[index] = { ...updated[index], [field]: value };
+    setCameras(updated);
+  };
+
+  const removeCamera = (index: number) => {
+    setCameras(cameras.filter((_, i) => i !== index));
   };
 
   const addWayfindingDirection = () => {
@@ -357,70 +398,56 @@ export default function DisplayEditModal({ display, onClose, onSaved }: DisplayE
             {/* Camera Config (IT Status) */}
             {showCameraConfig && (
               <div className="border-t dark:border-gray-700 pt-4 mt-4">
-                <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-3">Camera Configuration</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                      Camera 1 HLS URL
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.rtspUrl1 || ''}
-                      onChange={(e) => setFormData({ ...formData, rtspUrl1: e.target.value || null })}
-                      placeholder="http://server:1984/api/stream.m3u8?src=north-cam"
-                      className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                      Camera 1 Label
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.cameraLabel1 || ''}
-                      onChange={(e) => setFormData({ ...formData, cameraLabel1: e.target.value || null })}
-                      placeholder="e.g., North Courtroom"
-                      className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                      Camera 2 HLS URL
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.rtspUrl2 || ''}
-                      onChange={(e) => setFormData({ ...formData, rtspUrl2: e.target.value || null })}
-                      placeholder="http://server:1984/api/stream.m3u8?src=south-cam"
-                      className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                      Camera 2 Label
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.cameraLabel2 || ''}
-                      onChange={(e) => setFormData({ ...formData, cameraLabel2: e.target.value || null })}
-                      placeholder="e.g., South Courtroom"
-                      className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
-                    />
-                  </div>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-sm font-medium text-gray-900 dark:text-white">Cameras</h4>
+                  <button
+                    type="button"
+                    onClick={addCamera}
+                    className="text-xs px-2 py-1 bg-primary text-white rounded hover:bg-primary/90"
+                  >
+                    + Add Camera
+                  </button>
                 </div>
-                <div className="mt-3">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                    Camera Rotate Interval (seconds)
-                  </label>
-                  <input
-                    type="number"
-                    min="5"
-                    max="300"
-                    value={formData.cameraRotateInterval ?? 30}
-                    onChange={(e) => setFormData({ ...formData, cameraRotateInterval: parseInt(e.target.value) || 30 })}
-                    className="w-32 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
-                  />
+                <div className="space-y-3">
+                  {cameras.map((cam, idx) => (
+                    <div key={idx} className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Camera {idx + 1}</span>
+                        <button
+                          type="button"
+                          onClick={() => removeCamera(idx)}
+                          className="text-xs text-red-500 hover:text-red-700"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="text"
+                          value={cam.name}
+                          onChange={(e) => updateCamera(idx, 'name', e.target.value)}
+                          placeholder="Name (e.g., North Courtroom)"
+                          className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white"
+                        />
+                        <input
+                          type="text"
+                          value={cam.url}
+                          onChange={(e) => updateCamera(idx, 'url', e.target.value)}
+                          placeholder="HLS URL (leave empty for test pattern)"
+                          className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                  {cameras.length === 0 && (
+                    <p className="text-sm text-gray-400 dark:text-gray-500 italic text-center py-4">
+                      No cameras configured. Click "+ Add Camera" to start.
+                    </p>
+                  )}
                 </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                  Leave URL empty to show a test pattern for that camera tile.
+                </p>
               </div>
             )}
 

@@ -88,16 +88,16 @@
   <!-- IT Status Monitor -->
   <section id="display-it-status" class="display-type-section" style="display: none;">
     <div class="it-status-container">
-      <div class="it-video-panel">
-        <div class="camera-label" id="camera-label"></div>
-        <video id="camera-feed" autoplay muted playsinline></video>
-        <div class="camera-offline" id="camera-offline" style="display:none;">
-          Camera Offline
+      <div class="it-left-column">
+        <div class="it-video-panel" id="it-camera-grid">
+          <!-- Camera tiles created dynamically by JS -->
+        </div>
+        <div class="it-system-status" id="it-system-status">
+          <!-- System status populated by JS -->
         </div>
       </div>
-      <div class="it-info-panel">
-        <div id="it-current-hearing"></div>
-        <div id="it-upcoming-hearings"></div>
+      <div class="it-info-panel" id="it-schedule-panel">
+        <!-- Judge schedule populated by renderItHearings() -->
       </div>
     </div>
   </section>

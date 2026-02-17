@@ -95,6 +95,7 @@ model Display {
   cameraLabel1         String?   @map("camera_label_1")
   cameraLabel2         String?   @map("camera_label_2")
   cameraRotateInterval Int?      @map("camera_rotate_interval")
+  cameraConfig         String?   @map("camera_config")
   apiKeyHash       String    @map("api_key_hash")
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")

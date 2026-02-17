@@ -38,6 +38,7 @@ export interface Display {
   cameraLabel1: string | null;
   cameraLabel2: string | null;
   cameraRotateInterval: number | null;
+  cameraConfig: string | object | null;
   status: string;
   lastHeartbeat: string | null;
   ipAddress: string | null;
@@ -73,6 +74,7 @@ export interface CreateDisplayInput {
   cameraLabel1?: string | null;
   cameraLabel2?: string | null;
   cameraRotateInterval?: number | null;
+  cameraConfig?: object | string | null;
 }
 
 export interface UpdateDisplayInput extends Partial<Omit<CreateDisplayInput, 'id'>> {}
