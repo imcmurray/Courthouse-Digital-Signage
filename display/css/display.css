@@ -28,7 +28,7 @@
   --header-height: 120px;
   --notice-height: 60px;
   --ticker-height: 50px;
-  --row-height: 70px;
+  --row-height: 58px;
 }
 
 * {
@@ -233,7 +233,7 @@ html, body {
 .docket-header {
   background-color: var(--navy-dark);
   color: var(--white);
-  padding: 15px 30px;
+  padding: 8px 30px;
   border-bottom: 3px solid var(--primary-yellow);
 }
 
@@ -263,7 +263,7 @@ html, body {
   color: var(--white);
   font-size: var(--table-header-size);
   font-weight: bold;
-  padding: 15px 10px;
+  padding: 8px 10px;
   text-align: left;
   border-bottom: 2px solid var(--primary-yellow);
 }
@@ -276,13 +276,13 @@ html, body {
 .docket-table th:nth-child(3),
 .docket-table td:nth-child(3) { width: 8%; } /* TIME */
 .docket-table th:nth-child(4),
-.docket-table td:nth-child(4) { width: 12%; } /* CASE # */
+.docket-table td:nth-child(4) { width: 8%; } /* CASE # */
 .docket-table th:nth-child(5),
-.docket-table td:nth-child(5) { width: 30%; } /* MATTER */
+.docket-table td:nth-child(5) { width: 38%; } /* MATTER */
 .docket-table th:nth-child(6),
-.docket-table td:nth-child(6) { width: 8%; text-align: center; } /* ROOM */
+.docket-table td:nth-child(6) { width: 6%; text-align: center; } /* ROOM */
 .docket-table th:nth-child(7),
-.docket-table td:nth-child(7) { width: 12%; } /* JUDGE */
+.docket-table td:nth-child(7) { width: 10%; text-align: right; } /* JUDGE */
 
 .docket-table tbody tr {
   height: var(--row-height);
@@ -299,7 +299,7 @@ html, body {
 .docket-table td {
   color: var(--white);
   font-size: var(--table-content-size);
-  padding: 10px;
+  padding: 5px 10px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -348,6 +348,9 @@ html, body {
   display: flex;
   align-items: center;
   gap: 12px;
+  width: 100% !important;
+  overflow: visible;
+  text-overflow: clip;
 }
 
 .separator-label {
@@ -390,15 +393,41 @@ html, body {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   line-height: 1.4;
+  white-space: nowrap;
 }
 
-/* Zoom connection legend bar */
+
+/* Legend bar - fixed above bottom bar (pagination left, zoom right) */
 #zoom-legend {
-  display: none;
+  display: none;           /* JS sets to 'flex' when content present */
+  position: fixed;
+  bottom: calc(var(--notice-height) + var(--ticker-height));
+  left: 0;
+  width: 100%;
   background-color: var(--navy-dark);
   border-top: 2px solid var(--primary-yellow);
   padding: 8px 30px;
-  text-align: right;
+  z-index: 99;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Left section: pagination continuation label + dots */
+.legend-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.legend-bar-left .separator-label {
+  font-size: 18px;
+}
+
+/* Right section: zoom connection details */
+.legend-bar-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
 }
 
 .zoom-legend-title {
@@ -522,20 +551,69 @@ html, body {
   z-index: 1000;
 }
 
-/* Auto-scroll animation for long docket lists */
-.docket-table-container.scrolling tbody {
-  animation: auto-scroll 60s linear infinite;
+/* =============================================
+   Pagination Fade Transitions
+   ============================================= */
+
+.docket-table tbody {
+  opacity: 1;
+  transition: opacity 600ms ease-in-out;
 }
 
-@keyframes auto-scroll {
-  0%, 10% {
-    transform: translateY(0);
+.docket-table tbody.page-fade-out {
+  opacity: 0;
+}
+
+/* Page dots (rendered in legend bar left section) */
+.page-dots {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.page-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.25);
+  transition: background-color 0.3s ease;
+}
+
+.page-dot.active {
+  background-color: var(--primary-yellow);
+}
+
+/* =============================================
+   "Next Up" Highlighting
+   ============================================= */
+
+.docket-table tbody tr.upcoming-next {
+  background: linear-gradient(90deg, #6a5a1a, #5a4a0a) !important;
+  border-left: 4px solid var(--primary-yellow);
+  animation: next-up-pulse 3s ease-in-out infinite;
+}
+
+.docket-table tbody tr.upcoming-next td:first-child::before {
+  content: 'NEXT';
+  display: inline-block;
+  background-color: var(--primary-yellow);
+  color: var(--navy-dark);
+  font-size: 14px;
+  font-weight: bold;
+  padding: 1px 6px;
+  border-radius: 3px;
+  margin-right: 8px;
+  vertical-align: middle;
+  letter-spacing: 1px;
+}
+
+@keyframes next-up-pulse {
+  0%, 100% {
+    box-shadow: inset 0 0 0 rgba(255, 215, 0, 0);
   }
-  45%, 55% {
-    transform: translateY(calc(-100% + 600px));
-  }
-  90%, 100% {
-    transform: translateY(0);
+  50% {
+    box-shadow: inset 0 0 20px rgba(255, 215, 0, 0.15);
   }
 }
 
@@ -633,16 +711,16 @@ body.portrait .info-widget {
 /* Table: smaller fonts, shorter rows */
 body.portrait .docket-table th {
   font-size: 24px;
-  padding: 10px 8px;
+  padding: 6px 8px;
 }
 
 body.portrait .docket-table td {
   font-size: 22px;
-  padding: 8px;
+  padding: 4px 8px;
 }
 
 body.portrait .docket-table tbody tr {
-  height: 55px;
+  height: 46px;
 }
 
 /* Zoom detail rows: scale down */
@@ -699,6 +777,20 @@ body.portrait .zoom-pill {
 
 body.portrait #zoom-legend {
   padding: 6px 20px;
+  bottom: 94px; /* 50px notice + 44px ticker */
+}
+
+/* Portrait page indicator */
+body.portrait .page-dot {
+  width: 8px;
+  height: 8px;
+}
+
+/* Portrait next-up */
+body.portrait .docket-table tbody tr.upcoming-next td:first-child::before {
+  font-size: 12px;
+  padding: 1px 4px;
+  margin-right: 6px;
 }
 
 body.portrait .zoom-legend-title {

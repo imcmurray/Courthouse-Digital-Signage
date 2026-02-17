@@ -38,6 +38,19 @@
   let displayConfig = {};
   let socket = null;
 
+  // Pagination state
+  let paginationState = {
+    pages: [],           // Array of page HTML strings
+    rotationOrder: [],   // Weighted index sequence for rotation
+    currentIndex: 0,     // Current position in rotationOrder
+    timer: null,         // setInterval ID
+    active: false,       // Whether pagination is running
+    pageSignature: '',   // Hash of page structure for soft-refresh detection
+  };
+
+  const PAGINATION_DWELL = 8000;   // ms per page
+  const PAGINATION_FADE = 600;     // ms fade transition
+
   // Screensaver state
   let screensaverActive = false;
   let screensaverManualOverride = null; // null = auto, 'on' = forced, 'off' = forced
@@ -338,10 +351,13 @@
           upcomingLater.push({ entry, category: 'upcoming_later' });
         }
       } else if (entry.status === 'stricken') {
-        // Stricken entries follow same time logic if showStricken is on
-        if (minutesDiff !== null && minutesDiff >= -30) {
-          pastRecent.push({ entry, category: 'past_recent' });
+        // Stricken entries stay in their natural time slot (not EARLIER)
+        if (minutesDiff !== null && minutesDiff > 30) {
+          upcomingLater.push({ entry, category: 'upcoming_later' });
+        } else if (minutesDiff !== null && minutesDiff >= -30) {
+          upcomingSoon.push({ entry, category: 'upcoming_soon' });
         }
+        // Stricken older than 30 min past: hidden entirely
       } else {
         // Any other status -- show in upcoming later
         upcomingLater.push({ entry, category: 'upcoming_later' });
@@ -373,14 +389,14 @@
     return zoomMap;
   }
 
-  // Render zoom connection legend at bottom
+  // Render zoom connection details into the right section of the legend bar
   function renderZoomLegend(zoomMap) {
-    const legendEl = document.getElementById('zoom-legend');
-    if (!legendEl) return;
+    const rightEl = document.getElementById('zoom-legend-content');
+    if (!rightEl) return;
 
     if (!zoomMap || zoomMap.size === 0) {
-      legendEl.innerHTML = '';
-      legendEl.style.display = 'none';
+      rightEl.innerHTML = '';
+      updateLegendBarVisibility();
       return;
     }
 
@@ -402,8 +418,49 @@
     });
     html += '</div>';
 
-    legendEl.innerHTML = html;
-    legendEl.style.display = 'block';
+    rightEl.innerHTML = html;
+    updateLegendBarVisibility();
+  }
+
+  // Update pagination info in the left section of the legend bar
+  function updatePaginationInfo(pageIndex, label) {
+    const leftEl = document.getElementById('pagination-info');
+    if (!leftEl) return;
+
+    const totalPages = paginationState.pages.length;
+    if (totalPages <= 1) {
+      leftEl.innerHTML = '';
+      updateLegendBarVisibility();
+      return;
+    }
+
+    let html = '';
+    if (label) {
+      html += `<span class="separator-label">${escapeHtml(label)}</span>`;
+    }
+    html += '<span class="page-dots">';
+    for (let i = 0; i < totalPages; i++) {
+      html += `<span class="page-dot${i === pageIndex ? ' active' : ''}"></span>`;
+    }
+    html += '</span>';
+
+    leftEl.innerHTML = html;
+    updateLegendBarVisibility();
+  }
+
+  // Show or hide the legend bar based on whether either section has content
+  function updateLegendBarVisibility() {
+    const bar = document.getElementById('zoom-legend');
+    const leftEl = document.getElementById('pagination-info');
+    const rightEl = document.getElementById('zoom-legend-content');
+    if (!bar) return;
+
+    const hasLeft = leftEl && leftEl.innerHTML.trim() !== '';
+    const hasRight = rightEl && rightEl.innerHTML.trim() !== '';
+    bar.style.display = (hasLeft || hasRight) ? 'flex' : 'none';
+
+    // Re-adjust docket padding since bar visibility may have changed
+    adjustDocketPadding();
   }
 
   // Build HTML for a single hearing row (shared between both modes)
@@ -454,6 +511,246 @@
     `;
   }
 
+  // =============================================
+  // Pagination Engine
+  // =============================================
+
+  // Calculate how many hearing rows fit on one page
+  function getRowsPerPage() {
+    const isPortrait = document.body.classList.contains('portrait');
+    const screenHeight = isPortrait ? 1920 : 1080;
+
+    // Fixed elements: header, thead, bottom bar (notice + ticker)
+    const headerEl = document.querySelector('.header');
+    const headerH = headerEl ? headerEl.offsetHeight : (isPortrait ? 160 : 120);
+    const docketHeaderEl = document.querySelector('.docket-header');
+    const docketHeaderH = docketHeaderEl ? docketHeaderEl.offsetHeight : 60;
+    const theadEl = document.querySelector('.docket-table thead');
+    const theadH = theadEl ? theadEl.offsetHeight : 60;
+    const bottomBarH = isPortrait ? 94 : 110;
+
+    // Zoom legend height (dynamic)
+    const legendEl = document.getElementById('zoom-legend');
+    const legendH = (legendEl && legendEl.style.display !== 'none') ? legendEl.offsetHeight : 0;
+
+    // Page indicator height
+    const pageIndicatorH = 30;
+
+    const available = screenHeight - headerH - docketHeaderH - theadH - bottomBarH - legendH - pageIndicatorH - 10;
+    const rowH = isPortrait ? 46 : 58;
+    const separatorH = isPortrait ? 32 : 40;
+
+    // Reserve space for at least one separator per page
+    return Math.max(2, Math.floor((available - separatorH) / rowH));
+  }
+
+  // Build sections array from classified entries for pagination
+  function buildSectionsForPagination(entries, now, zoomMap) {
+    const { inProgress, upcomingSoon, upcomingLater, pastRecent } = classifyEntries(entries, now);
+    const sections = [];
+
+    if (inProgress.length > 0) {
+      const rows = [];
+      let ri = 0;
+      inProgress.forEach(({ entry }) => {
+        rows.push(buildEntryRow(entry, ri, now, zoomMap, []));
+        ri++;
+      });
+      sections.push({ label: 'NOW', rows, priority: 'high' });
+    }
+
+    if (upcomingSoon.length > 0) {
+      const rows = [];
+      let ri = 0;
+      const hasInProgress = inProgress.length > 0;
+      upcomingSoon.forEach(({ entry }, idx) => {
+        const extra = ['upcoming-soon'];
+        // First upcoming-soon entry gets "next up" treatment when nothing is in progress
+        if (idx === 0 && !hasInProgress) extra.push('upcoming-next');
+        rows.push(buildEntryRow(entry, ri, now, zoomMap, extra));
+        ri++;
+      });
+      sections.push({ label: 'COMING UP', rows, priority: 'high' });
+    }
+
+    if (upcomingLater.length > 0) {
+      const rows = [];
+      let ri = 0;
+      upcomingLater.forEach(({ entry }) => {
+        rows.push(buildEntryRow(entry, ri, now, zoomMap, []));
+        ri++;
+      });
+      sections.push({ label: 'LATER', rows, priority: 'low' });
+    }
+
+    // Drop EARLIER on busy days (more than 3 past entries)
+    if (pastRecent.length > 0 && pastRecent.length <= 3) {
+      const rows = [];
+      let ri = 0;
+      pastRecent.forEach(({ entry }) => {
+        rows.push(buildEntryRow(entry, ri, now, zoomMap, ['past-recent']));
+        ri++;
+      });
+      sections.push({ label: 'EARLIER', rows, priority: 'none' });
+    }
+
+    return sections;
+  }
+
+  // Slice sections into screen-sized pages, respecting section boundaries
+  function buildPaginatedPages(sections, rowsPerPage) {
+    const pages = [];
+    let currentPageHtml = '';
+    let currentPageRows = 0;
+    let currentPagePriority = 'low'; // track highest priority on current page
+    let currentPageContLabel = null;  // continuation label (shown in legend bar)
+
+    sections.forEach(section => {
+      // If adding this section's separator + first row would overflow, start new page
+      if (currentPageRows > 0 && currentPageRows + 1 > rowsPerPage) {
+        pages.push({ html: currentPageHtml, priority: currentPagePriority, contLabel: currentPageContLabel });
+        currentPageHtml = '';
+        currentPageRows = 0;
+        currentPagePriority = 'low';
+        currentPageContLabel = null;
+      }
+
+      // Add separator
+      currentPageHtml += buildSeparatorRow(section.label);
+
+      // Track priority
+      if (section.priority === 'high') currentPagePriority = 'high';
+      else if (section.priority === 'none' && currentPagePriority !== 'high') currentPagePriority = 'none';
+
+      // Add rows, splitting across pages if needed
+      section.rows.forEach(rowHtml => {
+        if (currentPageRows >= rowsPerPage) {
+          pages.push({ html: currentPageHtml, priority: currentPagePriority, contLabel: currentPageContLabel });
+          currentPageHtml = '';
+          currentPageRows = 0;
+          currentPagePriority = section.priority === 'high' ? 'high' : 'low';
+          // Continuation label moves to legend bar (no separator row in table)
+          currentPageContLabel = section.label + ' (CONT.)';
+        }
+        currentPageHtml += rowHtml;
+        currentPageRows++;
+      });
+    });
+
+    if (currentPageHtml) {
+      pages.push({ html: currentPageHtml, priority: currentPagePriority, contLabel: currentPageContLabel });
+    }
+
+    return pages;
+  }
+
+  // Create weighted rotation order: high-priority pages shown after every low-priority page
+  function buildRotationOrder(pages) {
+    if (pages.length <= 1) return pages.map((_, i) => i);
+
+    const highPages = [];
+    const otherPages = [];
+
+    pages.forEach((page, i) => {
+      if (page.priority === 'high') highPages.push(i);
+      else otherPages.push(i);
+    });
+
+    // If no high-priority pages, just cycle through all
+    if (highPages.length === 0) return pages.map((_, i) => i);
+    // If no other pages, just cycle high-priority
+    if (otherPages.length === 0) return highPages;
+
+    // Interleave: after each other page, show all high-priority pages
+    const order = [];
+    otherPages.forEach(otherIdx => {
+      // Show high-priority pages first
+      highPages.forEach(hIdx => order.push(hIdx));
+      order.push(otherIdx);
+    });
+    // End with high-priority pages one more time
+    highPages.forEach(hIdx => order.push(hIdx));
+
+    return order;
+  }
+
+  function showPage(pageIndex) {
+    const tbody = document.getElementById('docket-body');
+    if (!tbody || !paginationState.pages[pageIndex]) return;
+
+    tbody.innerHTML = paginationState.pages[pageIndex].html;
+
+    const totalPages = paginationState.pages.length;
+    if (totalPages > 1) {
+      // Move the first separator's label into the legend bar so it matches
+      // the "(CONT.)" treatment on continuation pages.
+      let label = paginationState.pages[pageIndex].contLabel || '';
+      const firstSep = tbody.querySelector('tr.time-separator');
+      if (firstSep) {
+        const labelEl = firstSep.querySelector('.separator-label');
+        if (labelEl) label = labelEl.textContent;
+        firstSep.remove();
+      }
+      updatePaginationInfo(pageIndex, label);
+    } else {
+      updatePaginationInfo(pageIndex, '');
+    }
+  }
+
+  function transitionToNextPage() {
+    const tbody = document.getElementById('docket-body');
+    if (!tbody || paginationState.pages.length === 0) return;
+
+    // Advance to next position in rotation order
+    paginationState.currentIndex = (paginationState.currentIndex + 1) % paginationState.rotationOrder.length;
+    const nextPageIdx = paginationState.rotationOrder[paginationState.currentIndex];
+
+    // Fade out
+    tbody.classList.add('page-fade-out');
+
+    setTimeout(() => {
+      showPage(nextPageIdx);
+      tbody.classList.remove('page-fade-out');
+    }, PAGINATION_FADE);
+  }
+
+  function startPagination(pages) {
+    stopPagination();
+
+    paginationState.pages = pages;
+    paginationState.rotationOrder = buildRotationOrder(pages);
+    paginationState.currentIndex = 0;
+    paginationState.active = true;
+    paginationState.pageSignature = pages.map(p => p.html.length + ':' + p.priority).join('|');
+
+    // Show first page immediately
+    if (paginationState.rotationOrder.length > 0) {
+      showPage(paginationState.rotationOrder[0]);
+    }
+
+    // Start rotation timer (only if more than one page)
+    if (pages.length > 1) {
+      paginationState.timer = setInterval(transitionToNextPage, PAGINATION_DWELL);
+    }
+  }
+
+  function stopPagination() {
+    if (paginationState.timer) {
+      clearInterval(paginationState.timer);
+      paginationState.timer = null;
+    }
+    paginationState.active = false;
+    paginationState.pages = [];
+    paginationState.rotationOrder = [];
+    paginationState.currentIndex = 0;
+    paginationState.pageSignature = '';
+
+    // Clear pagination info from legend bar
+    const leftEl = document.getElementById('pagination-info');
+    if (leftEl) leftEl.innerHTML = '';
+    updateLegendBarVisibility();
+  }
+
   // Render docket table
   function renderDocket() {
     const tbody = document.getElementById('docket-body');
@@ -485,15 +782,61 @@
     // Render zoom legend (always shows for any zoom hearing today, not time-gated)
     renderZoomLegend(legendMap);
 
-    // Enable auto-scroll if needed
+    // Adjust docket section bottom padding to avoid zoom legend overlap
+    adjustDocketPadding();
+
+    // Activate pagination if needed
     const container = document.getElementById('docket-container');
     const scrollThreshold = document.body.classList.contains('portrait') ? 18 : 8;
     const rowCount = tbody.querySelectorAll('tr:not(.time-separator)').length;
+
     if (container && rowCount > scrollThreshold) {
-      container.classList.add('scrolling');
+      container.classList.remove('scrolling'); // Remove legacy auto-scroll class
+      const rowsPerPage = getRowsPerPage();
+      const sections = isSmartMode
+        ? buildSectionsForPagination(docketData, now, legendMap)
+        : buildAllSectionsForPagination(docketData, now, legendMap);
+      const pages = buildPaginatedPages(sections, rowsPerPage);
+
+      if (pages.length > 0) {
+        // Soft refresh: if page structure is similar, just update current page content
+        const newSig = pages.map(p => p.html.length + ':' + p.priority).join('|');
+        if (paginationState.active && newSig === paginationState.pageSignature) {
+          // Soft refresh — update pages in place without restarting rotation
+          paginationState.pages = pages;
+          const currentPageIdx = paginationState.rotationOrder[paginationState.currentIndex];
+          if (currentPageIdx !== undefined) {
+            showPage(currentPageIdx);
+          }
+        } else {
+          startPagination(pages);
+        }
+      }
     } else if (container) {
       container.classList.remove('scrolling');
+      stopPagination();
     }
+  }
+
+  // Build sections for "all" mode pagination
+  function buildAllSectionsForPagination(entries, now, zoomMap) {
+    const rows = [];
+    let ri = 0;
+    entries.forEach(entry => {
+      rows.push(buildEntryRow(entry, ri, now, zoomMap, []));
+      ri++;
+    });
+    return [{ label: "TODAY'S HEARINGS", rows, priority: 'low' }];
+  }
+
+  // Adjust docket section bottom padding to avoid zoom legend overlap
+  function adjustDocketPadding() {
+    const legendEl = document.getElementById('zoom-legend');
+    const docketSection = document.querySelector('.docket-section');
+    if (!docketSection) return;
+    const legendH = (legendEl && legendEl.style.display !== 'none') ? legendEl.offsetHeight : 0;
+    docketSection.style.paddingBottom = legendH > 0 ? legendH + 'px' : '0';
+
   }
 
   // Render all-mode docket (legacy behavior, but with zoom pill dedup)
@@ -548,8 +891,11 @@
     // Upcoming soon section
     if (upcomingSoon.length > 0) {
       html += buildSeparatorRow('COMING UP');
-      upcomingSoon.forEach(({ entry }) => {
-        html += buildEntryRow(entry, rowIndex, now, zoomMap, ['upcoming-soon']);
+      upcomingSoon.forEach(({ entry }, idx) => {
+        const extra = ['upcoming-soon'];
+        // First upcoming-soon entry gets "next up" when nothing is in progress
+        if (idx === 0 && inProgress.length === 0) extra.push('upcoming-next');
+        html += buildEntryRow(entry, rowIndex, now, zoomMap, extra);
         rowIndex++;
       });
     }
