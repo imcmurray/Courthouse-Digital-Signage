@@ -1217,3 +1217,8 @@ body.portrait .it-status-display-pill {
 .chambers-mode .docket-table td:nth-child(5) {
   width: 48%;
 }
+
+/* Courtroom mode: hide ROOM header text but keep column for Zoom pills */
+.courtroom-mode .docket-table th:nth-child(6) {
+  font-size: 0;
+}
