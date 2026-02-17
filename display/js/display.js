@@ -425,6 +425,13 @@
     updateLegendBarVisibility();
   }
 
+  // Build the stricken-hidden notice if applicable
+  function getStrickenNotice() {
+    return displayConfig.showStricken === false
+      ? '<span class="stricken-notice">(Stricken hearings hidden)</span>'
+      : '';
+  }
+
   // Update pagination info in the left section of the legend bar
   function updatePaginationInfo(pageIndex, label) {
     const leftEl = document.getElementById('pagination-info');
@@ -432,7 +439,7 @@
 
     const totalPages = paginationState.pages.length;
     if (totalPages <= 1) {
-      leftEl.innerHTML = '';
+      leftEl.innerHTML = getStrickenNotice();
       updateLegendBarVisibility();
       return;
     }
@@ -446,6 +453,7 @@
       html += `<span class="page-dot${i === pageIndex ? ' active' : ''}"></span>`;
     }
     html += '</span>';
+    html += getStrickenNotice();
 
     leftEl.innerHTML = html;
     updateLegendBarVisibility();
@@ -748,9 +756,9 @@
     paginationState.currentIndex = 0;
     paginationState.pageSignature = '';
 
-    // Clear pagination info from legend bar
+    // Clear pagination info from legend bar, but keep stricken notice
     const leftEl = document.getElementById('pagination-info');
-    if (leftEl) leftEl.innerHTML = '';
+    if (leftEl) leftEl.innerHTML = getStrickenNotice();
     updateLegendBarVisibility();
   }
 
