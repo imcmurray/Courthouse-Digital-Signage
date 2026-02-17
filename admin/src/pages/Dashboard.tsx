@@ -48,6 +48,7 @@ export default function Dashboard() {
   const [editingDisplay, setEditingDisplay] = useState<Display | null>(null);
   const [editingDocketEntry, setEditingDocketEntry] = useState<DocketEntry | null>(null);
   const [selectedJudge, setSelectedJudge] = useState<string | null>(null);
+  const [hideStricken, setHideStricken] = useState(false);
 
   // Quick Action mutations
   const createHearingMutation = useMutation({
@@ -649,26 +650,34 @@ export default function Dashboard() {
                 <span className="ml-2 text-gray-400">({todaysHearings.total})</span>
               )}
             </h3>
-            {Object.keys(judgeCounts).length > 1 && (
-              <div className="flex flex-wrap justify-end gap-1">
-                {Object.entries(judgeCounts).map(([judge, count]) => (
-                  <button
-                    key={judge}
-                    onClick={() => setSelectedJudge(prev => prev === judge ? null : judge)}
-                    className={`inline-flex items-center px-2 py-0.5 rounded text-xs transition-colors ${
-                      selectedJudge === judge
-                        ? 'bg-primary text-white'
-                        : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                    }`}
-                  >
-                    {getLastName(judge)} ({count})
-                  </button>
-                ))}
-              </div>
-            )}
+            <div className="flex flex-wrap justify-end gap-1">
+              <button
+                onClick={() => setHideStricken(prev => !prev)}
+                className={`inline-flex items-center px-2 py-0.5 rounded text-xs transition-colors ${
+                  hideStricken
+                    ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                }`}
+              >
+                {hideStricken ? 'Stricken Hidden' : 'Hide Stricken'}
+              </button>
+              {Object.keys(judgeCounts).length > 1 && Object.entries(judgeCounts).map(([judge, count]) => (
+                <button
+                  key={judge}
+                  onClick={() => setSelectedJudge(prev => prev === judge ? null : judge)}
+                  className={`inline-flex items-center px-2 py-0.5 rounded text-xs transition-colors ${
+                    selectedJudge === judge
+                      ? 'bg-primary text-white'
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  }`}
+                >
+                  {getLastName(judge)} ({count})
+                </button>
+              ))}
+            </div>
           </div>
           {todaysHearings?.entries && todaysHearings.entries.length > 0 ? (
-            <div className="max-h-52 overflow-y-auto -mx-2 px-2">
+            <div className="max-h-96 overflow-y-auto -mx-2 px-2">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-xs text-gray-500 dark:text-gray-400">
@@ -682,7 +691,7 @@ export default function Dashboard() {
                 <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                   {todaysHearings.entries
                     .filter(entry => !selectedJudge || entry.hearingJudge === selectedJudge)
-                    .slice(0, 15)
+                    .filter(entry => !hideStricken || entry.status !== 'stricken')
                     .map((entry) => {
                       const isStricken = entry.status === 'stricken';
                       const isContinued = entry.status === 'continued';
