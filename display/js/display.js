@@ -485,7 +485,7 @@
     const useZoomPill = entry.isZoom && displayConfig.showZoomInfo !== false;
 
     const adversaryMarker = entry.adversaryNumber
-      ? '<span class="adversary-marker">&#8224;</span>'
+      ? '<span class="adversary-marker">&#9876;&#65039;</span>'
       : '';
 
     // Room column: use colored pill if zoom dedup is active, else plain text
