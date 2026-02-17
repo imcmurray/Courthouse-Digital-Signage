@@ -345,9 +345,14 @@
           upcomingSoon.push({ entry, category: 'upcoming_soon' });
         } else if (minutesDiff !== null && minutesDiff > 30 && minutesDiff <= 120) {
           upcomingLater.push({ entry, category: 'upcoming_later' });
-        } else if (minutesDiff !== null && minutesDiff <= 0) {
-          // Scheduled but time has passed -- treat as upcoming soon (clock drift / not yet started)
+        } else if (minutesDiff !== null && minutesDiff <= 0 && minutesDiff >= -15) {
+          // Scheduled but time passed within 15 min -- grace period (clock drift / not yet started)
           upcomingSoon.push({ entry, category: 'upcoming_soon' });
+        } else if (minutesDiff !== null && minutesDiff < -15 && minutesDiff >= -60) {
+          // Scheduled 15-60 min ago -- recently passed
+          pastRecent.push({ entry, category: 'past_recent' });
+        } else if (minutesDiff !== null && minutesDiff < -60) {
+          // Scheduled more than 60 min ago -- drop entirely (not shown)
         } else if (minutesDiff !== null && minutesDiff > 120) {
           upcomingLater.push({ entry, category: 'upcoming_later' });
         } else {
@@ -1344,8 +1349,9 @@
       if (type === 'chambers') {
         applyChambersTweaks();
       }
-      // Customize docket title for courtroom displays with a room filter
+      // Customize courtroom displays with a room filter
       if (type === 'courtroom' && displayConfig.courtroomFilter) {
+        document.body.classList.add('courtroom-mode');
         var titleEl = document.getElementById('docket-title');
         if (titleEl) {
           titleEl.textContent = "TODAY'S HEARING CALENDAR For Courtroom " + displayConfig.courtroomFilter;

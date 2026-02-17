@@ -314,6 +314,15 @@ export default function Dashboard() {
     return diffMs > 0 && diffMs <= 30 * 60 * 1000;
   };
 
+  const isHearingPast = (entry: DocketEntry) => {
+    const now = new Date();
+    const [h, m] = entry.hearingTime.split(':').map(Number);
+    const hearingDate = new Date(entry.hearingDate);
+    hearingDate.setHours(h, m, 0, 0);
+    const diffMs = hearingDate.getTime() - now.getTime();
+    return diffMs < -15 * 60 * 1000; // more than 15 min ago
+  };
+
   const isAnnouncementExpiringSoon = (ann: Announcement) => {
     if (!ann.expiresAt) return false;
     const diffMs = new Date(ann.expiresAt).getTime() - Date.now();
@@ -678,10 +687,11 @@ export default function Dashboard() {
                       const isStricken = entry.status === 'stricken';
                       const isContinued = entry.status === 'continued';
                       const isInactive = isStricken || isContinued;
+                      const isPast = !isInactive && isHearingPast(entry);
                       return (
                     <tr
                       key={entry.id}
-                      className={isStricken ? 'opacity-50' : isHearingSoon(entry) ? 'bg-amber-50 dark:bg-amber-900/10' : ''}
+                      className={isStricken ? 'opacity-50' : isPast ? 'opacity-40' : isHearingSoon(entry) ? 'bg-amber-50 dark:bg-amber-900/10' : ''}
                     >
                       <td className="py-1.5 pr-2 whitespace-nowrap">
                         <span className={`${isInactive ? 'line-through text-gray-400 dark:text-gray-500' : isHearingSoon(entry) ? 'text-amber-600 dark:text-amber-400 font-medium' : 'text-gray-900 dark:text-white'}`}>
@@ -814,17 +824,20 @@ export default function Dashboard() {
                     ).map(([time, groupEntries]) => {
                       const hasSoon = groupEntries.some(e => isHearingSoon(e));
                       const hasInProgress = groupEntries.some(e => e.status === 'in_progress');
+                      const isGroupPast = groupEntries.every(e => isHearingPast(e));
                       const groupActive = groupEntries.filter(e => e.status !== 'stricken').length;
                       const groupStricken = groupEntries.length - groupActive;
                       return (
                         <span
                           key={time}
                           className={`inline-flex items-center px-2 py-0.5 rounded text-xs ${
-                            hasSoon
-                              ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
-                              : hasInProgress
-                                ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                                : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
+                            isGroupPast
+                              ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 opacity-40'
+                              : hasSoon
+                                ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
+                                : hasInProgress
+                                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                                  : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
                           }`}
                           title={groupEntries.map(e => `${e.caseNumber} - ${e.status} - ${e.courtroom || 'No room'}`).join('\n')}
                         >
