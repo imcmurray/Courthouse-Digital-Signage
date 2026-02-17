@@ -1755,27 +1755,6 @@
     if (uptimeStr) html += '<span class="it-status-label" style="margin-left:8px">Uptime</span><span class="it-status-value">' + uptimeStr + '</span>';
     html += '</div>';
 
-    // Displays
-    if (data.displays) {
-      var online = data.displays.filter(function(d) { return d.status === 'online'; }).length;
-      var total = data.displays.length;
-      html += '<div class="it-status-item">';
-      html += '<span class="it-status-dot" style="background:' + (online > 0 ? '#4CAF50' : '#E53E3E') + '"></span>';
-      html += '<span class="it-status-label">Displays</span>';
-      html += '<span class="it-status-value">' + online + '/' + total + ' online</span>';
-      html += '</div>';
-
-      // Individual display pills
-      html += '<div class="it-status-item it-status-displays-list">';
-      data.displays.forEach(function(d) {
-        var isOn = d.status === 'online';
-        html += '<span class="it-status-display-pill ' + (isOn ? 'online' : 'offline') + '">';
-        html += escapeHtml(d.name);
-        html += '</span>';
-      });
-      html += '</div>';
-    }
-
     // Calendar sync
     if (data.calendarSync) {
       var sync = data.calendarSync;
@@ -1792,6 +1771,27 @@
       html += '<span class="it-status-dot" style="background:' + (sync.lastRunAt ? (syncOk ? '#4CAF50' : '#E53E3E') : '#999') + '"></span>';
       html += '<span class="it-status-label">Calendar Sync</span>';
       html += '<span class="it-status-value">' + syncText + '</span>';
+      html += '</div>';
+    }
+
+    // Displays
+    if (data.displays) {
+      var online = data.displays.filter(function(d) { return d.status === 'online'; }).length;
+      var total = data.displays.length;
+      html += '<div class="it-status-item">';
+      html += '<span class="it-status-dot" style="background:' + (online > 0 ? '#4CAF50' : '#E53E3E') + '"></span>';
+      html += '<span class="it-status-label">Displays</span>';
+      html += '<span class="it-status-value">' + online + '/' + total + ' online</span>';
+      html += '</div>';
+
+      // Individual display pills on their own line
+      html += '<div class="it-status-item it-status-displays-list">';
+      data.displays.forEach(function(d) {
+        var isOn = d.status === 'online';
+        html += '<span class="it-status-display-pill ' + (isOn ? 'online' : 'offline') + '">';
+        html += escapeHtml(d.name);
+        html += '</span>';
+      });
       html += '</div>';
     }
 
