@@ -1441,12 +1441,12 @@ app.get('/api/displays/:id/docket', displayLimiter, authenticateApiKey, async (r
       lt: tomorrowUTC
     };
 
-    // Apply display filters
-    if (display.judgeFilter) {
+    // Apply display filters (wayfinding shows all hearings — skip judge/courtroom filters)
+    if (display.judgeFilter && display.displayType !== 'wayfinding') {
       where.hearingJudge = display.judgeFilter;
     }
     // Chambers type: filter by judge only (skip courtroom filter to show all rooms)
-    if (display.courtroomFilter && display.displayType !== 'chambers') {
+    if (display.courtroomFilter && display.displayType !== 'chambers' && display.displayType !== 'wayfinding') {
       where.OR = [
         { courtroom: display.courtroomFilter },
         { courtroom: null }

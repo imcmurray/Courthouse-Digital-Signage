@@ -295,6 +295,7 @@
           headers: {
             'X-API-Key': getApiKey(),
           },
+          cache: 'no-store',
         }
       );
 
@@ -1384,34 +1385,73 @@
     var directionsEl = document.getElementById('wayfinding-directions');
     if (!hearingsEl || !directionsEl) return;
 
-    // Group hearings by courtroom
-    var groups = {};
+    // Group hearings by judge (for left panel) and count by room (for direction badges)
+    var judgeGroups = {};
     var hearingCounts = {};
     docketData.forEach(function(entry) {
-      var room = entry.courtroom || 'Unassigned';
-      if (!groups[room]) {
-        groups[room] = [];
-        hearingCounts[room] = 0;
+      // Judge grouping for left panel
+      var judge = entry.hearingJudge || 'Unassigned';
+      if (!judgeGroups[judge]) judgeGroups[judge] = { entries: [], courtroom: null, zoom: null };
+      judgeGroups[judge].entries.push(entry);
+      if (entry.courtroom && !judgeGroups[judge].courtroom) {
+        judgeGroups[judge].courtroom = entry.courtroom;
       }
-      groups[room].push(entry);
+      if (entry.isZoom && entry.zoomMeetingId && !judgeGroups[judge].zoom) {
+        judgeGroups[judge].zoom = {
+          meetingId: entry.zoomMeetingId,
+          passcode: entry.zoomPasscode,
+          phone: entry.zoomPhone
+        };
+      }
+
+      // Room counting for direction badge logic
+      var room = entry.courtroom || 'Unassigned';
+      if (!hearingCounts[room]) hearingCounts[room] = 0;
       hearingCounts[room]++;
     });
 
-    // Render hearing list (left panel)
-    var hearingsHtml = '<h4>Today\'s Hearings</h4>';
-    var roomNames = Object.keys(groups).sort();
-    if (roomNames.length === 0) {
+    // Render hearing list (left panel) — grouped by judge
+    var hearingsHtml = '<h4>Today\'s Schedule by Judge</h4>';
+    var judgeNames = Object.keys(judgeGroups).sort();
+    if (judgeNames.length === 0) {
       hearingsHtml += '<p style="color: rgba(255,255,255,0.5); font-style: italic;">No hearings scheduled</p>';
     } else {
-      roomNames.forEach(function(room) {
-        hearingsHtml += '<div class="wayfinding-room-group">';
-        hearingsHtml += '<div class="wayfinding-room-name">' + escapeHtml(room) + '</div>';
-        groups[room].forEach(function(entry) {
-          hearingsHtml += '<div class="wayfinding-hearing-item">';
-          hearingsHtml += '<span class="wayfinding-hearing-time">' + formatTime(entry.hearingTime) + '</span>';
-          hearingsHtml += '<span class="wayfinding-hearing-name">' + escapeHtml(entry.caseTitle) + '</span>';
+      judgeNames.forEach(function(judge) {
+        var group = judgeGroups[judge];
+        hearingsHtml += '<div class="wayfinding-judge-group">';
+        hearingsHtml += '<div class="wayfinding-judge-name">' + escapeHtml(judge) + '</div>';
+
+        // Courtroom + Zoom indicator line
+        var metaParts = [];
+        if (group.courtroom) metaParts.push(escapeHtml(group.courtroom));
+        if (group.zoom) metaParts.push('Zoom');
+        if (metaParts.length > 0) {
+          hearingsHtml += '<div class="wayfinding-judge-meta">' + metaParts.join(' &middot; ') + '</div>';
+        }
+
+        // Zoom details (styled like docket zoom legend)
+        if (group.zoom) {
+          hearingsHtml += '<div class="wayfinding-zoom-details">';
+          if (group.zoom.meetingId) hearingsHtml += '<span class="zoom-legend-field">Meeting ID</span> <span class="zoom-legend-value">' + escapeHtml(group.zoom.meetingId) + '</span>';
+          if (group.zoom.passcode) hearingsHtml += ' <span class="zoom-legend-sep"></span> <span class="zoom-legend-field">Passcode</span> <span class="zoom-legend-value">' + escapeHtml(group.zoom.passcode) + '</span>';
+          if (group.zoom.phone) hearingsHtml += ' <span class="zoom-legend-sep"></span> <span class="zoom-legend-field">Phone</span> <span class="zoom-legend-value">' + escapeHtml(group.zoom.phone) + '</span>';
           hearingsHtml += '</div>';
+        }
+
+        // Time pills — group by time with count
+        var timeCounts = {};
+        group.entries.forEach(function(entry) {
+          var t = formatTime(entry.hearingTime);
+          if (!timeCounts[t]) timeCounts[t] = 0;
+          timeCounts[t]++;
         });
+        hearingsHtml += '<div class="wayfinding-time-pills">';
+        Object.keys(timeCounts).forEach(function(time) {
+          var count = timeCounts[time];
+          hearingsHtml += '<span class="wayfinding-time-pill">' + time + (count > 1 ? ' (' + count + ')' : '') + '</span>';
+        });
+        hearingsHtml += '</div>';
+
         hearingsHtml += '</div>';
       });
     }
