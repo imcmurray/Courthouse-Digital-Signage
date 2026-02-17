@@ -425,17 +425,29 @@ export async function runImport(io?: any): Promise<ImportResult[]> {
  * Get current import status.
  */
 export async function getImportStatus(): Promise<ImportStatus> {
-  const enabledSetting = await prisma.setting.findUnique({
-    where: { key: 'calendar_import_enabled' },
-  });
-  const intervalSetting = await prisma.setting.findUnique({
-    where: { key: 'calendar_import_interval' },
-  });
+  const [enabledSetting, intervalSetting] = await Promise.all([
+    prisma.setting.findUnique({ where: { key: 'calendar_import_enabled' } }),
+    prisma.setting.findUnique({ where: { key: 'calendar_import_interval' } }),
+  ]);
+
+  // Fall back to most recent import log if in-memory state was lost (e.g. server restart)
+  let effectiveLastRunAt = lastRunAt;
+  let effectiveLastRunStatus = lastRunStatus;
+  if (!effectiveLastRunAt) {
+    const latestLog = await prisma.importLog.findFirst({
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true, status: true },
+    });
+    if (latestLog) {
+      effectiveLastRunAt = latestLog.createdAt.toISOString();
+      effectiveLastRunStatus = latestLog.status;
+    }
+  }
 
   return {
     isRunning: isImportRunning,
-    lastRunAt,
-    lastRunStatus,
+    lastRunAt: effectiveLastRunAt,
+    lastRunStatus: effectiveLastRunStatus,
     autoImportEnabled: enabledSetting?.value ? JSON.parse(enabledSetting.value) === true : false,
     intervalMinutes: intervalSetting?.value ? parseInt(JSON.parse(intervalSetting.value), 10) : 30,
     progress: isImportRunning ? importProgress : null,
