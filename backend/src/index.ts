@@ -1389,6 +1389,8 @@ app.get('/api/displays/:id/config', displayLimiter, authenticateApiKey, async (r
       screensaverType: display.screensaverType,
       docketViewMode: display.docketViewMode,
       displayType: display.displayType,
+      judgeFilter: display.judgeFilter || null,
+      courtroomFilter: display.courtroomFilter || null,
       wayfindingConfig: (() => {
         if (!display.wayfindingConfig) return null;
         let parsed = JSON.parse(display.wayfindingConfig);
@@ -1458,10 +1460,7 @@ app.get('/api/displays/:id/docket', displayLimiter, authenticateApiKey, async (r
     }
     // Chambers type: filter by judge only (skip courtroom filter to show all rooms)
     if (display.courtroomFilter && display.displayType !== 'chambers' && display.displayType !== 'wayfinding' && display.displayType !== 'it-status') {
-      where.OR = [
-        { courtroom: display.courtroomFilter },
-        { courtroom: null }
-      ];
+      where.courtroom = display.courtroomFilter;
     }
     if (display.chapterFilter) {
       const chapters = JSON.parse(display.chapterFilter);

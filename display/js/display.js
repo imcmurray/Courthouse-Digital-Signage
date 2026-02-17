@@ -1344,6 +1344,13 @@
       if (type === 'chambers') {
         applyChambersTweaks();
       }
+      // Customize docket title for courtroom displays with a room filter
+      if (type === 'courtroom' && displayConfig.courtroomFilter) {
+        var titleEl = document.getElementById('docket-title');
+        if (titleEl) {
+          titleEl.textContent = "TODAY'S HEARING CALENDAR For Courtroom " + displayConfig.courtroomFilter;
+        }
+      }
     }
   }
 
@@ -1367,11 +1374,10 @@
     // Add chambers-mode class to body for CSS column hiding
     document.body.classList.add('chambers-mode');
 
-    // Change docket title
+    // Change docket title to include judge name
     var titleEl = document.getElementById('docket-title');
     if (titleEl && displayConfig.judgeFilter) {
-      var lastName = displayConfig.judgeFilter.split(' ').pop().toUpperCase();
-      titleEl.textContent = "JUDGE " + lastName + "'S CALENDAR";
+      titleEl.textContent = "TODAY'S HEARING CALENDAR For " + displayConfig.judgeFilter;
     }
   }
 
