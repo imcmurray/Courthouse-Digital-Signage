@@ -21,12 +21,38 @@ const DISPLAY_TYPE_OPTIONS = [
   { value: 'chambers', label: "Judge's Chambers" },
 ];
 
-const DIRECTION_OPTIONS = ['right', 'left', 'straight', 'down-the-hall'];
+const ARROW_OPTIONS = [
+  'right', 'left', 'up', 'up-right', 'up-left',
+  'left-near-up', 'left-mid-up', 'left-far-up',
+  'left-near-down', 'left-mid-down', 'left-far-down',
+  'right-near-up', 'right-mid-up', 'right-far-up',
+  'right-near-down', 'right-mid-down',
+];
+
+const ARROW_LABELS: Record<string, string> = {
+  'right': 'right',
+  'left': 'left',
+  'up': 'up (straight)',
+  'up-right': 'up-right',
+  'up-left': 'up-left',
+  'left-near-up': 'left (short) → up',
+  'left-mid-up': 'left (mid) → up',
+  'left-far-up': 'left (far) → up',
+  'left-near-down': 'left (short) → down',
+  'left-mid-down': 'left (mid) → down',
+  'left-far-down': 'left (far) → down',
+  'right-near-up': 'right (short) → up',
+  'right-mid-up': 'right (mid) → up',
+  'right-far-up': 'right (far) → up',
+  'right-near-down': 'right (short) → down',
+  'right-mid-down': 'right (mid) → down',
+};
 const ICON_OPTIONS = ['courtroom', 'intake', 'restroom', 'conference'];
 
 interface WayfindingDirection {
   name: string;
   direction: string;
+  arrow: string;
   description: string;
   icon: string;
 }
@@ -45,7 +71,8 @@ function parseScheduleConfig(raw: string): WeekSchedule {
 function parseWayfindingConfig(raw: string | null): WayfindingDirection[] {
   if (!raw) return [];
   try {
-    const parsed = JSON.parse(raw);
+    let parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    if (typeof parsed === 'string') parsed = JSON.parse(parsed); // double-encoded repair
     return parsed?.directions || [];
   } catch { return []; }
 }
@@ -136,7 +163,7 @@ export default function DisplayEditModal({ display, onClose, onSaved }: DisplayE
   };
 
   const addWayfindingDirection = () => {
-    setWayfindingDirections([...wayfindingDirections, { name: '', direction: 'right', description: '', icon: 'courtroom' }]);
+    setWayfindingDirections([...wayfindingDirections, { name: '', direction: 'right', arrow: 'right', description: '', icon: 'courtroom' }]);
   };
 
   const updateWayfindingDirection = (index: number, field: keyof WayfindingDirection, value: string) => {
@@ -291,12 +318,12 @@ export default function DisplayEditModal({ display, onClose, onSaved }: DisplayE
                           className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white"
                         />
                         <select
-                          value={dir.direction}
-                          onChange={(e) => updateWayfindingDirection(idx, 'direction', e.target.value)}
+                          value={dir.arrow || dir.direction}
+                          onChange={(e) => updateWayfindingDirection(idx, 'arrow', e.target.value)}
                           className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white"
                         >
-                          {DIRECTION_OPTIONS.map((d) => (
-                            <option key={d} value={d}>{d}</option>
+                          {ARROW_OPTIONS.map((a) => (
+                            <option key={a} value={a}>{ARROW_LABELS[a] || a}</option>
                           ))}
                         </select>
                         <input

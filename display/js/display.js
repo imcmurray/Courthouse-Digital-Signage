@@ -1431,7 +1431,7 @@
       });
 
       directionsHtml += '<div class="wayfinding-direction-card">';
-      directionsHtml += '<div class="wayfinding-arrow">' + getDirectionArrowSvg(dir.direction) + '</div>';
+      directionsHtml += '<div class="wayfinding-arrow">' + getDirectionArrowSvg(dir.arrow || dir.direction) + '</div>';
       directionsHtml += '<div class="wayfinding-card-info">';
       directionsHtml += '<div class="wayfinding-card-name">' + escapeHtml(dir.name) + '</div>';
       directionsHtml += '<div class="wayfinding-card-desc">' + escapeHtml(dir.description) + '</div>';
@@ -1450,13 +1450,34 @@
   }
 
   function getDirectionArrowSvg(direction) {
-    // Returns an SVG arrow pointing in the specified direction
+    // L-shaped compound arrows (custom path, no rotation)
+    var lPaths = {
+      'left-near-up':    'M21 19H15V5M11 9l4-4 4 4',
+      'left-mid-up':     'M21 19H11V5M7 9l4-4 4 4',
+      'left-far-up':     'M21 19H6V5M2 9l4-4 4 4',
+      'left-near-down':  'M21 5H15V19M11 15l4 4 4-4',
+      'left-mid-down':   'M21 5H11V19M7 15l4 4 4-4',
+      'left-far-down':   'M21 5H6V19M2 15l4 4 4-4',
+      'right-near-up':   'M3 19H9V5M5 9l4-4 4 4',
+      'right-mid-up':    'M3 19H13V5M9 9l4-4 4 4',
+      'right-far-up':    'M3 19H18V5M14 9l4-4 4 4',
+      'right-near-down': 'M3 5H9V19M5 15l4 4 4-4',
+      'right-mid-down':  'M3 5H13V19M9 15l4 4 4-4',
+    };
+    if (lPaths[direction]) {
+      return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="' + lPaths[direction] + '"/></svg>';
+    }
+
+    // Simple directional arrows (rotation of base arrow)
     var rotation = '0';
     switch (direction) {
       case 'right': rotation = '0'; break;
       case 'left': rotation = '180'; break;
+      case 'up': rotation = '-90'; break;
       case 'straight': rotation = '-90'; break;
-      case 'down-the-hall': rotation = '-45'; break;
+      case 'down-the-hall': rotation = '-90'; break;
+      case 'up-right': rotation = '-45'; break;
+      case 'up-left': rotation = '-135'; break;
       default: rotation = '0';
     }
     return '<svg viewBox="0 0 24 24" style="transform: rotate(' + rotation + 'deg)" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
