@@ -288,6 +288,7 @@
 
   // Fetch docket entries
   async function fetchDocket() {
+    if (screensaverActive) return;
     try {
       const response = await fetch(
         `${CONFIG.apiBaseUrl}/api/displays/${CONFIG.displayId}/docket`,
@@ -949,6 +950,7 @@
 
   // Fetch announcements
   async function fetchAnnouncements() {
+    if (screensaverActive) return;
     try {
       const response = await fetch(
         `${CONFIG.apiBaseUrl}/api/announcements?active=true`,
@@ -1095,6 +1097,7 @@
 
   // Fetch weather data
   async function fetchWeather() {
+    if (screensaverActive) return;
     try {
       const nwsHeaders = { 'User-Agent': 'CourthouseSignage/1.0' };
 
@@ -1719,6 +1722,7 @@
 
   // System status fetching and rendering
   async function fetchSystemStatus() {
+    if (screensaverActive) return;
     try {
       var response = await fetch(
         CONFIG.apiBaseUrl + '/api/displays/' + CONFIG.displayId + '/system-status',
