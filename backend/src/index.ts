@@ -741,7 +741,7 @@ app.get('/api/docket', authenticateToken, async (req: AuthenticatedRequest, res:
     const { date, courtroom, status, judge, chapter, search, limit = '10', page = '1', sortBy, sortOrder, hidePast } = req.query;
 
     // Parse pagination params
-    const pageSize = Math.min(parseInt(limit as string, 10) || 10, 100);
+    const pageSize = Math.min(parseInt(limit as string, 10) || 10, 500);
     const currentPage = Math.max(parseInt(page as string, 10) || 1, 1);
     const offset = (currentPage - 1) * pageSize;
 

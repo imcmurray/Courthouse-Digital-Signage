@@ -164,7 +164,7 @@ export default function Dashboard() {
   // Widget 1: Today's hearings
   const { data: todaysHearings } = useQuery({
     queryKey: ['dashboardHearings', todayStr],
-    queryFn: () => docketApi.getAll({ date: todayStr, limit: 100, sortBy: 'hearingTime', sortOrder: 'asc' }),
+    queryFn: () => docketApi.getAll({ date: todayStr, limit: 500, sortBy: 'hearingTime', sortOrder: 'asc' }),
     refetchInterval: 60000,
   });
 
