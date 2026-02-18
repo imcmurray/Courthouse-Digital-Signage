@@ -665,34 +665,9 @@
     return pages;
   }
 
-  // Create weighted rotation order: high-priority pages shown after every low-priority page
+  // Simple sequential rotation: cycle through pages in order (0→1→2→0→1→2...)
   function buildRotationOrder(pages) {
-    if (pages.length <= 1) return pages.map((_, i) => i);
-
-    const highPages = [];
-    const otherPages = [];
-
-    pages.forEach((page, i) => {
-      if (page.priority === 'high') highPages.push(i);
-      else otherPages.push(i);
-    });
-
-    // If no high-priority pages, just cycle through all
-    if (highPages.length === 0) return pages.map((_, i) => i);
-    // If no other pages, just cycle high-priority
-    if (otherPages.length === 0) return highPages;
-
-    // Interleave: after each other page, show all high-priority pages
-    const order = [];
-    otherPages.forEach(otherIdx => {
-      // Show high-priority pages first
-      highPages.forEach(hIdx => order.push(hIdx));
-      order.push(otherIdx);
-    });
-    // End with high-priority pages one more time
-    highPages.forEach(hIdx => order.push(hIdx));
-
-    return order;
+    return pages.map((_, i) => i);
   }
 
   function showPage(pageIndex) {
