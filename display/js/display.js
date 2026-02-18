@@ -766,35 +766,36 @@
     const isSmartMode = displayConfig.docketViewMode === 'smart';
     const showZoomInfo = displayConfig.showZoomInfo !== false;
 
-    // Collect zoom meetings for pill rendering and legend (no time gate)
-    const legendMap = showZoomInfo ? collectAllZoomMeetings(docketData) : null;
+    // Collect zoom meetings from all entries (for pill coloring on rows)
+    const zoomMap = showZoomInfo ? collectAllZoomMeetings(docketData) : null;
 
     if (isSmartMode) {
-      renderSmartDocket(tbody, docketData, now, legendMap);
+      renderSmartDocket(tbody, docketData, now, zoomMap);
     } else {
-      renderAllDocket(tbody, docketData, now, legendMap);
+      renderAllDocket(tbody, docketData, now, zoomMap);
     }
 
-    // Render zoom legend (always shows for any zoom hearing today, not time-gated)
-    renderZoomLegend(legendMap);
-
-    // Adjust docket section bottom padding to avoid zoom legend overlap
-    adjustDocketPadding();
-
-    // Activate pagination if needed
+    // Activate pagination if needed (may change which entries are actually visible)
     const container = document.getElementById('docket-container');
     const scrollThreshold = document.body.classList.contains('portrait') ? 18 : 8;
     const rowCount = tbody.querySelectorAll('tr:not(.time-separator)').length;
+    let paginationActive = false;
+    let paginationDroppedEarlier = false;
 
     if (container && rowCount > scrollThreshold) {
       container.classList.remove('scrolling'); // Remove legacy auto-scroll class
       const rowsPerPage = getRowsPerPage();
       const sections = isSmartMode
-        ? buildSectionsForPagination(docketData, now, legendMap)
-        : buildAllSectionsForPagination(docketData, now, legendMap);
+        ? buildSectionsForPagination(docketData, now, zoomMap)
+        : buildAllSectionsForPagination(docketData, now, zoomMap);
       const pages = buildPaginatedPages(sections, rowsPerPage);
 
       if (pages.length > 0) {
+        paginationActive = true;
+        // Check if EARLIER section was dropped (smart mode drops pastRecent > 3)
+        if (isSmartMode) {
+          paginationDroppedEarlier = !sections.some(s => s.label === 'EARLIER');
+        }
         // Soft refresh: if page structure is similar, just update current page content
         const newSig = pages.map(p => p.html.length + ':' + p.priority).join('|');
         if (paginationState.active && newSig === paginationState.pageSignature) {
@@ -812,6 +813,32 @@
       container.classList.remove('scrolling');
       stopPagination();
     }
+
+    // Build zoom legend from only the entries that are actually visible on screen,
+    // but preserve color assignments from the full zoomMap so pills and legend match.
+    let legendMap = zoomMap;
+    if (showZoomInfo && zoomMap && isSmartMode && docketData.length > 8) {
+      const classified = classifyEntries(docketData, now);
+      // Include pastRecent only if it wasn't dropped by pagination
+      const includePastRecent = !paginationActive || !paginationDroppedEarlier;
+      const visibleEntries = [
+        ...classified.inProgress,
+        ...classified.upcomingSoon,
+        ...classified.upcomingLater,
+        ...(includePastRecent ? classified.pastRecent : [])
+      ].map(item => item.entry);
+      // Collect visible meeting IDs, then filter the original zoomMap (preserves colors)
+      const visibleMeetingIds = new Set(
+        visibleEntries.filter(e => e.isZoom && e.zoomMeetingId).map(e => e.zoomMeetingId)
+      );
+      legendMap = new Map([...zoomMap].filter(([id]) => visibleMeetingIds.has(id)));
+    }
+
+    // Render zoom legend from visible entries only
+    renderZoomLegend(legendMap);
+
+    // Adjust docket section bottom padding to avoid zoom legend overlap
+    adjustDocketPadding();
   }
 
   // Build sections for "all" mode pagination
