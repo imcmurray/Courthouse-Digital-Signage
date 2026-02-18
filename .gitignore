@@ -57,7 +57,7 @@ backend/prisma/migrations/*_migration.sql
 *.tsbuildinfo
 
 # Vite
-admin/.vite/
+.vite/
 
 # Autocoder (feature tracking)
 .autocoder/
