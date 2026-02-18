@@ -245,10 +245,20 @@ export default function Dashboard() {
       user: 'user',
       api_key: 'API key',
       setting: 'setting',
+      calendar: 'calendar',
     }[activity.entityType] || activity.entityType;
 
     if (activity.action === 'login' || activity.action === 'logout') {
       return actionVerb;
+    }
+
+    if (activity.action === 'import' && activity.changes) {
+      const c = activity.changes as Record<string, number>;
+      const parts: string[] = [];
+      if (c.created) parts.push(`${c.created} added`);
+      if (c.updated) parts.push(`${c.updated} updated`);
+      if (c.removed) parts.push(`${c.removed} removed`);
+      return `imported calendars — ${parts.length > 0 ? parts.join(', ') : 'no changes'}`;
     }
 
     return `${actionVerb} ${entityName}`;
@@ -299,6 +309,12 @@ export default function Dashboard() {
         return (
           <svg className="h-4 w-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+        );
+      case 'import':
+        return (
+          <svg className="h-4 w-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
           </svg>
         );
       default:

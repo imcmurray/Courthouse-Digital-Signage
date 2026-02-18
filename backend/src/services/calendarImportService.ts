@@ -410,6 +410,23 @@ export async function runImport(io?: any): Promise<ImportResult[]> {
                     results.some(r => r.status === 'success') ? 'partial' : 'failed';
 
     console.log(`[Calendar Import] Import complete: ${results.length} calendars processed`);
+
+    // Create audit log for this import run
+    const totals = {
+      calendars: results.length,
+      found: results.reduce((s, r) => s + r.entriesFound, 0),
+      created: results.reduce((s, r) => s + r.entriesCreated, 0),
+      updated: results.reduce((s, r) => s + r.entriesUpdated, 0),
+      removed: results.reduce((s, r) => s + r.entriesRemoved, 0),
+      status: lastRunStatus,
+    };
+    await prisma.auditLog.create({
+      data: {
+        action: 'import',
+        entityType: 'calendar',
+        changes: JSON.stringify(totals),
+      },
+    });
   } catch (err: any) {
     console.error('[Calendar Import] Import failed:', err);
     lastRunAt = new Date().toISOString();
