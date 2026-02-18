@@ -775,12 +775,28 @@
       renderAllDocket(tbody, docketData, now, zoomMap);
     }
 
+    // Pre-render zoom legend BEFORE pagination so getRowsPerPage() sees the real height.
+    // Start with all classified visible entries (maximum legend height — safe direction).
+    let legendMap = zoomMap;
+    if (showZoomInfo && zoomMap && isSmartMode && docketData.length > 8) {
+      const classified = classifyEntries(docketData, now);
+      const visibleEntries = [
+        ...classified.inProgress,
+        ...classified.upcomingSoon,
+        ...classified.upcomingLater,
+        ...classified.pastRecent
+      ].map(item => item.entry);
+      const visibleMeetingIds = new Set(
+        visibleEntries.filter(e => e.isZoom && e.zoomMeetingId).map(e => e.zoomMeetingId)
+      );
+      legendMap = new Map([...zoomMap].filter(([id]) => visibleMeetingIds.has(id)));
+    }
+    renderZoomLegend(legendMap);
+
     // Activate pagination if needed (may change which entries are actually visible)
     const container = document.getElementById('docket-container');
     const scrollThreshold = document.body.classList.contains('portrait') ? 18 : 8;
     const rowCount = tbody.querySelectorAll('tr:not(.time-separator)').length;
-    let paginationActive = false;
-    let paginationDroppedEarlier = false;
 
     if (container && rowCount > scrollThreshold) {
       container.classList.remove('scrolling'); // Remove legacy auto-scroll class
@@ -791,8 +807,8 @@
       const pages = buildPaginatedPages(sections, rowsPerPage);
 
       if (pages.length > 0) {
-        paginationActive = true;
         // Check if EARLIER section was dropped (smart mode drops pastRecent > 3)
+        let paginationDroppedEarlier = false;
         if (isSmartMode) {
           paginationDroppedEarlier = !sections.some(s => s.label === 'EARLIER');
         }
@@ -808,34 +824,28 @@
         } else {
           startPagination(pages);
         }
+
+        // Post-pagination: if EARLIER was dropped, re-filter legend to remove pastRecent
+        // entries. Legend can only shrink (fewer zoom connections), so pagination still has
+        // enough space — no overlap possible.
+        if (paginationDroppedEarlier && showZoomInfo && zoomMap && isSmartMode && docketData.length > 8) {
+          const postClassified = classifyEntries(docketData, now);
+          const finalEntries = [
+            ...postClassified.inProgress,
+            ...postClassified.upcomingSoon,
+            ...postClassified.upcomingLater
+          ].map(item => item.entry);
+          const finalMeetingIds = new Set(
+            finalEntries.filter(e => e.isZoom && e.zoomMeetingId).map(e => e.zoomMeetingId)
+          );
+          legendMap = new Map([...zoomMap].filter(([id]) => finalMeetingIds.has(id)));
+          renderZoomLegend(legendMap);
+        }
       }
     } else if (container) {
       container.classList.remove('scrolling');
       stopPagination();
     }
-
-    // Build zoom legend from only the entries that are actually visible on screen,
-    // but preserve color assignments from the full zoomMap so pills and legend match.
-    let legendMap = zoomMap;
-    if (showZoomInfo && zoomMap && isSmartMode && docketData.length > 8) {
-      const classified = classifyEntries(docketData, now);
-      // Include pastRecent only if it wasn't dropped by pagination
-      const includePastRecent = !paginationActive || !paginationDroppedEarlier;
-      const visibleEntries = [
-        ...classified.inProgress,
-        ...classified.upcomingSoon,
-        ...classified.upcomingLater,
-        ...(includePastRecent ? classified.pastRecent : [])
-      ].map(item => item.entry);
-      // Collect visible meeting IDs, then filter the original zoomMap (preserves colors)
-      const visibleMeetingIds = new Set(
-        visibleEntries.filter(e => e.isZoom && e.zoomMeetingId).map(e => e.zoomMeetingId)
-      );
-      legendMap = new Map([...zoomMap].filter(([id]) => visibleMeetingIds.has(id)));
-    }
-
-    // Render zoom legend from visible entries only
-    renderZoomLegend(legendMap);
 
     // Adjust docket section bottom padding to avoid zoom legend overlap
     adjustDocketPadding();
