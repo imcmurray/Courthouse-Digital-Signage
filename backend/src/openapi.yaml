@@ -394,6 +394,34 @@ components:
           enum: [all, smart]
           default: all
           description: '"all" shows every hearing; "smart" filters by time relevance'
+        displayType:
+          type: string
+          enum: [courtroom, combined, wayfinding, it-status, chambers]
+          default: courtroom
+        wayfindingConfig:
+          type: string
+          nullable: true
+          description: JSON object with wayfinding layout configuration
+        rtspUrl1:
+          type: string
+          nullable: true
+        rtspUrl2:
+          type: string
+          nullable: true
+        cameraLabel1:
+          type: string
+          nullable: true
+        cameraLabel2:
+          type: string
+          nullable: true
+        cameraRotateInterval:
+          type: integer
+          nullable: true
+          description: Camera rotation interval in seconds
+        cameraConfig:
+          type: string
+          nullable: true
+          description: JSON object with advanced camera configuration
         status:
           type: string
           enum: [online, offline, unknown]
@@ -463,6 +491,27 @@ components:
           type: string
           enum: [all, smart]
           default: all
+        displayType:
+          type: string
+          enum: [courtroom, combined, wayfinding, it-status, chambers]
+          default: courtroom
+        wayfindingConfig:
+          type: string
+          description: JSON object with wayfinding layout configuration
+        rtspUrl1:
+          type: string
+        rtspUrl2:
+          type: string
+        cameraLabel1:
+          type: string
+        cameraLabel2:
+          type: string
+        cameraRotateInterval:
+          type: integer
+          description: Camera rotation interval in seconds
+        cameraConfig:
+          type: string
+          description: JSON object with advanced camera configuration
       required: [id, name, location]
 
     CreateDisplayResponse:
@@ -524,6 +573,17 @@ components:
           enum: [all, smart]
           default: all
           description: '"all" shows every hearing; "smart" filters by time relevance'
+        displayType:
+          type: string
+          enum: [courtroom, combined, wayfinding, it-status, chambers]
+        wayfindingConfig:
+          type: object
+          nullable: true
+          description: Parsed wayfinding layout configuration
+        cameraConfig:
+          type: object
+          nullable: true
+          description: Parsed camera configuration (array of {name, url} objects)
         courtName:
           type: string
         courtSubtitle:
@@ -567,6 +627,36 @@ components:
         createdById:
           type: string
           nullable: true
+        createdBy:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: string
+            name:
+              type: string
+            email:
+              type: string
+        displays:
+          type: array
+          description: Display assignments. Empty array = shows on all displays.
+          items:
+            $ref: '#/components/schemas/AnnouncementDisplay'
+
+    AnnouncementDisplay:
+      type: object
+      properties:
+        displayId:
+          type: string
+        announcementId:
+          type: string
+        display:
+          type: object
+          properties:
+            id:
+              type: string
+            name:
+              type: string
 
     CreateAnnouncementRequest:
       type: object
@@ -581,6 +671,11 @@ components:
         expiresAt:
           type: string
           format: date-time
+        displayIds:
+          type: array
+          description: Display IDs to target. Omit or send empty array for all displays.
+          items:
+            type: string
       required: [text]
 
     ApiKey:
@@ -1488,9 +1583,14 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Display'
+                type: object
+                properties:
+                  displays:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Display'
+                  total:
+                    type: integer
         '401':
           description: Not authenticated
           content:
@@ -1907,14 +2007,40 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    displayId:
-                      type: string
-                    docketEntryId:
-                      type: string
+                type: object
+                properties:
+                  associations:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        displayId:
+                          type: string
+                        docketEntryId:
+                          type: string
+                        display:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                            name:
+                              type: string
+                            location:
+                              type: string
+                        docketEntry:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                            caseNumber:
+                              type: string
+                            caseTitle:
+                              type: string
+                            hearingDate:
+                              type: string
+                              format: date-time
+                  total:
+                    type: integer
         '401':
           description: Not authenticated
           content:
@@ -1938,15 +2064,28 @@ paths:
           description: |
             If true, only return enabled and non-expired announcements.
             Forced to true for unauthenticated requests.
+        - name: displayId
+          in: query
+          schema:
+            type: string
+          description: |
+            Filter to announcements visible on this display.
+            Returns announcements with no display restriction (all displays)
+            plus announcements explicitly assigned to this display ID.
       responses:
         '200':
           description: List of announcements
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Announcement'
+                type: object
+                properties:
+                  announcements:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Announcement'
+                  total:
+                    type: integer
     post:
       tags: [Announcements]
       summary: Create an announcement
@@ -3106,6 +3245,10 @@ paths:
                         type: array
                         items:
                           $ref: '#/components/schemas/Announcement'
+                      displayAnnouncements:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/AnnouncementDisplay'
                       settings:
                         type: array
                         items:
@@ -3145,6 +3288,8 @@ paths:
                       docketEntries:
                         type: integer
                       announcements:
+                        type: integer
+                      displayAnnouncements:
                         type: integer
                       auditLogs:
                         type: integer
