@@ -1558,14 +1558,27 @@ app.get('/api/announcements', async (req, res) => {
             ]
           }
         : undefined,
+      include: {
+        displays: {
+          include: { display: { select: { id: true, name: true } } }
+        }
+      },
       orderBy: [
         { priority: 'desc' },
         { createdAt: 'desc' }
       ],
     });
 
-    console.log(`[DB] SELECT from announcements - found ${announcements.length} records`);
-    res.json({ announcements, total: announcements.length });
+    // Filter by displayId if provided (display client passes this)
+    const displayId = req.query.displayId as string | undefined;
+    const filtered = displayId
+      ? announcements.filter(a =>
+          a.displays.length === 0 || a.displays.some(d => d.displayId === displayId)
+        )
+      : announcements;
+
+    console.log(`[DB] SELECT from announcements - found ${announcements.length} records${displayId ? `, filtered to ${filtered.length} for display ${displayId}` : ''}`);
+    res.json({ announcements: filtered, total: filtered.length });
   } catch (error) {
     console.error('Failed to fetch announcements:', error);
     res.status(500).json({ error: 'Failed to fetch announcements' });
@@ -1575,7 +1588,7 @@ app.get('/api/announcements', async (req, res) => {
 // Create announcement
 app.post('/api/announcements', authenticateToken, requireEditor, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { text, priority = 100, enabled = true, expiresAt } = req.body;
+    const { text, priority = 100, enabled = true, expiresAt, displayIds } = req.body;
 
     if (!text || typeof text !== 'string' || text.length === 0) {
       return res.status(400).json({ error: 'Announcement text is required' });
@@ -1591,6 +1604,14 @@ app.post('/api/announcements', authenticateToken, requireEditor, async (req: Aut
         priority: typeof priority === 'number' ? priority : 100,
         enabled: typeof enabled === 'boolean' ? enabled : true,
         expiresAt: expiresAt ? new Date(expiresAt) : null,
+        ...(Array.isArray(displayIds) && displayIds.length > 0
+          ? { displays: { create: displayIds.map((id: string) => ({ displayId: id })) } }
+          : {}),
+      },
+      include: {
+        displays: {
+          include: { display: { select: { id: true, name: true } } }
+        }
       },
     });
 
@@ -1614,6 +1635,9 @@ app.get('/api/announcements/:id', authenticateToken, async (req: AuthenticatedRe
       include: {
         createdBy: {
           select: { id: true, name: true, email: true }
+        },
+        displays: {
+          include: { display: { select: { id: true, name: true } } }
         }
       }
     });
@@ -1633,7 +1657,7 @@ app.get('/api/announcements/:id', authenticateToken, async (req: AuthenticatedRe
 // Update announcement
 app.put('/api/announcements/:id', authenticateToken, requireEditor, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { text, priority, enabled, expiresAt } = req.body;
+    const { text, priority, enabled, expiresAt, displayIds } = req.body;
 
     const updateData: Record<string, unknown> = {};
     if (text !== undefined) {
@@ -1649,15 +1673,40 @@ app.put('/api/announcements/:id', authenticateToken, requireEditor, async (req: 
     if (enabled !== undefined) updateData.enabled = enabled;
     if (expiresAt !== undefined) updateData.expiresAt = expiresAt ? new Date(expiresAt) : null;
 
-    const announcement = await prisma.announcement.update({
-      where: { id: req.params.id },
-      data: updateData,
+    const announcementId = req.params.id;
+
+    // If displayIds explicitly provided, replace display assignments in a transaction
+    if (displayIds !== undefined) {
+      await prisma.$transaction([
+        prisma.displayAnnouncement.deleteMany({ where: { announcementId } }),
+        prisma.announcement.update({ where: { id: announcementId }, data: updateData }),
+        ...(Array.isArray(displayIds) && displayIds.length > 0
+          ? [prisma.displayAnnouncement.createMany({
+              data: displayIds.map((id: string) => ({ displayId: id, announcementId })),
+            })]
+          : []),
+      ]);
+    } else {
+      await prisma.announcement.update({
+        where: { id: announcementId },
+        data: updateData,
+      });
+    }
+
+    // Re-fetch with displays included
+    const announcement = await prisma.announcement.findUnique({
+      where: { id: announcementId },
+      include: {
+        displays: {
+          include: { display: { select: { id: true, name: true } } }
+        }
+      },
     });
 
-    console.log(`[DB] UPDATE announcements WHERE id = ${req.params.id}`);
+    console.log(`[DB] UPDATE announcements WHERE id = ${announcementId}`);
 
     // Emit WebSocket event for real-time updates
-    io.emit('announcement:new', { id: announcement.id });
+    io.emit('announcement:new', { id: announcementId });
 
     res.json(announcement);
   } catch (error: unknown) {
@@ -3139,6 +3188,7 @@ app.get('/api/export', authenticateToken, requireAdmin, async (req: Authenticate
 
     if (include.has('announcements')) {
       categories.announcements = await prisma.announcement.findMany();
+      categories.displayAnnouncements = await prisma.displayAnnouncement.findMany();
     }
 
     if (include.has('users')) {
@@ -3186,6 +3236,8 @@ app.delete('/api/clear', authenticateToken, requireAdmin, async (req: Authentica
       }
 
       if (categories.includes('announcements')) {
+        const da = await tx.displayAnnouncement.deleteMany({});
+        cleared.displayAnnouncements = da.count;
         const r = await tx.announcement.deleteMany({});
         cleared.announcements = r.count;
       }
@@ -3199,6 +3251,9 @@ app.delete('/api/clear', authenticateToken, requireAdmin, async (req: Authentica
         // display_docket_entries cascade from displays, but also delete api_keys
         if (!categories.includes('docket')) {
           await tx.displayDocketEntry.deleteMany({});
+        }
+        if (!categories.includes('announcements')) {
+          await tx.displayAnnouncement.deleteMany({});
         }
         await tx.apiKey.deleteMany({});
         const r = await tx.display.deleteMany({});
@@ -3343,6 +3398,16 @@ app.post('/api/import', authenticateToken, requireAdmin, async (req: Authenticat
         const r = await tx.announcement.createMany({ data: announcementsToCreate, // @ts-expect-error -- skipDuplicates works with SQLite at runtime (Prisma uses INSERT OR IGNORE)
           skipDuplicates: true });
         imported.announcements = r.count;
+      }
+
+      if (cats.displayAnnouncements && Array.isArray(cats.displayAnnouncements)) {
+        const dasToCreate = cats.displayAnnouncements.map((d: Record<string, unknown>) => ({
+          displayId: d.displayId as string,
+          announcementId: d.announcementId as string,
+        }));
+        const r = await tx.displayAnnouncement.createMany({ data: dasToCreate, // @ts-expect-error -- skipDuplicates works with SQLite at runtime (Prisma uses INSERT OR IGNORE)
+          skipDuplicates: true });
+        imported.displayAnnouncements = r.count;
       }
     });
 

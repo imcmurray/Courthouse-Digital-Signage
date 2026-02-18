@@ -953,7 +953,7 @@
     if (screensaverActive) return;
     try {
       const response = await fetch(
-        `${CONFIG.apiBaseUrl}/api/announcements?active=true`,
+        `${CONFIG.apiBaseUrl}/api/announcements?active=true&displayId=${encodeURIComponent(CONFIG.displayId)}`,
         {
           headers: {
             'X-API-Key': getApiKey(),

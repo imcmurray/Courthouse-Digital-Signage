@@ -1,5 +1,10 @@
 import apiClient from './client';
 
+export interface AnnouncementDisplay {
+  displayId: string;
+  display: { id: string; name: string };
+}
+
 export interface Announcement {
   id: string;
   text: string;
@@ -13,6 +18,7 @@ export interface Announcement {
     name: string;
     email: string;
   } | null;
+  displays?: AnnouncementDisplay[];
 }
 
 export interface CreateAnnouncementInput {
@@ -20,6 +26,7 @@ export interface CreateAnnouncementInput {
   priority?: number;
   enabled?: boolean;
   expiresAt?: string | null;
+  displayIds?: string[];
 }
 
 export interface UpdateAnnouncementInput extends Partial<CreateAnnouncementInput> {}

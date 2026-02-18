@@ -102,6 +102,7 @@ model Display {
 
   // Relations
   docketEntries DisplayDocketEntry[]
+  announcements DisplayAnnouncement[]
   apiKeys       ApiKey[]
 
   @@map("displays")
@@ -119,6 +120,17 @@ model DisplayDocketEntry {
   @@map("display_docket_entries")
 }
 
+model DisplayAnnouncement {
+  displayId      String @map("display_id")
+  announcementId String @map("announcement_id")
+
+  display      Display      @relation(fields: [displayId], references: [id], onDelete: Cascade)
+  announcement Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+
+  @@id([displayId, announcementId])
+  @@map("display_announcements")
+}
+
 model Announcement {
   id          String    @id @default(uuid())
   text        String // max 500 chars
@@ -130,7 +142,8 @@ model Announcement {
   createdById String?   @map("created_by")
 
   // Relations
-  createdBy User? @relation(fields: [createdById], references: [id])
+  createdBy User?                  @relation(fields: [createdById], references: [id])
+  displays  DisplayAnnouncement[]
 
   @@map("announcements")
 }

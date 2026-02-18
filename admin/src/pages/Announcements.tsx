@@ -19,6 +19,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { announcementsApi, Announcement, CreateAnnouncementInput, UpdateAnnouncementInput, AnnouncementsResponse } from '../api/announcements';
+import { displaysApi } from '../api/displays';
 
 // Check if an announcement is expired
 const isExpired = (expiresAt: string | null): boolean => {
@@ -113,6 +114,21 @@ function SortableRow({ announcement, position, onEdit, onDelete, onToggle, isTog
           </button>
         )}
       </td>
+      <td className="px-6 py-4 whitespace-nowrap">
+        <div className="flex flex-wrap gap-1">
+          {!announcement.displays || announcement.displays.length === 0 ? (
+            <span className="inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300">
+              All Displays
+            </span>
+          ) : (
+            announcement.displays.map((d) => (
+              <span key={d.displayId} className="inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">
+                {d.display.name}
+              </span>
+            ))
+          )}
+        </div>
+      </td>
       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
         {announcement.expiresAt
           ? new Date(announcement.expiresAt).toLocaleDateString()
@@ -147,7 +163,9 @@ export default function Announcements() {
     text: '',
     enabled: true,
     expiresAt: null,
+    displayIds: [],
   });
+  const [showOnAllDisplays, setShowOnAllDisplays] = useState(true);
 
   // Drag sensors
   const sensors = useSensors(
@@ -162,6 +180,13 @@ export default function Announcements() {
     queryKey: ['announcements'],
     queryFn: () => announcementsApi.getAll(),
   });
+
+  // Fetch displays for targeting selector
+  const { data: displaysData } = useQuery({
+    queryKey: ['displays'],
+    queryFn: () => displaysApi.getAll(),
+  });
+  const displays = displaysData?.displays || [];
 
   // Create announcement mutation
   const createMutation = useMutation({
@@ -231,18 +256,29 @@ export default function Announcements() {
       text: '',
       enabled: true,
       expiresAt: null,
+      displayIds: [],
     });
+    setShowOnAllDisplays(true);
   };
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
-    createMutation.mutate(formData);
+    createMutation.mutate({
+      ...formData,
+      displayIds: showOnAllDisplays ? [] : formData.displayIds,
+    });
   };
 
   const handleUpdate = (e: React.FormEvent) => {
     e.preventDefault();
     if (editingAnnouncement) {
-      updateMutation.mutate({ id: editingAnnouncement.id, data: formData });
+      updateMutation.mutate({
+        id: editingAnnouncement.id,
+        data: {
+          ...formData,
+          displayIds: showOnAllDisplays ? [] : formData.displayIds,
+        },
+      });
     }
   };
 
@@ -254,10 +290,13 @@ export default function Announcements() {
 
   const openEditModal = (announcement: Announcement) => {
     setEditingAnnouncement(announcement);
+    const isAllDisplays = !announcement.displays || announcement.displays.length === 0;
+    setShowOnAllDisplays(isAllDisplays);
     setFormData({
       text: announcement.text,
       enabled: announcement.enabled,
       expiresAt: announcement.expiresAt,
+      displayIds: isAllDisplays ? [] : announcement.displays!.map(d => d.displayId),
     });
   };
 
@@ -350,6 +389,9 @@ export default function Announcements() {
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Status
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Displays
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Expires
@@ -454,6 +496,59 @@ export default function Announcements() {
                   Enabled (show on displays)
                 </label>
               </div>
+
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="showOnAllDisplays"
+                  checked={showOnAllDisplays}
+                  onChange={(e) => {
+                    setShowOnAllDisplays(e.target.checked);
+                    if (e.target.checked) setFormData({ ...formData, displayIds: [] });
+                  }}
+                  className="h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600 rounded"
+                />
+                <label htmlFor="showOnAllDisplays" className="ml-2 text-sm text-gray-700 dark:text-gray-200">
+                  Show on all displays
+                </label>
+              </div>
+
+              {!showOnAllDisplays && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
+                    Select Displays
+                  </label>
+                  <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                    {displays.length === 0 ? (
+                      <p className="text-sm text-gray-500 dark:text-gray-400 col-span-2">No displays available</p>
+                    ) : (
+                      displays.map((display) => (
+                        <label key={display.id} className="flex items-center space-x-2 p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={formData.displayIds?.includes(display.id) || false}
+                            onChange={(e) => {
+                              const currentIds = formData.displayIds || [];
+                              if (e.target.checked) {
+                                setFormData({ ...formData, displayIds: [...currentIds, display.id] });
+                              } else {
+                                setFormData({ ...formData, displayIds: currentIds.filter(id => id !== display.id) });
+                              }
+                            }}
+                            className="h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600 rounded"
+                          />
+                          <span className="text-sm text-gray-700 dark:text-gray-200 truncate">{display.name}</span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                  {(formData.displayIds?.length || 0) > 0 && (
+                    <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                      {formData.displayIds!.length} display{formData.displayIds!.length !== 1 ? 's' : ''} selected
+                    </p>
+                  )}
+                </div>
+              )}
 
               <div className="flex justify-end space-x-3 pt-4">
                 <button

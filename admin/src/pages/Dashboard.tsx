@@ -42,9 +42,12 @@ export default function Dashboard() {
     priority: 0,
     enabled: true,
     expiresAt: null,
+    displayIds: [],
   });
+  const [showOnAllDisplaysCreate, setShowOnAllDisplaysCreate] = useState(true);
   const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
   const [editForm, setEditForm] = useState<UpdateAnnouncementInput>({});
+  const [showOnAllDisplaysEdit, setShowOnAllDisplaysEdit] = useState(true);
   const [editingDisplay, setEditingDisplay] = useState<Display | null>(null);
   const [editingDocketEntry, setEditingDocketEntry] = useState<DocketEntry | null>(null);
   const [selectedJudge, setSelectedJudge] = useState<string | null>(null);
@@ -69,7 +72,8 @@ export default function Dashboard() {
     onSuccess: () => {
       toast.success('Announcement created successfully');
       setIsNewAnnouncementOpen(false);
-      setAnnouncementForm({ text: '', priority: 0, enabled: true, expiresAt: null });
+      setAnnouncementForm({ text: '', priority: 0, enabled: true, expiresAt: null, displayIds: [] });
+      setShowOnAllDisplaysCreate(true);
       queryClient.invalidateQueries({ queryKey: ['dashboardStats'] });
       queryClient.invalidateQueries({ queryKey: ['dashboardAnnouncements'] });
     },
@@ -774,7 +778,9 @@ export default function Dashboard() {
                     <button
                       onClick={() => {
                         setEditingAnnouncement(ann);
-                        setEditForm({ text: ann.text, enabled: ann.enabled, expiresAt: ann.expiresAt });
+                        const isAllDisplays = !ann.displays || ann.displays.length === 0;
+                        setShowOnAllDisplaysEdit(isAllDisplays);
+                        setEditForm({ text: ann.text, enabled: ann.enabled, expiresAt: ann.expiresAt, displayIds: isAllDisplays ? [] : ann.displays!.map(d => d.displayId) });
                       }}
                       className={`text-sm font-medium truncate block w-full text-left hover:text-primary dark:hover:text-primary-light transition-colors cursor-pointer ${isActive ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500 line-through'}`}
                     >
@@ -792,6 +798,15 @@ export default function Dashboard() {
                         </span>
                       )}
                     </div>
+                    {ann.displays && ann.displays.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-0.5">
+                        {ann.displays.map((d) => (
+                          <span key={d.displayId} className="inline-flex text-[9px] px-1 py-0 font-medium rounded bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">
+                            {d.display.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -918,7 +933,10 @@ export default function Dashboard() {
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                createAnnouncementMutation.mutate(announcementForm);
+                createAnnouncementMutation.mutate({
+                  ...announcementForm,
+                  displayIds: showOnAllDisplaysCreate ? [] : announcementForm.displayIds,
+                });
               }}
               className="mt-4 space-y-4"
             >
@@ -1003,12 +1021,66 @@ export default function Dashboard() {
                 </label>
               </div>
 
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="dashboard-create-all-displays"
+                  checked={showOnAllDisplaysCreate}
+                  onChange={(e) => {
+                    setShowOnAllDisplaysCreate(e.target.checked);
+                    if (e.target.checked) setAnnouncementForm({ ...announcementForm, displayIds: [] });
+                  }}
+                  className="h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700"
+                />
+                <label htmlFor="dashboard-create-all-displays" className="ml-2 text-sm text-gray-700 dark:text-gray-200">
+                  Show on all displays
+                </label>
+              </div>
+
+              {!showOnAllDisplaysCreate && displaysData?.displays && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
+                    Select Displays
+                  </label>
+                  <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                    {displaysData.displays.length === 0 ? (
+                      <p className="text-sm text-gray-500 dark:text-gray-400 col-span-2">No displays available</p>
+                    ) : (
+                      displaysData.displays.map((display) => (
+                        <label key={display.id} className="flex items-center space-x-2 p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={announcementForm.displayIds?.includes(display.id) || false}
+                            onChange={(e) => {
+                              const currentIds = announcementForm.displayIds || [];
+                              if (e.target.checked) {
+                                setAnnouncementForm({ ...announcementForm, displayIds: [...currentIds, display.id] });
+                              } else {
+                                setAnnouncementForm({ ...announcementForm, displayIds: currentIds.filter(id => id !== display.id) });
+                              }
+                            }}
+                            className="h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700"
+                          />
+                          <span className="text-sm text-gray-700 dark:text-gray-200 truncate">{display.name}</span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                  {(announcementForm.displayIds?.length || 0) > 0 && (
+                    <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                      {announcementForm.displayIds!.length} display{announcementForm.displayIds!.length !== 1 ? 's' : ''} selected
+                    </p>
+                  )}
+                </div>
+              )}
+
               <div className="flex justify-end space-x-3 pt-4">
                 <button
                   type="button"
                   onClick={() => {
                     setIsNewAnnouncementOpen(false);
-                    setAnnouncementForm({ text: '', priority: 0, enabled: true, expiresAt: null });
+                    setAnnouncementForm({ text: '', priority: 0, enabled: true, expiresAt: null, displayIds: [] });
+                    setShowOnAllDisplaysCreate(true);
                   }}
                   className="px-4 py-2 text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
                 >
@@ -1037,7 +1109,13 @@ export default function Dashboard() {
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                updateAnnouncementMutation.mutate({ id: editingAnnouncement.id, data: editForm });
+                updateAnnouncementMutation.mutate({
+                  id: editingAnnouncement.id,
+                  data: {
+                    ...editForm,
+                    displayIds: showOnAllDisplaysEdit ? [] : editForm.displayIds,
+                  },
+                });
               }}
               className="mt-4 space-y-4"
             >
@@ -1102,6 +1180,59 @@ export default function Dashboard() {
                   Enabled (show on displays)
                 </label>
               </div>
+
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="edit-all-displays"
+                  checked={showOnAllDisplaysEdit}
+                  onChange={(e) => {
+                    setShowOnAllDisplaysEdit(e.target.checked);
+                    if (e.target.checked) setEditForm({ ...editForm, displayIds: [] });
+                  }}
+                  className="h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700"
+                />
+                <label htmlFor="edit-all-displays" className="ml-2 text-sm text-gray-700 dark:text-gray-200">
+                  Show on all displays
+                </label>
+              </div>
+
+              {!showOnAllDisplaysEdit && displaysData?.displays && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
+                    Select Displays
+                  </label>
+                  <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                    {displaysData.displays.length === 0 ? (
+                      <p className="text-sm text-gray-500 dark:text-gray-400 col-span-2">No displays available</p>
+                    ) : (
+                      displaysData.displays.map((display) => (
+                        <label key={display.id} className="flex items-center space-x-2 p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={editForm.displayIds?.includes(display.id) || false}
+                            onChange={(e) => {
+                              const currentIds = editForm.displayIds || [];
+                              if (e.target.checked) {
+                                setEditForm({ ...editForm, displayIds: [...currentIds, display.id] });
+                              } else {
+                                setEditForm({ ...editForm, displayIds: currentIds.filter(id => id !== display.id) });
+                              }
+                            }}
+                            className="h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700"
+                          />
+                          <span className="text-sm text-gray-700 dark:text-gray-200 truncate">{display.name}</span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                  {(editForm.displayIds?.length || 0) > 0 && (
+                    <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                      {editForm.displayIds!.length} display{editForm.displayIds!.length !== 1 ? 's' : ''} selected
+                    </p>
+                  )}
+                </div>
+              )}
 
               <div className="flex justify-end space-x-3 pt-4">
                 <button
