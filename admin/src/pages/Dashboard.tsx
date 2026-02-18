@@ -701,6 +701,7 @@ export default function Dashboard() {
                     <th className="pb-2 font-medium">Time</th>
                     <th className="pb-2 font-medium">Case</th>
                     <th className="pb-2 font-medium hidden lg:table-cell">Name</th>
+                    <th className="pb-2 font-medium hidden lg:table-cell">Party</th>
                     <th className="pb-2 font-medium hidden md:table-cell">Judge</th>
                     <th className="pb-2 font-medium">Room</th>
                   </tr>
@@ -743,6 +744,9 @@ export default function Dashboard() {
                       </td>
                       <td className={`py-1.5 pr-2 truncate max-w-[150px] hidden lg:table-cell ${isInactive ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-600 dark:text-gray-300'}`} title={entry.caseTitle}>
                         {entry.caseTitle}
+                      </td>
+                      <td className={`py-1.5 pr-2 truncate max-w-[120px] hidden lg:table-cell ${isInactive ? 'text-gray-400 dark:text-gray-500' : 'text-gray-600 dark:text-gray-300'}`} title={entry.movingParty ? `${entry.movingParty}${entry.hearingMatter ? ` — ${entry.hearingMatter}` : ''}` : undefined}>
+                        {entry.movingParty ? getLastName(entry.movingParty) : '--'}
                       </td>
                       <td className={`py-1.5 pr-2 truncate max-w-[120px] hidden md:table-cell ${isInactive ? 'text-gray-400 dark:text-gray-500' : 'text-gray-600 dark:text-gray-300'}`}>
                         {getLastName(entry.hearingJudge)}
