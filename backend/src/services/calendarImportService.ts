@@ -149,10 +149,11 @@ async function upsertEntry(entry: ParsedEntry, judgeName: string): Promise<'crea
   try {
     const existing = await prisma.docketEntry.findUnique({
       where: {
-        caseNumber_hearingDate_hearingTime: {
+        caseNumber_hearingDate_hearingTime_hearingMatter: {
           caseNumber: entry.caseNumber,
           hearingDate,
           hearingTime: entry.hearingTime,
+          hearingMatter: entry.hearingMatter,
         },
       },
     });
@@ -162,7 +163,6 @@ async function upsertEntry(entry: ParsedEntry, judgeName: string): Promise<'crea
       caseChapter: entry.caseChapter,
       adversaryNumber: entry.adversaryNumber,
       adversaryTitle: entry.adversaryTitle,
-      hearingMatter: entry.hearingMatter,
       hearingJudge: judgeName,
       courtroom: entry.courtroom,
       movingParty: entry.movingParty,
@@ -191,6 +191,7 @@ async function upsertEntry(entry: ParsedEntry, judgeName: string): Promise<'crea
           caseNumber: entry.caseNumber,
           hearingDate,
           hearingTime: entry.hearingTime,
+          hearingMatter: entry.hearingMatter,
           ...data,
         },
       });
@@ -302,7 +303,7 @@ export async function runImport(io?: any): Promise<ImportResult[]> {
           if (result === 'created') created++;
           else if (result === 'updated') updated++;
           else skipped++;
-          importedKeys.add(`${entry.caseNumber}|${entry.hearingDate}|${entry.hearingTime}`);
+          importedKeys.add(`${entry.caseNumber}|${entry.hearingDate}|${entry.hearingTime}|${entry.hearingMatter}`);
         }
 
         // Remove stale entries for this judge:
@@ -316,7 +317,7 @@ export async function runImport(io?: any): Promise<ImportResult[]> {
               hearingJudge: judgeName,
               hearingDate: { lte: dateRange.end },
             },
-            select: { id: true, caseNumber: true, hearingDate: true, hearingTime: true },
+            select: { id: true, caseNumber: true, hearingDate: true, hearingTime: true, hearingMatter: true },
           });
 
           const staleIds = existingEntries
@@ -325,7 +326,7 @@ export async function runImport(io?: any): Promise<ImportResult[]> {
               if (e.hearingDate < dateRange.start) return true;
               // Entries within the date range must still be in the PDF
               const dateStr = e.hearingDate.toISOString().split('T')[0];
-              return !importedKeys.has(`${e.caseNumber}|${dateStr}|${e.hearingTime}`);
+              return !importedKeys.has(`${e.caseNumber}|${dateStr}|${e.hearingTime}|${e.hearingMatter}`);
             })
             .map(e => e.id);
 

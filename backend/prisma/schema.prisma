@@ -59,7 +59,7 @@ model DocketEntry {
   createdBy User?                 @relation(fields: [createdById], references: [id])
   displays  DisplayDocketEntry[]
 
-  @@unique([caseNumber, hearingDate, hearingTime])
+  @@unique([caseNumber, hearingDate, hearingTime, hearingMatter])
   @@map("docket_entries")
 }
 

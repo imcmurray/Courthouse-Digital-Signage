@@ -946,7 +946,7 @@ app.post('/api/docket', authenticateToken, requireEditor, async (req: Authentica
     res.status(201).json(entry);
   } catch (error: unknown) {
     if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002') {
-      return res.status(409).json({ error: 'Duplicate entry: case number, date, and time combination already exists' });
+      return res.status(409).json({ error: 'Duplicate entry: case number, date, time, and matter combination already exists' });
     }
     console.error('Failed to create docket entry:', error);
     res.status(500).json({ error: 'Failed to create docket entry' });
@@ -1026,7 +1026,7 @@ app.post('/api/docket/bulk', authenticateToken, requireEditor, async (req: Authe
     });
   } catch (error: unknown) {
     if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002') {
-      return res.status(409).json({ error: 'Duplicate entry found. Check case numbers, dates, and times.' });
+      return res.status(409).json({ error: 'Duplicate entry found. Check case numbers, dates, times, and matters.' });
     }
     console.error('Failed to bulk import docket entries:', error);
     res.status(500).json({ error: 'Failed to bulk import docket entries' });
