@@ -47,7 +47,7 @@ const ARROW_LABELS: Record<string, string> = {
   'right-near-down': 'right (short) → down',
   'right-mid-down': 'right (mid) → down',
 };
-const ICON_OPTIONS = ['courtroom', 'intake', 'restroom', 'conference'];
+const ICON_OPTIONS = ['courtroom', 'intake', 'restroom', 'conference', 'informational', 'emergency'];
 
 interface CameraEntry {
   name: string;
@@ -60,6 +60,8 @@ interface WayfindingDirection {
   arrow: string;
   description: string;
   icon: string;
+  column: number;  // 1 = left, 2 = right
+  row: number;     // 1-based row position
 }
 
 function parseScheduleConfig(raw: string): WeekSchedule {
@@ -78,7 +80,13 @@ function parseWayfindingConfig(raw: string | object | null): WayfindingDirection
   try {
     let parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
     if (typeof parsed === 'string') parsed = JSON.parse(parsed); // double-encoded repair
-    return parsed?.directions || [];
+    const directions: WayfindingDirection[] = parsed?.directions || [];
+    // Backfill column/row for directions saved before grid support
+    return directions.map((d, i) => ({
+      ...d,
+      column: d.column || 1,
+      row: d.row || (i + 1),
+    }));
   } catch { return []; }
 }
 
@@ -204,10 +212,16 @@ export default function DisplayEditModal({ display, onClose, onSaved }: DisplayE
   };
 
   const addWayfindingDirection = () => {
-    setWayfindingDirections([...wayfindingDirections, { name: '', direction: 'right', arrow: 'right', description: '', icon: 'courtroom' }]);
+    const maxRow = wayfindingDirections
+      .filter(d => d.column === 1)
+      .reduce((max, d) => Math.max(max, d.row || 0), 0);
+    setWayfindingDirections([...wayfindingDirections, {
+      name: '', direction: 'right', arrow: 'right', description: '', icon: 'courtroom',
+      column: 1, row: maxRow + 1,
+    }]);
   };
 
-  const updateWayfindingDirection = (index: number, field: keyof WayfindingDirection, value: string) => {
+  const updateWayfindingDirection = (index: number, field: keyof WayfindingDirection, value: string | number) => {
     const updated = [...wayfindingDirections];
     updated[index] = { ...updated[index], [field]: value };
     setWayfindingDirections(updated);
@@ -383,6 +397,25 @@ export default function DisplayEditModal({ display, onClose, onSaved }: DisplayE
                             <option key={ic} value={ic}>{ic}</option>
                           ))}
                         </select>
+                      </div>
+                      <div className="flex items-center gap-3 mt-1">
+                        <label className="text-xs text-gray-500 dark:text-gray-400">Column</label>
+                        <select
+                          value={dir.column || 1}
+                          onChange={(e) => updateWayfindingDirection(idx, 'column', parseInt(e.target.value, 10))}
+                          className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white w-24"
+                        >
+                          <option value={1}>Left</option>
+                          <option value={2}>Right</option>
+                        </select>
+                        <label className="text-xs text-gray-500 dark:text-gray-400">Row</label>
+                        <input
+                          type="number"
+                          min={1}
+                          value={dir.row || 1}
+                          onChange={(e) => updateWayfindingDirection(idx, 'row', Math.max(1, parseInt(e.target.value, 10) || 1))}
+                          className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white w-16"
+                        />
                       </div>
                     </div>
                   ))}

@@ -917,20 +917,50 @@ body.portrait .screensaver-logo {
 .wayfinding-directions {
   background-color: var(--navy-mid);
   padding: 30px;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 20px;
   overflow-y: auto;
+  align-content: start;
 }
 
 .wayfinding-direction-card {
   background: linear-gradient(135deg, var(--navy-light), var(--navy-dark));
   border-radius: 12px;
-  padding: 24px 30px;
+  padding: 20px 24px;
   display: flex;
   align-items: center;
-  gap: 24px;
+  gap: 20px;
   border-left: 5px solid var(--primary-yellow);
+}
+
+/* Right-column cards: mirror layout (arrow + accent bar on right) */
+.wayfinding-direction-card.wayfinding-col-right {
+  flex-direction: row-reverse;
+  border-left: none;
+  border-right: 5px solid var(--primary-yellow);
+}
+
+.wayfinding-direction-card.wayfinding-col-right .wayfinding-card-info {
+  text-align: right;
+}
+
+.wayfinding-direction-card.wayfinding-card-emergency {
+  background: linear-gradient(135deg, #4a1c1c, #2d1111);
+  border-left-color: #c0392b;
+}
+
+.wayfinding-direction-card.wayfinding-card-emergency.wayfinding-col-right {
+  border-left: none;
+  border-right-color: #c0392b;
+}
+
+.wayfinding-card-emergency .wayfinding-card-name {
+  color: #f5b7b1;
+}
+
+.wayfinding-card-emergency .wayfinding-arrow svg {
+  color: #c0392b;
 }
 
 .wayfinding-arrow {
@@ -989,6 +1019,7 @@ body.portrait .wayfinding-hearings {
 body.portrait .wayfinding-directions {
   padding: 20px;
   gap: 15px;
+  grid-template-columns: 1fr 1fr;
 }
 
 body.portrait .wayfinding-direction-card {

@@ -1487,7 +1487,7 @@
     // Render direction cards (right panel)
     var directions = (displayConfig.wayfindingConfig && displayConfig.wayfindingConfig.directions) || [];
     var directionsHtml = '';
-    directions.forEach(function(dir) {
+    directions.forEach(function(dir, index) {
       // Count hearings matching this direction name (fuzzy case-insensitive)
       var count = 0;
       var dirNameLower = (dir.name || '').toLowerCase();
@@ -1497,13 +1497,18 @@
         }
       });
 
-      directionsHtml += '<div class="wayfinding-direction-card">';
+      var col = dir.column || 1;
+      var row = dir.row || (index + 1);
+      var cardClass = 'wayfinding-direction-card';
+      if (col === 2) cardClass += ' wayfinding-col-right';
+      if (dir.icon === 'emergency') cardClass += ' wayfinding-card-emergency';
+      directionsHtml += '<div class="' + cardClass + '" style="grid-column:' + col + ';grid-row:' + row + ';">';
       directionsHtml += '<div class="wayfinding-arrow">' + getDirectionArrowSvg(dir.arrow || dir.direction) + '</div>';
       directionsHtml += '<div class="wayfinding-card-info">';
       directionsHtml += '<div class="wayfinding-card-name">' + escapeHtml(dir.name) + '</div>';
       directionsHtml += '<div class="wayfinding-card-desc">' + escapeHtml(dir.description) + '</div>';
       directionsHtml += '</div>';
-      if (count > 0) {
+      if (count > 0 && dir.icon !== 'informational' && dir.icon !== 'emergency') {
         directionsHtml += '<div class="wayfinding-card-badge">' + count + ' hearing' + (count !== 1 ? 's' : '') + '</div>';
       }
       directionsHtml += '</div>';
