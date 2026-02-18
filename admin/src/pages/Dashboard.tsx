@@ -310,22 +310,35 @@ export default function Dashboard() {
     }
   };
 
-  const isHearingSoon = (entry: DocketEntry) => {
+  // Build a local Date for a hearing's time today.
+  // entry.hearingDate is UTC midnight (e.g. "2026-02-18T00:00:00.000Z") which
+  // shifts to the previous day in US timezones.  Since the dashboard already
+  // filters to today's hearings, we use new Date() (local today) as the base
+  // and only apply the hearing's HH:MM — matching the wayfinder display approach.
+  const hearingToLocal = (entry: DocketEntry) => {
     const now = new Date();
     const [h, m] = entry.hearingTime.split(':').map(Number);
-    const hearingDate = new Date(entry.hearingDate);
-    hearingDate.setHours(h, m, 0, 0);
-    const diffMs = hearingDate.getTime() - now.getTime();
+    const t = new Date(now);
+    t.setHours(h, m, 0, 0);
+    return { now, t };
+  };
+
+  const isHearingSoon = (entry: DocketEntry) => {
+    const { now, t } = hearingToLocal(entry);
+    const diffMs = t.getTime() - now.getTime();
     return diffMs > 0 && diffMs <= 30 * 60 * 1000;
   };
 
   const isHearingPast = (entry: DocketEntry) => {
-    const now = new Date();
-    const [h, m] = entry.hearingTime.split(':').map(Number);
-    const hearingDate = new Date(entry.hearingDate);
-    hearingDate.setHours(h, m, 0, 0);
-    const diffMs = hearingDate.getTime() - now.getTime();
+    const { now, t } = hearingToLocal(entry);
+    const diffMs = t.getTime() - now.getTime();
     return diffMs < -15 * 60 * 1000; // more than 15 min ago
+  };
+
+  const isHearingImminent = (entry: DocketEntry) => {
+    const { now, t } = hearingToLocal(entry);
+    const diffMin = (t.getTime() - now.getTime()) / (60 * 1000);
+    return diffMin >= -15 && diffMin <= 15;
   };
 
   const isAnnouncementExpiringSoon = (ann: Announcement) => {
@@ -846,22 +859,19 @@ export default function Dashboard() {
                         return acc;
                       }, {} as Record<string, typeof entries>)
                     ).map(([time, groupEntries]) => {
-                      const hasSoon = groupEntries.some(e => isHearingSoon(e));
-                      const hasInProgress = groupEntries.some(e => e.status === 'in_progress');
                       const isGroupPast = groupEntries.every(e => isHearingPast(e));
+                      const hasImminent = groupEntries.some(e => isHearingImminent(e));
                       const groupActive = groupEntries.filter(e => e.status !== 'stricken').length;
                       const groupStricken = groupEntries.length - groupActive;
                       return (
                         <span
                           key={time}
-                          className={`inline-flex items-center px-2 py-0.5 rounded text-xs ${
+                          className={`inline-flex items-center bg-accent text-primary font-bold rounded-full px-2.5 py-0.5 text-xs ${
                             isGroupPast
-                              ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 opacity-40'
-                              : hasSoon
-                                ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
-                                : hasInProgress
-                                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                                  : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
+                              ? 'opacity-35'
+                              : hasImminent
+                                ? 'schedule-pill-imminent'
+                                : ''
                           }`}
                           title={groupEntries.map(e => `${e.caseNumber} - ${e.status} - ${e.courtroom || 'No room'}`).join('\n')}
                         >

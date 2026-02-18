@@ -139,3 +139,13 @@ body {
 .dark .react-datepicker__close-icon::after {
   background-color: #9ca3af;
 }
+
+/* Schedule pill flash animation (matches wayfinder display) */
+@keyframes pill-flash {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.schedule-pill-imminent {
+  animation: pill-flash 1.5s ease-in-out infinite;
+}
