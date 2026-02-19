@@ -837,7 +837,7 @@ export default function Dashboard() {
         </div>
 
         {/* Active Announcements */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm dark:shadow-gray-900/50 p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm dark:shadow-gray-900/50 p-4 flex flex-col">
           <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
             Announcements
             {announcementsData && announcementsData.total > 0 && (
@@ -845,7 +845,7 @@ export default function Dashboard() {
             )}
           </h3>
           {announcementsData?.announcements && announcementsData.announcements.length > 0 ? (
-            <div className="max-h-52 overflow-y-auto -mx-2 px-2 space-y-2">
+            <div className="flex-1 overflow-y-auto -mx-2 px-2 space-y-2">
               {announcementsData.announcements.map((ann) => {
                 const isExpired = ann.expiresAt && new Date(ann.expiresAt).getTime() < Date.now();
                 const isActive = ann.enabled && !isExpired;

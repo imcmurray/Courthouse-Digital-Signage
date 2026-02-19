@@ -1628,6 +1628,11 @@ app.post('/api/announcements', authenticateToken, requireEditor, async (req: Aut
 
     console.log(`[DB] INSERT into announcements - created id: ${announcement.id}`);
 
+    await createAuditLog('create', 'announcement', announcement.id, req.user?.userId || null, {
+      text: text.length > 80 ? text.slice(0, 80) + '…' : text,
+      enabled,
+    });
+
     // Emit WebSocket event for real-time updates
     io.emit('announcement:new', { id: announcement.id });
 
@@ -1686,6 +1691,13 @@ app.put('/api/announcements/:id', authenticateToken, requireEditor, async (req: 
 
     const announcementId = req.params.id;
 
+    const existingAnnouncement = await prisma.announcement.findUnique({
+      where: { id: announcementId },
+    });
+    if (!existingAnnouncement) {
+      return res.status(404).json({ error: 'Announcement not found' });
+    }
+
     // If displayIds explicitly provided, replace display assignments in a transaction
     if (displayIds !== undefined) {
       await prisma.$transaction([
@@ -1716,14 +1728,21 @@ app.put('/api/announcements/:id', authenticateToken, requireEditor, async (req: 
 
     console.log(`[DB] UPDATE announcements WHERE id = ${announcementId}`);
 
+    const annChanges: Record<string, { from: unknown; to: unknown }> = {};
+    for (const [key, newValue] of Object.entries(updateData)) {
+      const oldValue = (existingAnnouncement as Record<string, unknown>)[key];
+      if (String(oldValue) !== String(newValue)) {
+        annChanges[key] = { from: oldValue, to: newValue };
+      }
+    }
+    await createAuditLog('update', 'announcement', announcementId, req.user?.userId || null,
+      Object.keys(annChanges).length > 0 ? annChanges : updateData);
+
     // Emit WebSocket event for real-time updates
     io.emit('announcement:new', { id: announcementId });
 
     res.json(announcement);
   } catch (error: unknown) {
-    if (error && typeof error === 'object' && 'code' in error && error.code === 'P2025') {
-      return res.status(404).json({ error: 'Announcement not found' });
-    }
     console.error('Failed to update announcement:', error);
     res.status(500).json({ error: 'Failed to update announcement' });
   }
@@ -1732,20 +1751,26 @@ app.put('/api/announcements/:id', authenticateToken, requireEditor, async (req: 
 // Delete announcement
 app.delete('/api/announcements/:id', authenticateToken, requireEditor, async (req: AuthenticatedRequest, res: Response) => {
   try {
+    const existing = await prisma.announcement.findUnique({ where: { id: req.params.id } });
+    if (!existing) {
+      return res.status(404).json({ error: 'Announcement not found' });
+    }
+
     await prisma.announcement.delete({
       where: { id: req.params.id },
     });
 
     console.log(`[DB] DELETE from announcements WHERE id = ${req.params.id}`);
 
+    await createAuditLog('delete', 'announcement', req.params.id, req.user?.userId || null, {
+      text: existing.text.length > 80 ? existing.text.slice(0, 80) + '…' : existing.text,
+    });
+
     // Emit WebSocket event for real-time updates
     io.emit('announcement:remove', { id: req.params.id });
 
     res.status(204).send();
   } catch (error: unknown) {
-    if (error && typeof error === 'object' && 'code' in error && error.code === 'P2025') {
-      return res.status(404).json({ error: 'Announcement not found' });
-    }
     console.error('Failed to delete announcement:', error);
     res.status(500).json({ error: 'Failed to delete announcement' });
   }
