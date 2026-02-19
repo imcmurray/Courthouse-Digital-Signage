@@ -51,6 +51,7 @@ model DocketEntry {
   status          String   @default("scheduled") // scheduled, in_progress, completed, cancelled, continued, stricken, reserved
   statusNote      String?  @map("status_note")
   comment         String?
+  manuallyEdited  Boolean  @default(false) @map("manually_edited")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
   createdById     String?  @map("created_by")

@@ -258,10 +258,65 @@ export default function Dashboard() {
       if (c.created) parts.push(`${c.created} added`);
       if (c.updated) parts.push(`${c.updated} updated`);
       if (c.removed) parts.push(`${c.removed} removed`);
+      if (c.skippedManualEdits) parts.push(`${c.skippedManualEdits} protected`);
       return `imported calendars — ${parts.length > 0 ? parts.join(', ') : 'no changes'}`;
     }
 
+    // Enhanced update descriptions with before/after detail
+    if (activity.action === 'update' && activity.changes) {
+      const c = activity.changes as Record<string, unknown>;
+      // Check if changes have { from, to } structure
+      const fieldEntries = Object.entries(c).filter(
+        ([, v]) => v && typeof v === 'object' && 'from' in (v as Record<string, unknown>) && 'to' in (v as Record<string, unknown>)
+      );
+      if (fieldEntries.length > 0) {
+        // If status changed, highlight it
+        const statusChange = fieldEntries.find(([k]) => k === 'status');
+        if (statusChange) {
+          const to = (statusChange[1] as { to: unknown }).to;
+          const otherCount = fieldEntries.length - 1;
+          const suffix = otherCount > 0 ? ` + ${otherCount} more` : '';
+          return `updated ${entityName} — status \u2192 ${to}${suffix}`;
+        }
+        // Otherwise list changed field names
+        if (fieldEntries.length <= 2) {
+          return `updated ${entityName} — ${fieldEntries.map(([k]) => k).join(', ')} changed`;
+        }
+        return `updated ${entityName} — ${fieldEntries.length} fields changed`;
+      }
+    }
+
+    // Enhanced create/delete with identifying info
+    if ((activity.action === 'create' || activity.action === 'delete') && activity.changes) {
+      const c = activity.changes as Record<string, unknown>;
+      const label = c.name || c.caseNumber;
+      if (label) {
+        return `${actionVerb} ${entityName} "${label}"`;
+      }
+    }
+
     return `${actionVerb} ${entityName}`;
+  };
+
+  const formatActivityTooltip = (activity: ActivityItem): string | undefined => {
+    if (!activity.changes) return undefined;
+    const c = activity.changes as Record<string, unknown>;
+    const lines: string[] = [];
+
+    // Full timestamp
+    lines.push(new Date(activity.timestamp).toLocaleString());
+    if (activity.entityId) lines.push(`ID: ${activity.entityId}`);
+    lines.push('');
+
+    for (const [key, value] of Object.entries(c)) {
+      if (value && typeof value === 'object' && 'from' in (value as Record<string, unknown>) && 'to' in (value as Record<string, unknown>)) {
+        const { from, to } = value as { from: unknown; to: unknown };
+        lines.push(`${key}: ${from ?? '(empty)'} \u2192 ${to ?? '(empty)'}`);
+      } else {
+        lines.push(`${key}: ${typeof value === 'object' ? JSON.stringify(value) : String(value)}`);
+      }
+    }
+    return lines.join('\n');
   };
 
   const formatTimestamp = (timestamp: string) => {
@@ -920,7 +975,7 @@ export default function Dashboard() {
           ) : recentActivity && recentActivity.length > 0 ? (
             <div className="max-h-48 overflow-y-auto space-y-1 -mx-2 px-2">
               {recentActivity.map((activity) => (
-                <div key={activity.id} className="flex items-center space-x-3 py-1.5">
+                <div key={activity.id} className="flex items-center space-x-3 py-1.5" title={formatActivityTooltip(activity)}>
                   <div className="flex-shrink-0">
                     {getActivityIcon(activity.action)}
                   </div>

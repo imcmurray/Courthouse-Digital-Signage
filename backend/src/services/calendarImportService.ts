@@ -16,6 +16,7 @@ interface ImportResult {
   entriesUpdated: number;
   entriesSkipped: number;
   entriesRemoved: number;
+  skippedManualEdits: number;
   status: 'success' | 'partial' | 'failed';
   errorMessage?: string;
   durationMs: number;
@@ -143,7 +144,7 @@ function extractDateRange(filename: string): { start: Date; end: Date } | null {
  * Upsert a single parsed entry into the DocketEntry table.
  * Returns 'created', 'updated', or 'skipped'.
  */
-async function upsertEntry(entry: ParsedEntry, judgeName: string): Promise<'created' | 'updated' | 'skipped'> {
+async function upsertEntry(entry: ParsedEntry, judgeName: string): Promise<'created' | 'updated' | 'skipped' | 'skipped_manual'> {
   const hearingDate = new Date(entry.hearingDate + 'T00:00:00.000Z');
 
   try {
@@ -177,6 +178,20 @@ async function upsertEntry(entry: ParsedEntry, judgeName: string): Promise<'crea
     };
 
     if (existing) {
+      // Respect manually edited entries — only allow status changes through
+      if (existing.manuallyEdited) {
+        if (existing.status !== data.status) {
+          await prisma.docketEntry.update({
+            where: { id: existing.id },
+            data: { status: data.status },
+          });
+          console.log(`[Calendar Import] Manually edited ${entry.caseNumber} — status updated: ${existing.status} → ${data.status}`);
+          return 'updated';
+        }
+        console.log(`[Calendar Import] Skipping manually edited entry: ${entry.caseNumber}`);
+        return 'skipped_manual';
+      }
+
       if (existing.status !== data.status) {
         console.log(`[Calendar Import] Status change: ${entry.caseNumber} ${entry.hearingDate} ${entry.hearingTime} — ${existing.status} → ${data.status}`);
       }
@@ -249,6 +264,7 @@ export async function runImport(io?: any): Promise<ImportResult[]> {
         entriesUpdated: 0,
         entriesSkipped: 0,
         entriesRemoved: 0,
+        skippedManualEdits: 0,
         status: 'failed',
         errorMessage: 'No PDF calendars found',
         durationMs: 0,
@@ -294,6 +310,7 @@ export async function runImport(io?: any): Promise<ImportResult[]> {
         let created = 0;
         let updated = 0;
         let skipped = 0;
+        let skippedManualEdits = 0;
 
         // Track all imported entry keys so we can remove stale ones
         const importedKeys = new Set<string>();
@@ -302,6 +319,7 @@ export async function runImport(io?: any): Promise<ImportResult[]> {
           const result = await upsertEntry(entry, judgeName);
           if (result === 'created') created++;
           else if (result === 'updated') updated++;
+          else if (result === 'skipped_manual') skippedManualEdits++;
           else skipped++;
           importedKeys.add(`${entry.caseNumber}|${entry.hearingDate}|${entry.hearingTime}|${entry.hearingMatter}`);
         }
@@ -317,11 +335,13 @@ export async function runImport(io?: any): Promise<ImportResult[]> {
               hearingJudge: judgeName,
               hearingDate: { lte: dateRange.end },
             },
-            select: { id: true, caseNumber: true, hearingDate: true, hearingTime: true, hearingMatter: true },
+            select: { id: true, caseNumber: true, hearingDate: true, hearingTime: true, hearingMatter: true, manuallyEdited: true },
           });
 
           const staleIds = existingEntries
             .filter(e => {
+              // Never remove manually edited entries
+              if (e.manuallyEdited) return false;
               // Entries before the PDF's start date are always stale
               if (e.hearingDate < dateRange.start) return true;
               // Entries within the date range must still be in the PDF
@@ -361,12 +381,13 @@ export async function runImport(io?: any): Promise<ImportResult[]> {
           entriesUpdated: updated,
           entriesSkipped: skipped,
           entriesRemoved: removed,
+          skippedManualEdits,
           status: 'success',
           durationMs,
         });
 
         importProgress!.completedCalendars++;
-        console.log(`[Calendar Import] ${judgeName}: ${created} created, ${updated} updated, ${skipped} skipped, ${removed} removed (${durationMs}ms)`);
+        console.log(`[Calendar Import] ${judgeName}: ${created} created, ${updated} updated, ${skipped} skipped, ${removed} removed, ${skippedManualEdits} protected (${durationMs}ms)`);
       } catch (err: any) {
         const durationMs = Date.now() - startMs;
         const errorMessage = err.message || 'Unknown error';
@@ -389,6 +410,7 @@ export async function runImport(io?: any): Promise<ImportResult[]> {
           entriesUpdated: 0,
           entriesSkipped: 0,
           entriesRemoved: 0,
+          skippedManualEdits: 0,
           status: 'failed',
           errorMessage,
           durationMs,
@@ -418,6 +440,7 @@ export async function runImport(io?: any): Promise<ImportResult[]> {
       created: results.reduce((s, r) => s + r.entriesCreated, 0),
       updated: results.reduce((s, r) => s + r.entriesUpdated, 0),
       removed: results.reduce((s, r) => s + r.entriesRemoved, 0),
+      skippedManualEdits: results.reduce((s, r) => s + r.skippedManualEdits, 0),
       status: lastRunStatus,
     };
     await prisma.auditLog.create({

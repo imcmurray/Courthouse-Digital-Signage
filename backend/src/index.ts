@@ -1186,19 +1186,18 @@ app.put('/api/docket/:id', authenticateToken, requireEditor, async (req: Authent
       }
     }
 
+    // Fetch full existing entry for concurrency check and before/after diff
+    const existingEntry = await prisma.docketEntry.findUnique({
+      where: { id: req.params.id },
+    });
+
+    if (!existingEntry) {
+      return res.status(404).json({ error: 'Docket entry not found' });
+    }
+
     // Optimistic concurrency control: check updatedAt if provided
     const expectedUpdatedAt = req.body.updatedAt;
     if (expectedUpdatedAt) {
-      const existingEntry = await prisma.docketEntry.findUnique({
-        where: { id: req.params.id },
-        select: { updatedAt: true, caseTitle: true, hearingTime: true }
-      });
-
-      if (!existingEntry) {
-        return res.status(404).json({ error: 'Docket entry not found' });
-      }
-
-      // Compare timestamps - convert to ISO strings for reliable comparison
       const existingTimestamp = existingEntry.updatedAt.toISOString();
       const expectedTimestamp = new Date(expectedUpdatedAt).toISOString();
 
@@ -1214,6 +1213,9 @@ app.put('/api/docket/:id', authenticateToken, requireEditor, async (req: Authent
       }
     }
 
+    // Mark as manually edited so calendar imports won't overwrite
+    updateData.manuallyEdited = true;
+
     const entry = await prisma.docketEntry.update({
       where: { id: req.params.id },
       data: updateData
@@ -1221,8 +1223,17 @@ app.put('/api/docket/:id', authenticateToken, requireEditor, async (req: Authent
 
     console.log(`[DB] UPDATE docket_entries WHERE id = ${req.params.id}`);
 
-    // Create audit log for the update
-    await createAuditLog('update', 'docket_entry', entry.id, req.user?.userId || null, updateData);
+    // Compute before/after changes for audit log
+    const changes: Record<string, { from: unknown; to: unknown }> = {};
+    for (const [key, newValue] of Object.entries(updateData)) {
+      if (key === 'manuallyEdited') continue;
+      const oldValue = (existingEntry as Record<string, unknown>)[key];
+      if (String(oldValue) !== String(newValue)) {
+        changes[key] = { from: oldValue, to: newValue };
+      }
+    }
+    await createAuditLog('update', 'docket_entry', entry.id, req.user?.userId || null,
+      Object.keys(changes).length > 0 ? changes : updateData);
 
     // Emit WebSocket event for real-time updates
     io.emit('docket:update', {});
@@ -1891,6 +1902,10 @@ app.post('/api/displays', authenticateToken, requireEditor, async (req: Authenti
 
     console.log(`[DB] INSERT into displays - created id: ${display.id}`);
 
+    await createAuditLog('create', 'display', display.id, req.user?.userId || null, {
+      name, location, displayType: displayType || 'courtroom',
+    });
+
     // Return display info along with the plain API key (only returned on creation!)
     res.status(201).json({
       ...display,
@@ -1999,6 +2014,20 @@ app.put('/api/displays/:id', authenticateToken, requireEditor, async (req: Authe
 
     console.log(`[DB] UPDATE displays SET ... WHERE id = '${id}'`);
 
+    // Compute before/after diff for audit log
+    const changedFields: Record<string, { from: unknown; to: unknown }> = {};
+    const trackFields = ['name', 'location', 'judgeFilter', 'courtroomFilter',
+      'showStricken', 'showZoomInfo', 'highlightCurrent', 'orientation', 'theme',
+      'displayType', 'docketViewMode', 'screensaverType', 'tickerEnabled',
+      'tickerSpeed', 'showWeather', 'noticeText', 'scheduleEnabled'] as const;
+    for (const field of trackFields) {
+      if (req.body[field] !== undefined && String((existingDisplay as Record<string, unknown>)[field]) !== String((display as Record<string, unknown>)[field])) {
+        changedFields[field] = { from: (existingDisplay as Record<string, unknown>)[field], to: (display as Record<string, unknown>)[field] };
+      }
+    }
+    await createAuditLog('update', 'display', display.id, req.user?.userId || null,
+      Object.keys(changedFields).length > 0 ? changedFields : { note: 'config updated' });
+
     res.json(display);
   } catch (error) {
     console.error('Failed to update display:', error);
@@ -2056,6 +2085,10 @@ app.delete('/api/displays/:id', authenticateToken, requireEditor, async (req: Au
     });
 
     console.log(`[DB] DELETE FROM displays WHERE id = '${id}' (cascade delete removed associations)`);
+
+    await createAuditLog('delete', 'display', id, req.user?.userId || null, {
+      name: existingDisplay.name, location: existingDisplay.location,
+    });
 
     res.json({ success: true, message: 'Display deleted successfully' });
   } catch (error) {

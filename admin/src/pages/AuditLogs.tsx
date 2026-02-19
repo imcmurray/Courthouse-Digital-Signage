@@ -84,6 +84,15 @@ export default function AuditLogs() {
     }
   };
 
+  const formatChangeValue = (value: unknown): string => {
+    if (value === null || value === undefined) return '(empty)';
+    if (typeof value === 'object' && value !== null && 'from' in value && 'to' in value) {
+      const { from, to } = value as { from: unknown; to: unknown };
+      return `${from ?? '(empty)'} → ${to ?? '(empty)'}`;
+    }
+    return String(value);
+  };
+
   const renderChanges = (log: AuditLog) => {
     const changes = parseChanges(log.changes);
     if (!changes) return <span className="text-gray-400 dark:text-gray-500">-</span>;
@@ -93,7 +102,7 @@ export default function AuditLogs() {
       <div className="text-sm text-gray-600 dark:text-gray-300">
         {entries.map(([key, value], index) => (
           <span key={key}>
-            <span className="font-medium">{key}:</span> {String(value)}
+            <span className="font-medium">{key}:</span> {formatChangeValue(value)}
             {index < entries.length - 1 && ', '}
           </span>
         ))}
@@ -382,7 +391,15 @@ export default function AuditLogs() {
                         {Object.entries(parseChanges(selectedLog.changes)!).map(([key, value]) => (
                           <tr key={key}>
                             <td className="py-1.5 pr-4 font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap align-top">{key}</td>
-                            <td className="py-1.5 text-gray-900 dark:text-white break-all">{typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}</td>
+                            <td className="py-1.5 text-gray-900 dark:text-white break-all">
+                              {typeof value === 'object' && value !== null && 'from' in value && 'to' in value ? (
+                                <span>
+                                  <span className="text-red-500 dark:text-red-400 line-through">{String((value as { from: unknown }).from ?? '(empty)')}</span>
+                                  {' → '}
+                                  <span className="text-green-600 dark:text-green-400">{String((value as { to: unknown }).to ?? '(empty)')}</span>
+                                </span>
+                              ) : typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
