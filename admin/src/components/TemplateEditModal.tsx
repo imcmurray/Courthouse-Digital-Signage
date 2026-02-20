@@ -21,24 +21,83 @@ import ModalPortal from './ModalPortal';
 import { displayTemplatesApi, DisplayTypeTemplate } from '../api/displayTemplates';
 import { DISPLAY_COMPONENTS, ComponentType, COMPONENT_TYPE_LIST } from '../constants/displayComponents';
 
-interface TemplateComponent {
-  id: string; // client-side UUID for dnd-kit
-  type: ComponentType;
-  config: Record<string, unknown>;
+// --- Types ---
+
+interface OrientationLayout {
+  columns?: string;
+  rows?: string;
+  gap?: string;
+  areas: string[][];
 }
 
 interface LayoutConfig {
-  type: 'single' | 'two-column' | 'two-column-wide' | 'grid';
-  columns?: string;
-  rows?: string;
+  landscape: OrientationLayout;
+  portrait: OrientationLayout;
 }
 
-const LAYOUT_PRESETS: { value: LayoutConfig['type']; label: string; layout: LayoutConfig }[] = [
-  { value: 'single', label: 'Single Column', layout: { type: 'single' } },
-  { value: 'two-column', label: 'Two Column', layout: { type: 'two-column', columns: '1fr 1fr' } },
-  { value: 'two-column-wide', label: 'Two Column (wide left)', layout: { type: 'two-column', columns: '2fr 1fr' } },
-  { value: 'grid', label: 'Grid (2x2)', layout: { type: 'grid', columns: '1fr 1fr', rows: '1fr 1fr' } },
+interface TemplateComponent {
+  id: string;
+  type: ComponentType;
+  config: Record<string, unknown>;
+  gridArea?: {
+    landscape?: string;
+    portrait?: string;
+  };
+}
+
+type Orientation = 'landscape' | 'portrait';
+
+// --- Presets ---
+
+const DEFAULT_LAYOUT: LayoutConfig = {
+  landscape: { areas: [['main']] },
+  portrait: { areas: [['main']] },
+};
+
+interface LayoutPreset {
+  label: string;
+  layout: LayoutConfig;
+}
+
+const LAYOUT_PRESETS: LayoutPreset[] = [
+  {
+    label: 'Single Column',
+    layout: {
+      landscape: { areas: [['main']] },
+      portrait: { areas: [['main']] },
+    },
+  },
+  {
+    label: 'Two Column',
+    layout: {
+      landscape: { columns: '1fr 1fr', areas: [['left', 'right']] },
+      portrait: { rows: '1fr 1fr', areas: [['top'], ['bottom']] },
+    },
+  },
+  {
+    label: 'Two Column (40/60)',
+    layout: {
+      landscape: { columns: '40% 60%', areas: [['left', 'right']] },
+      portrait: { rows: '45% 55%', areas: [['top'], ['bottom']] },
+    },
+  },
+  {
+    label: 'Two Column (60/40)',
+    layout: {
+      landscape: { columns: '60% 40%', areas: [['left', 'right']] },
+      portrait: { rows: '55% 45%', areas: [['top'], ['bottom']] },
+    },
+  },
+  {
+    label: '2x2 Grid',
+    layout: {
+      landscape: { columns: '1fr 1fr', rows: '1fr 1fr', areas: [['tl', 'tr'], ['bl', 'br']] },
+      portrait: { columns: '1fr 1fr', rows: '1fr 1fr', areas: [['tl', 'tr'], ['bl', 'br']] },
+    },
+  },
 ];
+
+// --- Helpers ---
 
 function generateId() {
   return crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
@@ -48,26 +107,184 @@ function parseComponents(json: string): TemplateComponent[] {
   try {
     const arr = JSON.parse(json);
     if (!Array.isArray(arr)) return [];
-    return arr.map((c: { type: string; config?: Record<string, unknown> }) => ({
+    return arr.map((c: { type: string; config?: Record<string, unknown>; gridArea?: { landscape?: string; portrait?: string } | string }) => ({
       id: generateId(),
       type: c.type as ComponentType,
       config: c.config || {},
+      ...(c.gridArea && {
+        gridArea: typeof c.gridArea === 'string'
+          ? { landscape: c.gridArea, portrait: c.gridArea }
+          : c.gridArea,
+      }),
     }));
   } catch { return []; }
 }
 
 function parseLayout(json: string | null): LayoutConfig {
-  if (!json) return { type: 'single' };
+  if (!json) return DEFAULT_LAYOUT;
   try {
-    return JSON.parse(json);
-  } catch { return { type: 'single' }; }
+    const parsed = JSON.parse(json);
+    // New format: has landscape key
+    if (parsed.landscape) return parsed as LayoutConfig;
+    // Old format: { type, columns?, rows? } — normalize
+    return DEFAULT_LAYOUT;
+  } catch { return DEFAULT_LAYOUT; }
 }
 
 function slugify(text: string): string {
   return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
 
-// Sortable component row
+/** Extract unique area names from an OrientationLayout */
+function getAreaNames(ol: OrientationLayout): string[] {
+  const names = new Set<string>();
+  for (const row of ol.areas) {
+    for (const cell of row) {
+      names.add(cell);
+    }
+  }
+  return Array.from(names);
+}
+
+/** Build CSS grid-template-areas string from 2D areas array */
+function buildGridTemplateAreas(areas: string[][]): string {
+  return areas.map(row => `"${row.join(' ')}"`).join(' ');
+}
+
+/** Check if a layout matches a preset */
+function isPresetActive(layout: LayoutConfig, preset: LayoutConfig): boolean {
+  return JSON.stringify(layout) === JSON.stringify(preset);
+}
+
+/** Check if the layout is the default single-column layout */
+function isDefaultLayout(layout: LayoutConfig): boolean {
+  const l = layout.landscape;
+  const p = layout.portrait;
+  return (
+    l.areas.length === 1 && l.areas[0].length === 1 && l.areas[0][0] === 'main' &&
+    p.areas.length === 1 && p.areas[0].length === 1 && p.areas[0][0] === 'main' &&
+    !l.columns && !l.rows && !p.columns && !p.rows
+  );
+}
+
+// --- GridPreview Component ---
+
+interface GridPreviewProps {
+  orientation: Orientation;
+  orientationLayout: OrientationLayout;
+  components: TemplateComponent[];
+  onAssignComponent: (areaName: string, componentId: string) => void;
+  onUnassignComponent: (areaName: string, componentId: string) => void;
+}
+
+function GridPreview({ orientation, orientationLayout, components, onAssignComponent, onUnassignComponent }: GridPreviewProps) {
+  const [dropdownArea, setDropdownArea] = useState<string | null>(null);
+
+  const areaNames = getAreaNames(orientationLayout);
+
+  // Map area name -> assigned components
+  const areaAssignments: Record<string, TemplateComponent[]> = {};
+  for (const name of areaNames) {
+    areaAssignments[name] = [];
+  }
+  for (const comp of components) {
+    const assignedArea = comp.gridArea?.[orientation];
+    if (assignedArea && areaAssignments[assignedArea]) {
+      areaAssignments[assignedArea].push(comp);
+    }
+  }
+
+  // Components not assigned to any area in this orientation (and have gridArea capability — i.e., no behavioral overlays)
+  const unassigned = components.filter(comp => {
+    // idle-cards with replace-panel mode is behavioral, skip
+    if (comp.type === 'idle-cards' && comp.config.mode === 'replace-panel') return false;
+    const area = comp.gridArea?.[orientation];
+    return !area || !areaNames.includes(area);
+  });
+
+  const gridStyle: React.CSSProperties = {
+    display: 'grid',
+    gridTemplateAreas: buildGridTemplateAreas(orientationLayout.areas),
+    ...(orientationLayout.columns && { gridTemplateColumns: orientationLayout.columns }),
+    ...(orientationLayout.rows && { gridTemplateRows: orientationLayout.rows }),
+    gap: orientationLayout.gap || '4px',
+    width: '100%',
+    height: '100%',
+  };
+
+  return (
+    <div className={`border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-100 dark:bg-gray-900 p-2 ${
+      orientation === 'landscape' ? 'aspect-video max-h-[280px]' : 'aspect-[9/16] max-h-[400px]'
+    }`}>
+      <div style={gridStyle} className="h-full">
+        {areaNames.map(areaName => {
+          const assigned = areaAssignments[areaName];
+          return (
+            <div
+              key={areaName}
+              style={{ gridArea: areaName }}
+              className="relative border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-md p-2 flex flex-col items-center justify-center min-h-[40px] bg-white/50 dark:bg-gray-800/50"
+            >
+              <span className="text-[10px] font-mono text-gray-400 dark:text-gray-500 absolute top-1 left-2">{areaName}</span>
+              {assigned.length > 0 ? (
+                <div className="flex flex-col items-center gap-1 mt-3">
+                  {assigned.map(comp => (
+                    <div key={comp.id} className="flex items-center gap-1 bg-primary/10 dark:bg-primary/20 text-primary dark:text-primary-light text-xs px-2 py-0.5 rounded-full">
+                      <span>{DISPLAY_COMPONENTS[comp.type]?.name || comp.type}</span>
+                      <button
+                        type="button"
+                        onClick={() => onUnassignComponent(areaName, comp.id)}
+                        className="text-primary/60 hover:text-red-500 ml-0.5"
+                        title="Unassign"
+                      >
+                        &times;
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-3 relative">
+                  <button
+                    type="button"
+                    onClick={() => setDropdownArea(dropdownArea === areaName ? null : areaName)}
+                    className="text-[11px] text-gray-400 hover:text-primary dark:hover:text-primary-light italic"
+                  >
+                    Click to assign
+                  </button>
+                  {dropdownArea === areaName && unassigned.length > 0 && (
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg z-10 min-w-[160px] py-1">
+                      {unassigned.map(comp => (
+                        <button
+                          key={comp.id}
+                          type="button"
+                          onClick={() => {
+                            onAssignComponent(areaName, comp.id);
+                            setDropdownArea(null);
+                          }}
+                          className="block w-full text-left px-3 py-1.5 text-xs text-gray-700 dark:text-gray-200 hover:bg-primary/10 dark:hover:bg-primary/20"
+                        >
+                          {DISPLAY_COMPONENTS[comp.type]?.name || comp.type}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {dropdownArea === areaName && unassigned.length === 0 && (
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg z-10 min-w-[160px] py-2 px-3">
+                      <span className="text-xs text-gray-400 italic">No unassigned components</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// --- Sortable component row ---
+
 interface SortableComponentProps {
   component: TemplateComponent;
   onRemove: () => void;
@@ -93,6 +310,11 @@ function SortableComponent({ component, onRemove, onUpdateConfig, isExpanded, on
   };
 
   const info = DISPLAY_COMPONENTS[component.type];
+  const isBehavioral = component.type === 'idle-cards' && component.config.mode === 'replace-panel';
+
+  // Placement badges
+  const lArea = component.gridArea?.landscape;
+  const pArea = component.gridArea?.portrait;
 
   return (
     <div ref={setNodeRef} style={style} className="bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
@@ -113,9 +335,15 @@ function SortableComponent({ component, onRemove, onUpdateConfig, isExpanded, on
             <circle cx="11" cy="13" r="1.5" />
           </svg>
         </button>
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 flex items-center gap-2">
           <span className="text-sm font-medium text-gray-900 dark:text-white">{info?.name || component.type}</span>
-          <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">{info?.description}</span>
+          {isBehavioral ? (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400">Overlay</span>
+          ) : (lArea || pArea) ? (
+            <span className="text-[10px] font-mono text-gray-400 dark:text-gray-500">
+              {lArea && `L:${lArea}`}{lArea && pArea && ' '}{pArea && `P:${pArea}`}
+            </span>
+          ) : null}
         </div>
         <button
           type="button"
@@ -142,7 +370,8 @@ function SortableComponent({ component, onRemove, onUpdateConfig, isExpanded, on
   );
 }
 
-// Per-component config editor
+// --- Per-component config editor ---
+
 function ComponentConfigEditor({ type, config, onChange }: {
   type: ComponentType;
   config: Record<string, unknown>;
@@ -213,8 +442,10 @@ function ComponentConfigEditor({ type, config, onChange }: {
   }
 }
 
+// --- Main Modal ---
+
 interface TemplateEditModalProps {
-  template: DisplayTypeTemplate | null; // null = create mode
+  template: DisplayTypeTemplate | null;
   onClose: () => void;
 }
 
@@ -230,17 +461,17 @@ export default function TemplateEditModal({ template, onClose }: TemplateEditMod
     template ? parseComponents(template.components) : []
   );
   const [layout, setLayout] = useState<LayoutConfig>(
-    template ? parseLayout(template.layout) : { type: 'single' }
+    template ? parseLayout(template.layout) : DEFAULT_LAYOUT
   );
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [autoSlug, setAutoSlug] = useState(!isEditing);
+  const [activeTab, setActiveTab] = useState<Orientation>('landscape');
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor)
   );
 
-  // Auto-generate slug from name
   useEffect(() => {
     if (autoSlug && !isEditing) {
       setSlug(slugify(name));
@@ -277,7 +508,6 @@ export default function TemplateEditModal({ template, onClose }: TemplateEditMod
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['display-templates'] });
       toast.success('Template reset to defaults');
-      // Update local state with reset data
       setName(data.name);
       setDescription(data.description || '');
       setComponents(parseComponents(data.components));
@@ -290,7 +520,13 @@ export default function TemplateEditModal({ template, onClose }: TemplateEditMod
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const componentData = components.map(c => ({ type: c.type, config: c.config }));
+    const componentData = components.map(c => ({
+      type: c.type,
+      config: c.config,
+      ...(c.gridArea && Object.keys(c.gridArea).length > 0 && { gridArea: c.gridArea }),
+    }));
+
+    const layoutData = isDefaultLayout(layout) ? null : layout;
 
     if (isEditing && template) {
       updateMutation.mutate({
@@ -299,7 +535,7 @@ export default function TemplateEditModal({ template, onClose }: TemplateEditMod
           name,
           description: description || null,
           components: componentData,
-          layout: layout.type === 'single' ? null : layout,
+          layout: layoutData,
           ...(!isBuiltIn && { slug }),
         },
       });
@@ -309,7 +545,7 @@ export default function TemplateEditModal({ template, onClose }: TemplateEditMod
         name,
         description: description || null,
         components: componentData,
-        layout: layout.type === 'single' ? null : layout,
+        layout: layoutData,
       });
     }
   };
@@ -335,17 +571,44 @@ export default function TemplateEditModal({ template, onClose }: TemplateEditMod
     setComponents(arrayMove(components, oldIndex, newIndex));
   };
 
+  const handleAssignComponent = (areaName: string, componentId: string) => {
+    setComponents(components.map(c => {
+      if (c.id !== componentId) return c;
+      return { ...c, gridArea: { ...c.gridArea, [activeTab]: areaName } };
+    }));
+  };
+
+  const handleUnassignComponent = (_areaName: string, componentId: string) => {
+    setComponents(components.map(c => {
+      if (c.id !== componentId) return c;
+      const updated = { ...c.gridArea };
+      delete updated[activeTab];
+      return { ...c, gridArea: Object.keys(updated).length > 0 ? updated : undefined };
+    }));
+  };
+
+  const updateOrientationLayout = (field: 'columns' | 'rows', value: string) => {
+    setLayout(prev => ({
+      ...prev,
+      [activeTab]: {
+        ...prev[activeTab],
+        [field]: value || undefined,
+      },
+    }));
+  };
+
   const isPending = createMutation.isPending || updateMutation.isPending;
 
-  // Component types not already in the list
   const availableComponents = COMPONENT_TYPE_LIST.filter(
     c => !components.some(existing => existing.type === c.type)
   );
 
+  const activeOrientationLayout = layout[activeTab];
+
   return (
     <ModalPortal>
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
             {isEditing ? (isBuiltIn ? 'Edit Built-in Template' : 'Edit Template') : 'Create Template'}
           </h3>
@@ -398,7 +661,87 @@ export default function TemplateEditModal({ template, onClose }: TemplateEditMod
               />
             </div>
 
-            {/* B) Component List */}
+            {/* B) Layout Editor */}
+            <div className="border-t dark:border-gray-700 pt-4">
+              <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-3">Layout</h4>
+
+              {/* Preset buttons */}
+              <div className="flex flex-wrap gap-2 mb-4">
+                {LAYOUT_PRESETS.map(preset => (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() => {
+                      setLayout(preset.layout);
+                      // Clear component gridArea assignments when changing layout
+                      setComponents(prev => prev.map(c => ({ ...c, gridArea: undefined })));
+                    }}
+                    className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
+                      isPresetActive(layout, preset.layout)
+                        ? 'border-primary bg-primary/10 text-primary dark:text-primary-light'
+                        : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Orientation tabs */}
+              <div className="flex gap-1 mb-3">
+                {(['landscape', 'portrait'] as Orientation[]).map(tab => (
+                  <button
+                    key={tab}
+                    type="button"
+                    onClick={() => setActiveTab(tab)}
+                    className={`px-3 py-1.5 text-xs rounded-t-lg border border-b-0 transition-colors ${
+                      activeTab === tab
+                        ? 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white font-medium'
+                        : 'bg-gray-100 dark:bg-gray-700 border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                    }`}
+                  >
+                    {tab === 'landscape' ? 'Landscape' : 'Portrait'}
+                  </button>
+                ))}
+              </div>
+
+              {/* Per-orientation controls */}
+              <div className="border border-gray-300 dark:border-gray-600 rounded-lg rounded-tl-none p-4 space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Columns</label>
+                    <input
+                      type="text"
+                      value={activeOrientationLayout.columns || ''}
+                      onChange={e => updateOrientationLayout('columns', e.target.value)}
+                      placeholder="e.g., 40% 60% or 1fr 1fr"
+                      className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Rows</label>
+                    <input
+                      type="text"
+                      value={activeOrientationLayout.rows || ''}
+                      onChange={e => updateOrientationLayout('rows', e.target.value)}
+                      placeholder="e.g., 1fr auto or 45% 55%"
+                      className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white font-mono"
+                    />
+                  </div>
+                </div>
+
+                {/* Grid preview */}
+                <GridPreview
+                  orientation={activeTab}
+                  orientationLayout={activeOrientationLayout}
+                  components={components}
+                  onAssignComponent={handleAssignComponent}
+                  onUnassignComponent={handleUnassignComponent}
+                />
+              </div>
+            </div>
+
+            {/* C) Component List */}
             <div className="border-t dark:border-gray-700 pt-4">
               <div className="flex items-center justify-between mb-3">
                 <h4 className="text-sm font-medium text-gray-900 dark:text-white">Components</h4>
@@ -438,28 +781,6 @@ export default function TemplateEditModal({ template, onClose }: TemplateEditMod
                   No components added. Use the dropdown above to add components.
                 </p>
               )}
-            </div>
-
-            {/* C) Layout Selector */}
-            <div className="border-t dark:border-gray-700 pt-4">
-              <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-3">Layout</h4>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {LAYOUT_PRESETS.map(preset => (
-                  <button
-                    key={preset.value}
-                    type="button"
-                    onClick={() => setLayout(preset.layout)}
-                    className={`px-3 py-2 text-xs rounded-lg border transition-colors ${
-                      layout.type === preset.layout.type &&
-                      (layout.columns || '') === (preset.layout.columns || '')
-                        ? 'border-primary bg-primary/10 text-primary dark:text-primary-light'
-                        : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                    }`}
-                  >
-                    {preset.label}
-                  </button>
-                ))}
-              </div>
             </div>
 
             {/* D) Reset button for built-in */}

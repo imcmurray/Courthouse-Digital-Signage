@@ -2274,53 +2274,68 @@ const BUILT_IN_TEMPLATES = [
     name: 'Courtroom Calendar',
     description: 'Standard courtroom display showing docket table with smart time filtering',
     components: JSON.stringify([
-      { type: 'hearing-table', config: { viewMode: 'smart' } },
+      { type: 'hearing-table', config: { viewMode: 'smart' }, gridArea: { landscape: 'main', portrait: 'main' } },
       { type: 'idle-cards', config: { mode: 'interleave-pagination' } }
     ]),
-    layout: null,
+    layout: JSON.stringify({
+      landscape: { areas: [['main']] },
+      portrait: { areas: [['main']] },
+    }),
   },
   {
     slug: 'chambers',
     name: "Judge's Chambers",
     description: "Shows a single judge's full calendar across all courtrooms",
     components: JSON.stringify([
-      { type: 'hearing-table', config: { viewMode: 'smart', hideColumns: ['judge'] } },
+      { type: 'hearing-table', config: { viewMode: 'smart', hideColumns: ['judge'] }, gridArea: { landscape: 'main', portrait: 'main' } },
       { type: 'idle-cards', config: { mode: 'interleave-pagination' } }
     ]),
-    layout: null,
+    layout: JSON.stringify({
+      landscape: { areas: [['main']] },
+      portrait: { areas: [['main']] },
+    }),
   },
   {
     slug: 'combined',
     name: 'Combined / All Hearings',
     description: 'Shows all hearings across all judges and courtrooms',
     components: JSON.stringify([
-      { type: 'hearing-table', config: { viewMode: 'all' } },
+      { type: 'hearing-table', config: { viewMode: 'all' }, gridArea: { landscape: 'main', portrait: 'main' } },
       { type: 'idle-cards', config: { mode: 'interleave-pagination' } }
     ]),
-    layout: null,
+    layout: JSON.stringify({
+      landscape: { areas: [['main']] },
+      portrait: { areas: [['main']] },
+    }),
   },
   {
     slug: 'wayfinding',
     name: 'Wayfinding Directory',
     description: 'Direction cards with compact hearing schedule pills',
     components: JSON.stringify([
-      { type: 'hearing-pills', config: {} },
-      { type: 'direction-cards', config: {} },
+      { type: 'hearing-pills', config: {}, gridArea: { landscape: 'left', portrait: 'top' } },
+      { type: 'direction-cards', config: {}, gridArea: { landscape: 'right', portrait: 'bottom' } },
       { type: 'idle-cards', config: { mode: 'replace-panel', target: 'hearing-pills' } }
     ]),
-    layout: null,
+    layout: JSON.stringify({
+      landscape: { columns: '40% 60%', areas: [['left', 'right']] },
+      portrait: { rows: '45% 55%', areas: [['top'], ['bottom']] },
+    }),
   },
   {
     slug: 'it-status',
     name: 'IT Status Monitor',
     description: 'Camera feeds, system status, and compact hearing schedule',
     components: JSON.stringify([
-      { type: 'camera-grid', config: {} },
-      { type: 'system-status', config: {} },
-      { type: 'hearing-pills', config: {} },
+      { type: 'camera-grid', config: {}, gridArea: { landscape: 'left-top', portrait: 'top' } },
+      { type: 'system-status', config: {}, gridArea: { landscape: 'left-bottom', portrait: 'mid' } },
+      { type: 'hearing-pills', config: {}, gridArea: { landscape: 'right', portrait: 'bottom' } },
       { type: 'idle-cards', config: { mode: 'replace-panel', target: 'hearing-pills' } }
     ]),
-    layout: null,
+    layout: JSON.stringify({
+      landscape: { columns: '60% 40%', rows: '1fr auto', areas: [['left-top', 'right'], ['left-bottom', 'right']] },
+      portrait: { rows: 'auto auto 1fr', areas: [['top'], ['mid'], ['bottom']] },
+    }),
   },
 ];
 
@@ -2345,6 +2360,21 @@ function validateComponents(components: unknown): string | null {
   for (const comp of components) {
     if (!comp || typeof comp !== 'object') return 'Each component must be an object';
     if (!VALID_COMPONENT_TYPES.includes(comp.type)) return `Invalid component type: ${comp.type}`;
+    // Validate gridArea if present
+    if (comp.gridArea !== undefined) {
+      if (typeof comp.gridArea === 'string') continue; // legacy string format is OK
+      if (typeof comp.gridArea !== 'object' || comp.gridArea === null) {
+        return 'gridArea must be a string or object with landscape/portrait keys';
+      }
+      for (const key of Object.keys(comp.gridArea)) {
+        if (key !== 'landscape' && key !== 'portrait') {
+          return `gridArea has invalid key: ${key}`;
+        }
+        if (typeof comp.gridArea[key] !== 'string') {
+          return `gridArea.${key} must be a string`;
+        }
+      }
+    }
   }
   return null;
 }

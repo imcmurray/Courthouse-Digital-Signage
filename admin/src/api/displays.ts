@@ -49,22 +49,33 @@ export interface Display {
   updatedAt: string;
 }
 
-// Template builder types (groundwork for future visual template builder)
+// Template builder types
+export interface OrientationLayout {
+  columns?: string;         // CSS grid-template-columns, e.g. "40% 60%"
+  rows?: string;            // CSS grid-template-rows, e.g. "45% 55%"
+  gap?: string;             // CSS gap, e.g. "0" or "4px"
+  areas: string[][];        // 2D grid areas, e.g. [["left", "right"]]
+}
+
+export interface LayoutConfig {
+  landscape: OrientationLayout;
+  portrait: OrientationLayout;
+}
+
 export interface DisplayTemplateComponent {
   type: 'hearing-table' | 'hearing-pills' | 'idle-cards' | 'direction-cards' | 'camera-grid' | 'system-status';
   config: Record<string, any>;
-  gridArea?: string;  // CSS grid area for visual builder layout
+  gridArea?: {
+    landscape?: string;
+    portrait?: string;
+  };
 }
 
 export interface DisplayTemplate {
   name: string;
   displayType: string;
   components: DisplayTemplateComponent[];
-  layout?: {
-    type: 'single' | 'two-column' | 'grid';
-    columns?: string;
-    rows?: string;
-  };
+  layout?: LayoutConfig | null;
 }
 
 export interface CreateDisplayInput {
