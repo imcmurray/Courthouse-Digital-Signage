@@ -2263,6 +2263,309 @@ app.delete('/api/news/:id', authenticateToken, requireEditor, async (req: Authen
   }
 });
 
+// =============================================
+// Display Type Templates (admin auth)
+// =============================================
+
+// Built-in template seed data (mirrors DEFAULT_DISPLAY_TEMPLATES in display.js)
+const BUILT_IN_TEMPLATES = [
+  {
+    slug: 'courtroom',
+    name: 'Courtroom Calendar',
+    description: 'Standard courtroom display showing docket table with smart time filtering',
+    components: JSON.stringify([
+      { type: 'hearing-table', config: { viewMode: 'smart' } },
+      { type: 'idle-cards', config: { mode: 'interleave-pagination' } }
+    ]),
+    layout: null,
+  },
+  {
+    slug: 'chambers',
+    name: "Judge's Chambers",
+    description: "Shows a single judge's full calendar across all courtrooms",
+    components: JSON.stringify([
+      { type: 'hearing-table', config: { viewMode: 'smart', hideColumns: ['judge'] } },
+      { type: 'idle-cards', config: { mode: 'interleave-pagination' } }
+    ]),
+    layout: null,
+  },
+  {
+    slug: 'combined',
+    name: 'Combined / All Hearings',
+    description: 'Shows all hearings across all judges and courtrooms',
+    components: JSON.stringify([
+      { type: 'hearing-table', config: { viewMode: 'all' } },
+      { type: 'idle-cards', config: { mode: 'interleave-pagination' } }
+    ]),
+    layout: null,
+  },
+  {
+    slug: 'wayfinding',
+    name: 'Wayfinding Directory',
+    description: 'Direction cards with compact hearing schedule pills',
+    components: JSON.stringify([
+      { type: 'hearing-pills', config: {} },
+      { type: 'direction-cards', config: {} },
+      { type: 'idle-cards', config: { mode: 'replace-panel', target: 'hearing-pills' } }
+    ]),
+    layout: null,
+  },
+  {
+    slug: 'it-status',
+    name: 'IT Status Monitor',
+    description: 'Camera feeds, system status, and compact hearing schedule',
+    components: JSON.stringify([
+      { type: 'camera-grid', config: {} },
+      { type: 'system-status', config: {} },
+      { type: 'hearing-pills', config: {} },
+      { type: 'idle-cards', config: { mode: 'replace-panel', target: 'hearing-pills' } }
+    ]),
+    layout: null,
+  },
+];
+
+// Seed built-in templates on startup
+async function seedBuiltInTemplates() {
+  for (const tmpl of BUILT_IN_TEMPLATES) {
+    const existing = await prisma.displayTypeTemplate.findUnique({ where: { slug: tmpl.slug } });
+    if (!existing) {
+      await prisma.displayTypeTemplate.create({
+        data: { ...tmpl, isBuiltIn: true },
+      });
+      console.log(`[SEED] Created built-in template: ${tmpl.slug}`);
+    }
+  }
+}
+
+// Valid component types
+const VALID_COMPONENT_TYPES = ['hearing-table', 'hearing-pills', 'idle-cards', 'direction-cards', 'camera-grid', 'system-status'];
+
+function validateComponents(components: unknown): string | null {
+  if (!Array.isArray(components)) return 'components must be an array';
+  for (const comp of components) {
+    if (!comp || typeof comp !== 'object') return 'Each component must be an object';
+    if (!VALID_COMPONENT_TYPES.includes(comp.type)) return `Invalid component type: ${comp.type}`;
+  }
+  return null;
+}
+
+// GET /api/display-templates - List all templates with usageCount
+app.get('/api/display-templates', authenticateToken, requireEditor, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const templates = await prisma.displayTypeTemplate.findMany({
+      orderBy: [{ isBuiltIn: 'desc' }, { name: 'asc' }],
+      include: { createdBy: { select: { id: true, name: true, email: true } } },
+    });
+
+    // Count displays using each slug
+    const displays = await prisma.display.findMany({ select: { displayType: true } });
+    const usageMap: Record<string, number> = {};
+    for (const d of displays) {
+      usageMap[d.displayType] = (usageMap[d.displayType] || 0) + 1;
+    }
+
+    const result = templates.map(t => ({
+      ...t,
+      usageCount: usageMap[t.slug] || 0,
+    }));
+
+    res.json({ templates: result, total: result.length });
+  } catch (error) {
+    console.error('Failed to list display templates:', error);
+    res.status(500).json({ error: 'Failed to list display templates' });
+  }
+});
+
+// GET /api/display-templates/:id - Get single template
+app.get('/api/display-templates/:id', authenticateToken, requireEditor, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const template = await prisma.displayTypeTemplate.findUnique({
+      where: { id: req.params.id },
+      include: { createdBy: { select: { id: true, name: true, email: true } } },
+    });
+    if (!template) return res.status(404).json({ error: 'Template not found' });
+
+    const usageCount = await prisma.display.count({ where: { displayType: template.slug } });
+    res.json({ ...template, usageCount });
+  } catch (error) {
+    console.error('Failed to get display template:', error);
+    res.status(500).json({ error: 'Failed to get display template' });
+  }
+});
+
+// POST /api/display-templates - Create custom template
+app.post('/api/display-templates', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { slug, name, description, components, layout } = req.body;
+    if (!slug || !name || !components) {
+      return res.status(400).json({ error: 'Missing required fields: slug, name, components' });
+    }
+
+    // Validate slug format
+    if (!/^[a-z0-9-]+$/.test(slug)) {
+      return res.status(400).json({ error: 'Slug must contain only lowercase letters, numbers, and hyphens' });
+    }
+
+    // Check slug uniqueness
+    const existing = await prisma.displayTypeTemplate.findUnique({ where: { slug } });
+    if (existing) {
+      return res.status(409).json({ error: `Template with slug "${slug}" already exists` });
+    }
+
+    // Validate components
+    const parsed = typeof components === 'string' ? JSON.parse(components) : components;
+    const compError = validateComponents(parsed);
+    if (compError) return res.status(400).json({ error: compError });
+
+    const template = await prisma.displayTypeTemplate.create({
+      data: {
+        slug,
+        name,
+        description: description || null,
+        isBuiltIn: false,
+        components: typeof components === 'string' ? components : JSON.stringify(components),
+        layout: layout ? (typeof layout === 'string' ? layout : JSON.stringify(layout)) : null,
+        createdById: req.user?.userId || null,
+      },
+    });
+
+    await createAuditLog('create', 'display_type_template', template.id, req.user?.userId || null, {
+      slug, name, componentCount: parsed.length,
+    });
+
+    res.status(201).json(template);
+  } catch (error) {
+    console.error('Failed to create display template:', error);
+    res.status(500).json({ error: 'Failed to create display template' });
+  }
+});
+
+// PUT /api/display-templates/:id - Update template
+app.put('/api/display-templates/:id', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const existing = await prisma.displayTypeTemplate.findUnique({ where: { id: req.params.id } });
+    if (!existing) return res.status(404).json({ error: 'Template not found' });
+
+    const { slug, name, description, components, layout } = req.body;
+
+    // Block slug rename on built-in templates
+    if (existing.isBuiltIn && slug && slug !== existing.slug) {
+      return res.status(400).json({ error: 'Cannot change slug of built-in template' });
+    }
+
+    // If slug is being changed, validate and check uniqueness
+    if (slug && slug !== existing.slug) {
+      if (!/^[a-z0-9-]+$/.test(slug)) {
+        return res.status(400).json({ error: 'Slug must contain only lowercase letters, numbers, and hyphens' });
+      }
+      const slugExists = await prisma.displayTypeTemplate.findUnique({ where: { slug } });
+      if (slugExists) return res.status(409).json({ error: `Template with slug "${slug}" already exists` });
+    }
+
+    // Validate components if provided
+    if (components) {
+      const parsed = typeof components === 'string' ? JSON.parse(components) : components;
+      const compError = validateComponents(parsed);
+      if (compError) return res.status(400).json({ error: compError });
+    }
+
+    const template = await prisma.displayTypeTemplate.update({
+      where: { id: req.params.id },
+      data: {
+        ...(name !== undefined && { name }),
+        ...(description !== undefined && { description: description || null }),
+        ...(slug && !existing.isBuiltIn && { slug }),
+        ...(components !== undefined && {
+          components: typeof components === 'string' ? components : JSON.stringify(components),
+        }),
+        ...(layout !== undefined && {
+          layout: layout ? (typeof layout === 'string' ? layout : JSON.stringify(layout)) : null,
+        }),
+      },
+    });
+
+    await createAuditLog('update', 'display_type_template', template.id, req.user?.userId || null, {
+      name: template.name, slug: template.slug,
+    });
+
+    res.json(template);
+  } catch (error) {
+    console.error('Failed to update display template:', error);
+    res.status(500).json({ error: 'Failed to update display template' });
+  }
+});
+
+// DELETE /api/display-templates/:id - Delete custom template only
+app.delete('/api/display-templates/:id', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const template = await prisma.displayTypeTemplate.findUnique({ where: { id: req.params.id } });
+    if (!template) return res.status(404).json({ error: 'Template not found' });
+
+    if (template.isBuiltIn) {
+      return res.status(400).json({ error: 'Cannot delete built-in template' });
+    }
+
+    // Check if any displays use this slug
+    const displaysUsingTemplate = await prisma.display.findMany({
+      where: { displayType: template.slug },
+      select: { id: true, name: true },
+    });
+    if (displaysUsingTemplate.length > 0) {
+      return res.status(409).json({
+        error: `Cannot delete template: ${displaysUsingTemplate.length} display(s) are using it`,
+        displays: displaysUsingTemplate,
+      });
+    }
+
+    await prisma.displayTypeTemplate.delete({ where: { id: req.params.id } });
+
+    await createAuditLog('delete', 'display_type_template', template.id, req.user?.userId || null, {
+      slug: template.slug, name: template.name,
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Failed to delete display template:', error);
+    res.status(500).json({ error: 'Failed to delete display template' });
+  }
+});
+
+// POST /api/display-templates/:id/reset - Reset built-in to defaults
+app.post('/api/display-templates/:id/reset', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const template = await prisma.displayTypeTemplate.findUnique({ where: { id: req.params.id } });
+    if (!template) return res.status(404).json({ error: 'Template not found' });
+
+    if (!template.isBuiltIn) {
+      return res.status(400).json({ error: 'Can only reset built-in templates' });
+    }
+
+    const defaults = BUILT_IN_TEMPLATES.find(t => t.slug === template.slug);
+    if (!defaults) {
+      return res.status(500).json({ error: 'No default data found for this built-in template' });
+    }
+
+    const updated = await prisma.displayTypeTemplate.update({
+      where: { id: req.params.id },
+      data: {
+        name: defaults.name,
+        description: defaults.description,
+        components: defaults.components,
+        layout: defaults.layout,
+      },
+    });
+
+    await createAuditLog('reset', 'display_type_template', template.id, req.user?.userId || null, {
+      slug: template.slug, name: defaults.name,
+    });
+
+    res.json(updated);
+  } catch (error) {
+    console.error('Failed to reset display template:', error);
+    res.status(500).json({ error: 'Failed to reset display template' });
+  }
+});
+
 // GET /api/displays - List all displays
 app.get('/api/displays', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -2329,9 +2632,13 @@ app.post('/api/displays', authenticateToken, requireEditor, async (req: Authenti
       return res.status(400).json({ error: 'screensaverType must be one of: black, clock, logo' });
     }
 
-    const validDisplayTypes = ['courtroom', 'combined', 'wayfinding', 'it-status', 'chambers'];
-    if (displayType && !validDisplayTypes.includes(displayType)) {
-      return res.status(400).json({ error: `displayType must be one of: ${validDisplayTypes.join(', ')}` });
+    // Validate displayType against templates table
+    if (displayType) {
+      const validSlugs = await prisma.displayTypeTemplate.findMany({ select: { slug: true } });
+      const validTypes = validSlugs.map(s => s.slug);
+      if (!validTypes.includes(displayType)) {
+        return res.status(400).json({ error: `displayType must be one of: ${validTypes.join(', ')}` });
+      }
     }
 
     // Generate API key and hash it with bcrypt
@@ -2439,9 +2746,13 @@ app.put('/api/displays/:id', authenticateToken, requireEditor, async (req: Authe
       return res.status(400).json({ error: 'screensaverType must be one of: black, clock, logo' });
     }
 
-    const validDisplayTypes = ['courtroom', 'combined', 'wayfinding', 'it-status', 'chambers'];
-    if (displayType !== undefined && !validDisplayTypes.includes(displayType)) {
-      return res.status(400).json({ error: `displayType must be one of: ${validDisplayTypes.join(', ')}` });
+    // Validate displayType against templates table
+    if (displayType !== undefined) {
+      const validSlugs = await prisma.displayTypeTemplate.findMany({ select: { slug: true } });
+      const validTypes = validSlugs.map(s => s.slug);
+      if (!validTypes.includes(displayType)) {
+        return res.status(400).json({ error: `displayType must be one of: ${validTypes.join(', ')}` });
+      }
     }
 
     // Check if display exists
@@ -4063,6 +4374,13 @@ httpServer.listen(PORT, async () => {
   console.log(`Server running on http://localhost:${PORT}`);
   console.log(`Health check: http://localhost:${PORT}/api/health`);
   console.log('============================================');
+
+  // Seed built-in display type templates
+  try {
+    await seedBuiltInTemplates();
+  } catch (err) {
+    console.error('Failed to seed built-in templates:', err);
+  }
 
   // Start auto-import polling if enabled in settings
   try {

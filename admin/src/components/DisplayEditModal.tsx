@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { displaysApi, Display, UpdateDisplayInput, WeekSchedule, DaySchedule } from '../api/displays';
 import { docketApi } from '../api/docket';
 import AutocompleteInput from './AutocompleteInput';
 import ModalPortal from './ModalPortal';
+import { useDisplayTypeOptions, useTemplateBySlug } from '../hooks/useDisplayTemplates';
 
 const DAYS_OF_WEEK = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const;
 const DAY_LABELS: Record<string, string> = {
@@ -12,14 +13,6 @@ const DAY_LABELS: Record<string, string> = {
   friday: 'Fri', saturday: 'Sat', sunday: 'Sun'
 };
 const DEFAULT_DAY: DaySchedule = { start: '07:00', end: '18:00' };
-
-const DISPLAY_TYPE_OPTIONS = [
-  { value: 'courtroom', label: 'Courtroom Calendar' },
-  { value: 'combined', label: 'Combined / All Hearings' },
-  { value: 'wayfinding', label: 'Wayfinding Directory' },
-  { value: 'it-status', label: 'IT Status Monitor' },
-  { value: 'chambers', label: "Judge's Chambers" },
-];
 
 const ARROW_OPTIONS = [
   'right', 'left', 'up', 'up-right', 'up-left',
@@ -151,13 +144,42 @@ export default function DisplayEditModal({ display, onClose, onSaved }: DisplayE
 
   const displayType = formData.displayType || 'courtroom';
 
-  // Field visibility by display type
-  const showJudgeFilter = displayType === 'courtroom' || displayType === 'chambers';
-  const showCourtroomFilter = displayType === 'courtroom';
-  const showDocketViewMode = displayType === 'courtroom' || displayType === 'combined' || displayType === 'chambers';
-  const showDocketOptions = displayType !== 'wayfinding';
-  const showWayfindingConfig = displayType === 'wayfinding';
-  const showCameraConfig = displayType === 'it-status';
+  const { options: displayTypeOptions } = useDisplayTypeOptions();
+  const selectedTemplate = useTemplateBySlug(displayType);
+
+  // Parse template components to determine field visibility
+  const templateComponents = useMemo(() => {
+    if (!selectedTemplate) return [];
+    try {
+      return JSON.parse(selectedTemplate.components) as { type: string }[];
+    } catch { return []; }
+  }, [selectedTemplate]);
+
+  const hasComponent = (type: string) => templateComponents.some(c => c.type === type);
+
+  // Field visibility: for built-in slugs, keep existing behavior as fallback.
+  // For custom templates, derive from components.
+  const BUILTIN_SLUGS = ['courtroom', 'combined', 'wayfinding', 'it-status', 'chambers'];
+  const isBuiltInSlug = BUILTIN_SLUGS.includes(displayType);
+
+  const showJudgeFilter = isBuiltInSlug
+    ? (displayType === 'courtroom' || displayType === 'chambers')
+    : (hasComponent('hearing-table') || hasComponent('hearing-pills'));
+  const showCourtroomFilter = isBuiltInSlug
+    ? displayType === 'courtroom'
+    : hasComponent('hearing-table');
+  const showDocketViewMode = isBuiltInSlug
+    ? (displayType === 'courtroom' || displayType === 'combined' || displayType === 'chambers')
+    : hasComponent('hearing-table');
+  const showDocketOptions = isBuiltInSlug
+    ? displayType !== 'wayfinding'
+    : (hasComponent('hearing-table') || hasComponent('hearing-pills'));
+  const showWayfindingConfig = isBuiltInSlug
+    ? displayType === 'wayfinding'
+    : hasComponent('direction-cards');
+  const showCameraConfig = isBuiltInSlug
+    ? displayType === 'it-status'
+    : hasComponent('camera-grid');
 
   const { data: judges = [] } = useQuery({
     queryKey: ['docket-judges'],
@@ -248,7 +270,7 @@ export default function DisplayEditModal({ display, onClose, onSaved }: DisplayE
                 onChange={(e) => setFormData({ ...formData, displayType: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
               >
-                {DISPLAY_TYPE_OPTIONS.map((opt) => (
+                {displayTypeOptions.map((opt) => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
                 ))}
               </select>

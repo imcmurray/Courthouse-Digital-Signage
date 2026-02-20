@@ -21,11 +21,12 @@ model User {
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   // Relations
-  docketEntries    DocketEntry[]
-  announcements    Announcement[]
-  auditLogs        AuditLog[]
-  settings         Setting[]
-  idleContentCards IdleContentCard[]
+  docketEntries        DocketEntry[]
+  announcements        Announcement[]
+  auditLogs            AuditLog[]
+  settings             Setting[]
+  idleContentCards     IdleContentCard[]
+  displayTypeTemplates DisplayTypeTemplate[]
 
   @@map("users")
 }
@@ -279,4 +280,20 @@ model CachedNewsArticle {
   createdAt   DateTime  @default(now()) @map("created_at")
 
   @@map("cached_news_articles")
+}
+
+model DisplayTypeTemplate {
+  id          String   @id @default(uuid())
+  slug        String   @unique              // "courtroom", "lobby-info" — becomes displayType value
+  name        String                        // "Courtroom Calendar", "Lobby Info Board"
+  description String?
+  isBuiltIn   Boolean  @default(false) @map("is_built_in")
+  components  String                        // JSON: DisplayTemplateComponent[]
+  layout      String?                       // JSON: { type, columns?, rows? }
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  createdById String?  @map("created_by")
+  createdBy   User?    @relation(fields: [createdById], references: [id])
+
+  @@map("display_type_templates")
 }

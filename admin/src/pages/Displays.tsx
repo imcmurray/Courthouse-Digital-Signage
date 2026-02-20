@@ -7,9 +7,11 @@ import { docketApi } from '../api/docket';
 import AutocompleteInput from '../components/AutocompleteInput';
 import DisplayEditModal from '../components/DisplayEditModal';
 import ModalPortal from '../components/ModalPortal';
+import { useDisplayTypeOptions } from '../hooks/useDisplayTemplates';
 
 export default function Displays() {
   const queryClient = useQueryClient();
+  const { options: displayTypeOptions, templates } = useDisplayTypeOptions();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingDisplay, setEditingDisplay] = useState<Display | null>(null);
   const [deleteConfirmDisplay, setDeleteConfirmDisplay] = useState<Display | null>(null);
@@ -182,19 +184,21 @@ export default function Displays() {
     });
   };
 
+  const builtInBadgeColors: Record<string, string> = {
+    combined: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+    wayfinding: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
+    'it-status': 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300',
+    chambers: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300',
+  };
+
   const getDisplayTypeBadge = (type: string) => {
     if (!type || type === 'courtroom') return null;
-    const labels: Record<string, { label: string; color: string }> = {
-      combined: { label: 'Combined', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' },
-      wayfinding: { label: 'Wayfinding', color: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' },
-      'it-status': { label: 'IT Status', color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300' },
-      chambers: { label: 'Chambers', color: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300' },
-    };
-    const info = labels[type];
-    if (!info) return null;
+    const tmpl = templates.find(t => t.slug === type);
+    const label = tmpl?.name || type;
+    const color = builtInBadgeColors[type] || 'bg-gray-100 text-gray-700 dark:bg-teal-900/40 dark:text-teal-300';
     return (
-      <span className={`ml-2 inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded ${info.color}`}>
-        {info.label}
+      <span className={`ml-2 inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded ${color}`}>
+        {label}
       </span>
     );
   };
@@ -458,11 +462,9 @@ export default function Displays() {
                   onChange={(e) => setFormData({ ...formData, displayType: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                 >
-                  <option value="courtroom">Courtroom Calendar</option>
-                  <option value="combined">Combined / All Hearings</option>
-                  <option value="wayfinding">Wayfinding Directory</option>
-                  <option value="it-status">IT Status Monitor</option>
-                  <option value="chambers">Judge's Chambers</option>
+                  {displayTypeOptions.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
                 </select>
               </div>
 

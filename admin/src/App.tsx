@@ -17,6 +17,7 @@ import ApiKeys from './pages/ApiKeys';
 import AuditLogs from './pages/AuditLogs';
 import Settings from './pages/Settings';
 import CalendarImport from './pages/CalendarImport';
+import DisplayTemplates from './pages/DisplayTemplates';
 
 const queryClient = new QueryClient();
 
@@ -171,6 +172,16 @@ const router = createBrowserRouter([
           <ProtectedRoute allowedRoles={['admin']}>
             <AdminLayout>
               <ApiKeys />
+            </AdminLayout>
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: '/admin/display-templates',
+        element: (
+          <ProtectedRoute allowedRoles={['admin']}>
+            <AdminLayout>
+              <DisplayTemplates />
             </AdminLayout>
           </ProtectedRoute>
         ),
