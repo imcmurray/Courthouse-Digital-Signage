@@ -56,6 +56,13 @@
   let screensaverManualOverride = null; // null = auto, 'on' = forced, 'off' = forced
   let screensaverAnimationId = null;
 
+  // Idle content state
+  let idleContentData = null;
+  let idleSlides = [];
+  let idleCurrentSlide = 0;
+  let idleRotationTimer = null;
+  let idleContentActive = false;
+
   // Get display ID from URL or default
   function getDisplayId() {
     const params = new URLSearchParams(window.location.search);
@@ -82,10 +89,12 @@
     fetchDocket();
     fetchAnnouncements();
     fetchWeather();
+    fetchIdleContent();
 
     // Set up refresh intervals
     setInterval(fetchDocket, CONFIG.refreshInterval);
     setInterval(fetchAnnouncements, CONFIG.refreshInterval);
+    setInterval(fetchIdleContent, 300000); // Refresh idle content every 5 minutes
     setInterval(fetchWeather, CONFIG.weatherRefreshInterval);
 
     // Set up schedule checker (runs every 30 seconds)
@@ -753,6 +762,11 @@
     if (!tbody) return;
 
     if (docketData.length === 0) {
+      // If idle content is available and enabled, show it instead
+      if (idleContentData && idleContentData.enabled) {
+        renderIdleContent();
+        return;
+      }
       tbody.innerHTML = `
         <tr class="placeholder-row">
           <td colspan="7">No hearings scheduled for today</td>
@@ -760,6 +774,11 @@
       `;
       renderZoomLegend(null);
       return;
+    }
+
+    // If idle content was active and hearings appeared, deactivate it
+    if (idleContentActive) {
+      deactivateIdleContent();
     }
 
     const now = new Date();
@@ -1254,6 +1273,11 @@
           showOverlayMessage(data.message, data.duration || 5000);
         });
 
+        socket.on('idle-content:update', () => {
+          console.log('Idle content update received');
+          fetchIdleContent();
+        });
+
         socket.on('display:screensaver', (data) => {
           if (data.displayId && data.displayId !== CONFIG.displayId) return;
           console.log('Screensaver command received:', data.action);
@@ -1403,6 +1427,385 @@
   }
 
   // =============================================
+  // Idle Content System
+  // =============================================
+
+  async function fetchIdleContent() {
+    if (screensaverActive) return;
+    try {
+      var response = await fetch(
+        CONFIG.apiBaseUrl + '/api/displays/' + encodeURIComponent(CONFIG.displayId) + '/idle-content',
+        { headers: { 'X-API-Key': getApiKey() } }
+      );
+      if (response.ok) {
+        idleContentData = await response.json();
+        // If we're currently showing idle content, re-render to pick up changes
+        if (idleContentActive && docketData.length === 0) {
+          var type = displayConfig.displayType || 'courtroom';
+          if (type === 'wayfinding') {
+            renderWayfindingIdleContent();
+          } else {
+            renderIdleContent();
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch idle content:', error);
+    }
+  }
+
+  function renderIdleContent() {
+    var container = document.getElementById('idle-content-container');
+    var table = document.querySelector('.docket-table');
+    var tbody = document.getElementById('docket-body');
+    if (!container || !table) return;
+
+    if (!idleContentData || !idleContentData.enabled) {
+      // Fallback to standard placeholder
+      if (tbody) {
+        tbody.innerHTML = '<tr class="placeholder-row"><td colspan="7">No hearings scheduled for today</td></tr>';
+      }
+      renderZoomLegend(null);
+      return;
+    }
+
+    // Build slides from enabled modules
+    idleSlides = [];
+    var modules = idleContentData.modules || {};
+
+    // Upcoming Hearings slide
+    if (modules.upcoming_hearings && modules.upcoming_hearings.entries && modules.upcoming_hearings.entries.length > 0) {
+      idleSlides.push(buildUpcomingHearingsSlide(modules.upcoming_hearings));
+    }
+
+    // Info Card slides — one per card
+    if (modules.info_cards && modules.info_cards.cards) {
+      modules.info_cards.cards.forEach(function(card) {
+        idleSlides.push(buildInfoCardSlide(card));
+      });
+    }
+
+    // News slides — one per article
+    if (modules.news && modules.news.articles) {
+      modules.news.articles.forEach(function(article) {
+        idleSlides.push(buildNewsSlide(article));
+      });
+    }
+
+    // Statistics slide
+    if (modules.statistics && modules.statistics.stats) {
+      idleSlides.push(buildStatisticsSlide(modules.statistics.stats));
+    }
+
+    if (idleSlides.length === 0) {
+      // No slides to show, fall back to placeholder
+      if (tbody) {
+        tbody.innerHTML = '<tr class="placeholder-row"><td colspan="7">No hearings scheduled for today</td></tr>';
+      }
+      renderZoomLegend(null);
+      return;
+    }
+
+    // Hide the table, show the idle container
+    table.style.display = 'none';
+    container.style.display = 'flex';
+    renderZoomLegend(null);
+    stopPagination();
+    idleContentActive = true;
+    idleCurrentSlide = 0;
+
+    // Render first slide
+    showIdleSlide(0, container);
+
+    // Build dot indicators
+    var dotsHtml = '<div class="idle-dots">';
+    for (var i = 0; i < idleSlides.length; i++) {
+      dotsHtml += '<span class="idle-dot' + (i === 0 ? ' active' : '') + '"></span>';
+    }
+    dotsHtml += '</div>';
+
+    // Only add dots and progress bar if more than 1 slide
+    if (idleSlides.length > 1) {
+      container.insertAdjacentHTML('beforeend', dotsHtml);
+      var progressInterval = idleContentData.rotationInterval || 10;
+      container.insertAdjacentHTML('beforeend', '<div class="idle-progress-bar"><div class="idle-progress-bar-fill" style="animation-duration: ' + progressInterval + 's;"></div></div>');
+    }
+
+    // Start rotation
+    if (idleSlides.length > 1) {
+      var interval = (idleContentData.rotationInterval || 10) * 1000;
+      if (idleRotationTimer) clearInterval(idleRotationTimer);
+      idleRotationTimer = setInterval(function() {
+        idleCurrentSlide = (idleCurrentSlide + 1) % idleSlides.length;
+        showIdleSlide(idleCurrentSlide, container);
+      }, interval);
+    }
+  }
+
+  function showIdleSlide(index, container) {
+    // Fade out current
+    var currentSlide = container.querySelector('.idle-slide');
+    if (currentSlide) {
+      currentSlide.classList.add('fade-out');
+      setTimeout(function() {
+        // Replace with new slide
+        var slidesAndDots = container.querySelector('.idle-dots');
+        container.innerHTML = idleSlides[index];
+        if (slidesAndDots) {
+          // Re-add dots
+          var dotsHtml = '<div class="idle-dots">';
+          for (var i = 0; i < idleSlides.length; i++) {
+            dotsHtml += '<span class="idle-dot' + (i === index ? ' active' : '') + '"></span>';
+          }
+          dotsHtml += '</div>';
+          if (idleSlides.length > 1) {
+            container.insertAdjacentHTML('beforeend', dotsHtml);
+            var progressInterval = idleContentData.rotationInterval || 10;
+            container.insertAdjacentHTML('beforeend', '<div class="idle-progress-bar"><div class="idle-progress-bar-fill" style="animation-duration: ' + progressInterval + 's;"></div></div>');
+          }
+        }
+      }, PAGINATION_FADE);
+    } else {
+      container.innerHTML = idleSlides[index];
+      // Add dots and progress bar
+      if (idleSlides.length > 1) {
+        var dotsHtml = '<div class="idle-dots">';
+        for (var i = 0; i < idleSlides.length; i++) {
+          dotsHtml += '<span class="idle-dot' + (i === index ? ' active' : '') + '"></span>';
+        }
+        dotsHtml += '</div>';
+        container.insertAdjacentHTML('beforeend', dotsHtml);
+        var progressInterval = idleContentData.rotationInterval || 10;
+        container.insertAdjacentHTML('beforeend', '<div class="idle-progress-bar"><div class="idle-progress-bar-fill" style="animation-duration: ' + progressInterval + 's;"></div></div>');
+      }
+    }
+  }
+
+  function deactivateIdleContent() {
+    if (idleRotationTimer) {
+      clearInterval(idleRotationTimer);
+      idleRotationTimer = null;
+    }
+    var container = document.getElementById('idle-content-container');
+    var table = document.querySelector('.docket-table');
+    if (container) {
+      container.style.display = 'none';
+      container.innerHTML = '';
+    }
+    if (table) {
+      table.style.display = '';
+    }
+    idleContentActive = false;
+    idleSlides = [];
+    idleCurrentSlide = 0;
+  }
+
+  function renderWayfindingIdleContent() {
+    // Don't re-initialize if already running (timer would get reset on each render cycle)
+    if (idleContentActive) return;
+
+    var container = document.getElementById('wayfinding-idle-content-container');
+    var hearingsEl = document.getElementById('wayfinding-hearings');
+    if (!container || !hearingsEl) return;
+
+    if (!idleContentData || !idleContentData.enabled) return;
+
+    // Build slides from enabled modules (same logic as renderIdleContent)
+    idleSlides = [];
+    var modules = idleContentData.modules || {};
+
+    if (modules.upcoming_hearings && modules.upcoming_hearings.entries && modules.upcoming_hearings.entries.length > 0) {
+      idleSlides.push(buildUpcomingHearingsSlide(modules.upcoming_hearings));
+    }
+    if (modules.info_cards && modules.info_cards.cards) {
+      modules.info_cards.cards.forEach(function(card) {
+        idleSlides.push(buildInfoCardSlide(card));
+      });
+    }
+    if (modules.news && modules.news.articles) {
+      modules.news.articles.forEach(function(article) {
+        idleSlides.push(buildNewsSlide(article));
+      });
+    }
+    if (modules.statistics && modules.statistics.stats) {
+      idleSlides.push(buildStatisticsSlide(modules.statistics.stats));
+    }
+
+    if (idleSlides.length === 0) return;
+
+    // Hide hearings panel only, show idle container in its place
+    hearingsEl.style.display = 'none';
+    container.style.display = 'flex';
+    idleContentActive = true;
+    idleCurrentSlide = 0;
+
+    showIdleSlide(0, container);
+
+    if (idleSlides.length > 1) {
+      var dotsHtml = '<div class="idle-dots">';
+      for (var i = 0; i < idleSlides.length; i++) {
+        dotsHtml += '<span class="idle-dot' + (i === 0 ? ' active' : '') + '"></span>';
+      }
+      dotsHtml += '</div>';
+      container.insertAdjacentHTML('beforeend', dotsHtml);
+
+      var interval = (idleContentData.rotationInterval || 10) * 1000;
+      if (idleRotationTimer) clearInterval(idleRotationTimer);
+      idleRotationTimer = setInterval(function() {
+        idleCurrentSlide = (idleCurrentSlide + 1) % idleSlides.length;
+        showIdleSlide(idleCurrentSlide, container);
+      }, interval);
+    }
+  }
+
+  function deactivateWayfindingIdleContent() {
+    if (idleRotationTimer) {
+      clearInterval(idleRotationTimer);
+      idleRotationTimer = null;
+    }
+    var container = document.getElementById('wayfinding-idle-content-container');
+    var hearingsEl = document.getElementById('wayfinding-hearings');
+    if (container) {
+      container.style.display = 'none';
+      container.innerHTML = '';
+    }
+    if (hearingsEl) {
+      hearingsEl.style.display = '';
+    }
+    idleContentActive = false;
+    idleSlides = [];
+    idleCurrentSlide = 0;
+  }
+
+  function buildUpcomingHearingsSlide(data) {
+    var dateObj = new Date(data.date);
+    var dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    var monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    var dateStr = dayNames[dateObj.getUTCDay()] + ', ' + monthNames[dateObj.getUTCMonth()] + ' ' + dateObj.getUTCDate();
+
+    var html = '<div class="idle-slide idle-upcoming">';
+    html += '<div class="idle-slide-title">NEXT HEARINGS: ' + escapeHtml(dateStr) + '</div>';
+
+    // Group by judge
+    var judgeGroups = {};
+    data.entries.forEach(function(entry) {
+      var judge = entry.hearingJudge || 'Unassigned';
+      if (!judgeGroups[judge]) judgeGroups[judge] = { entries: [], courtroom: null, zoom: null };
+      judgeGroups[judge].entries.push(entry);
+      if (entry.courtroom && !judgeGroups[judge].courtroom) judgeGroups[judge].courtroom = entry.courtroom;
+      if (entry.isZoom && entry.zoomMeetingId && !judgeGroups[judge].zoom) {
+        judgeGroups[judge].zoom = { meetingId: entry.zoomMeetingId, passcode: entry.zoomPasscode, phone: entry.zoomPhone };
+      }
+    });
+
+    Object.keys(judgeGroups).sort().forEach(function(judge) {
+      var group = judgeGroups[judge];
+      html += '<div class="wayfinding-judge-group">';
+      html += '<div class="wayfinding-judge-name">' + escapeHtml(judge) + '</div>';
+
+      var metaParts = [];
+      if (group.courtroom) metaParts.push(escapeHtml(group.courtroom));
+      if (group.zoom) metaParts.push('Zoom');
+      if (metaParts.length > 0) {
+        html += '<div class="wayfinding-judge-meta">' + metaParts.join(' &middot; ') + '</div>';
+      }
+
+      if (group.zoom) {
+        html += '<div class="wayfinding-zoom-details">';
+        if (group.zoom.meetingId) html += '<span class="zoom-legend-field">Meeting ID</span> <span class="zoom-legend-value">' + escapeHtml(group.zoom.meetingId) + '</span>';
+        if (group.zoom.passcode) html += ' <span class="zoom-legend-sep"></span> <span class="zoom-legend-field">Passcode</span> <span class="zoom-legend-value">' + escapeHtml(group.zoom.passcode) + '</span>';
+        if (group.zoom.phone) html += ' <span class="zoom-legend-sep"></span> <span class="zoom-legend-field">Phone</span> <span class="zoom-legend-value">' + escapeHtml(group.zoom.phone) + '</span>';
+        html += '</div>';
+      }
+
+      // Time pills
+      var timeCounts = {};
+      group.entries.forEach(function(entry) {
+        var t = formatTime(entry.hearingTime);
+        if (!timeCounts[t]) timeCounts[t] = 0;
+        timeCounts[t]++;
+      });
+      html += '<div class="wayfinding-time-pills">';
+      Object.keys(timeCounts).forEach(function(time) {
+        html += '<span class="wayfinding-time-pill">' + time + (timeCounts[time] > 1 ? ' (' + timeCounts[time] + ')' : '') + '</span>';
+      });
+      html += '</div>';
+      html += '</div>';
+    });
+
+    html += '</div>';
+    return html;
+  }
+
+  function buildInfoCardSlide(card) {
+    var iconHtml = '';
+    if (card.icon) {
+      var iconMap = {
+        phone: 'M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z',
+        clock: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z',
+        gavel: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10',
+        info: 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+        location: 'M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z M15 11a3 3 0 11-6 0 3 3 0 016 0z',
+        calendar: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
+        shield: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z',
+        document: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
+      };
+      var path = iconMap[card.icon] || iconMap.info;
+      iconHtml = '<div class="idle-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="' + path + '"/></svg></div>';
+    }
+    return '<div class="idle-slide idle-card">' +
+      iconHtml +
+      '<div class="idle-card-title">' + escapeHtml(card.title) + '</div>' +
+      '<div class="idle-card-body">' + escapeHtml(card.body) + '</div>' +
+      '</div>';
+  }
+
+  function buildNewsSlide(article) {
+    var dateStr = '';
+    if (article.publishedAt) {
+      dateStr = new Date(article.publishedAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    } else if (article.fetchedAt) {
+      dateStr = new Date(article.fetchedAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    }
+    return '<div class="idle-slide idle-news">' +
+      '<div class="idle-news-source">COURT NEWS</div>' +
+      '<div class="idle-news-title">' + escapeHtml(article.title) + '</div>' +
+      '<div class="idle-news-summary">' + escapeHtml(article.summary) + '</div>' +
+      (dateStr ? '<div class="idle-news-date">' + escapeHtml(dateStr) + '</div>' : '') +
+      '</div>';
+  }
+
+  function buildStatisticsSlide(stats) {
+    var nextDateStr = '';
+    if (stats.nextHearingDate) {
+      var nd = new Date(stats.nextHearingDate);
+      nextDateStr = nd.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+    }
+    return '<div class="idle-slide idle-stats">' +
+      '<div class="idle-slide-title">COURT STATISTICS</div>' +
+      '<div class="idle-stats-grid">' +
+        '<div class="idle-stats-item">' +
+          '<div class="idle-stats-number">' + (stats.hearingsThisMonth || 0) + '</div>' +
+          '<div class="idle-stats-label">Hearings This Month</div>' +
+        '</div>' +
+        '<div class="idle-stats-item">' +
+          '<div class="idle-stats-number">' + (stats.hearingsThisWeek || 0) + '</div>' +
+          '<div class="idle-stats-label">Hearings This Week</div>' +
+        '</div>' +
+        '<div class="idle-stats-item">' +
+          '<div class="idle-stats-number">' + (stats.casesThisMonth || 0) + '</div>' +
+          '<div class="idle-stats-label">Cases This Month</div>' +
+        '</div>' +
+        '<div class="idle-stats-item">' +
+          '<div class="idle-stats-number">' + (stats.judgesActive || 0) + '</div>' +
+          '<div class="idle-stats-label">Active Judges</div>' +
+        '</div>' +
+      '</div>' +
+      (nextDateStr ? '<div class="idle-stats-next">Next Hearing Day: ' + escapeHtml(nextDateStr) + '</div>' : '') +
+      '</div>';
+  }
+
+  // =============================================
   // Wayfinding Directory
   // =============================================
 
@@ -1492,11 +1895,11 @@
     var directionsEl = document.getElementById('wayfinding-directions');
     if (!hearingsEl || !directionsEl) return;
 
+    // Build hearings data (needed for both hearings panel and direction badges)
     var result = buildJudgeScheduleHtml(docketData, new Date());
-    hearingsEl.innerHTML = result.html;
     var hearingCounts = result.hearingCounts;
 
-    // Render direction cards (right panel)
+    // Always render direction cards (right panel)
     var directions = (displayConfig.wayfindingConfig && displayConfig.wayfindingConfig.directions) || [];
     var directionsHtml = '';
     directions.forEach(function(dir, index) {
@@ -1531,6 +1934,20 @@
     }
 
     directionsEl.innerHTML = directionsHtml;
+
+    // Show idle content in left panel when no hearings and idle content is enabled
+    if (docketData.length === 0 && idleContentData && idleContentData.enabled) {
+      renderWayfindingIdleContent();
+      return;
+    }
+
+    // Deactivate idle content if hearings appeared
+    if (idleContentActive) {
+      deactivateWayfindingIdleContent();
+    }
+
+    // Render hearings in left panel
+    hearingsEl.innerHTML = result.html;
   }
 
   function getDirectionArrowSvg(direction) {

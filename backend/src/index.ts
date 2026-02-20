@@ -1424,6 +1424,7 @@ app.get('/api/displays/:id/config', displayLimiter, authenticateApiKey, async (r
         }
         return cameras.length > 0 ? { cameras } : null;
       })(),
+      showIdleContent: display.showIdleContent,
       // Global settings
       courtName: settingsMap.court_name || 'U.S. Bankruptcy Court',
       courtSubtitle: settingsMap.court_subtitle || 'District of Utah',
@@ -1436,6 +1437,158 @@ app.get('/api/displays/:id/config', displayLimiter, authenticateApiKey, async (r
   } catch (error) {
     console.error('Failed to fetch display config:', error);
     res.status(500).json({ error: 'Failed to fetch display config' });
+  }
+});
+
+// GET /api/displays/:id/idle-content - Aggregate idle content for a display (requires API key)
+app.get('/api/displays/:id/idle-content', displayLimiter, authenticateApiKey, async (req: ApiKeyRequest, res: Response) => {
+  try {
+    const display = await prisma.display.findUnique({
+      where: { id: req.params.id }
+    });
+
+    if (!display) {
+      return res.status(404).json({ error: 'Display not found' });
+    }
+
+    if (!display.showIdleContent) {
+      return res.json({ enabled: false });
+    }
+
+    // Fetch idle settings
+    const settingKeys = ['idle_modules', 'idle_rotation_interval'];
+    const settings = await prisma.setting.findMany({
+      where: { key: { in: settingKeys } }
+    });
+    const settingsMap: Record<string, string> = {};
+    for (const s of settings) {
+      try { settingsMap[s.key] = JSON.parse(s.value); } catch { settingsMap[s.key] = s.value; }
+    }
+
+    const enabledModules: string[] = Array.isArray(settingsMap.idle_modules)
+      ? settingsMap.idle_modules
+      : ['upcoming_hearings', 'info_cards', 'news', 'statistics'];
+    const rotationInterval = parseInt(settingsMap.idle_rotation_interval as string) || 10;
+
+    const modules: Record<string, unknown> = {};
+
+    // Upcoming hearings — find the next date with hearings (earliest hearingDate > today)
+    if (enabledModules.includes('upcoming_hearings')) {
+      const now = new Date();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      todayStart.setDate(todayStart.getDate() + 1); // Start from tomorrow
+
+      const nextEntry = await prisma.docketEntry.findFirst({
+        where: {
+          hearingDate: { gte: todayStart },
+          status: { notIn: ['cancelled', 'stricken'] },
+        },
+        orderBy: { hearingDate: 'asc' },
+        select: { hearingDate: true },
+      });
+
+      if (nextEntry) {
+        const nextDate = nextEntry.hearingDate;
+        const nextDateEnd = new Date(nextDate);
+        nextDateEnd.setHours(23, 59, 59, 999);
+
+        const entries = await prisma.docketEntry.findMany({
+          where: {
+            hearingDate: { gte: nextDate, lte: nextDateEnd },
+            status: { notIn: ['cancelled', 'stricken'] },
+          },
+          orderBy: [{ hearingJudge: 'asc' }, { hearingTime: 'asc' }],
+        });
+
+        modules.upcoming_hearings = {
+          date: nextDate.toISOString(),
+          entries,
+        };
+      } else {
+        modules.upcoming_hearings = { date: null, entries: [] };
+      }
+    }
+
+    // Info cards
+    if (enabledModules.includes('info_cards')) {
+      const cards = await prisma.idleContentCard.findMany({
+        where: {
+          enabled: true,
+          OR: [
+            { expiresAt: null },
+            { expiresAt: { gte: new Date() } }
+          ],
+        },
+        orderBy: { sortOrder: 'asc' },
+      });
+      modules.info_cards = { cards };
+    }
+
+    // News articles
+    if (enabledModules.includes('news')) {
+      const articles = await prisma.cachedNewsArticle.findMany({
+        orderBy: { fetchedAt: 'desc' },
+        take: 10,
+      });
+      modules.news = { articles };
+    }
+
+    // Statistics
+    if (enabledModules.includes('statistics')) {
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const weekStart = new Date(now);
+      weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+      weekStart.setHours(0, 0, 0, 0);
+
+      const [hearingsThisMonth, hearingsThisWeek, casesThisMonth, nextHearingEntry] = await Promise.all([
+        prisma.docketEntry.count({
+          where: { hearingDate: { gte: monthStart }, status: { notIn: ['cancelled', 'stricken'] } },
+        }),
+        prisma.docketEntry.count({
+          where: { hearingDate: { gte: weekStart }, status: { notIn: ['cancelled', 'stricken'] } },
+        }),
+        prisma.docketEntry.groupBy({
+          by: ['caseNumber'],
+          where: { hearingDate: { gte: monthStart }, status: { notIn: ['cancelled', 'stricken'] } },
+        }),
+        prisma.docketEntry.findFirst({
+          where: {
+            hearingDate: { gt: new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1) },
+            status: { notIn: ['cancelled', 'stricken'] },
+          },
+          orderBy: { hearingDate: 'asc' },
+          select: { hearingDate: true },
+        }),
+      ]);
+
+      // Count distinct judges active this month
+      const judgesActive = await prisma.docketEntry.groupBy({
+        by: ['hearingJudge'],
+        where: { hearingDate: { gte: monthStart }, status: { notIn: ['cancelled', 'stricken'] } },
+      });
+
+      modules.statistics = {
+        stats: {
+          hearingsThisMonth,
+          hearingsThisWeek,
+          casesThisMonth: casesThisMonth.length,
+          judgesActive: judgesActive.length,
+          nextHearingDate: nextHearingEntry?.hearingDate?.toISOString() || null,
+        },
+      };
+    }
+
+    console.log(`[API] Idle content fetched for display: ${req.display?.name || req.params.id}`);
+
+    res.json({
+      enabled: true,
+      rotationInterval,
+      modules,
+    });
+  } catch (error) {
+    console.error('Failed to fetch idle content:', error);
+    res.status(500).json({ error: 'Failed to fetch idle content' });
   }
 });
 
@@ -1812,6 +1965,263 @@ app.patch('/api/announcements/reorder', authenticateToken, requireEditor, async 
   }
 });
 
+// =============================================
+// Idle Content Cards CRUD (admin auth)
+// =============================================
+
+// GET /api/idle-content-cards - List all idle content cards
+app.get('/api/idle-content-cards', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const enabledOnly = req.query.enabled === 'true';
+    const where: Record<string, unknown> = {};
+    if (enabledOnly) {
+      where.enabled = true;
+      where.OR = [
+        { expiresAt: null },
+        { expiresAt: { gte: new Date() } }
+      ];
+    }
+
+    const cards = await prisma.idleContentCard.findMany({
+      where: Object.keys(where).length > 0 ? where : undefined,
+      include: {
+        createdBy: { select: { id: true, name: true, email: true } }
+      },
+      orderBy: { sortOrder: 'asc' },
+    });
+
+    console.log(`[DB] SELECT from idle_content_cards - found ${cards.length} records`);
+    res.json({ cards, total: cards.length });
+  } catch (error) {
+    console.error('Failed to fetch idle content cards:', error);
+    res.status(500).json({ error: 'Failed to fetch idle content cards' });
+  }
+});
+
+// POST /api/idle-content-cards - Create an idle content card
+app.post('/api/idle-content-cards', authenticateToken, requireEditor, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { title, body, icon, sortOrder = 100, enabled = true, expiresAt } = req.body;
+
+    if (!title || typeof title !== 'string' || title.length === 0) {
+      return res.status(400).json({ error: 'Title is required' });
+    }
+    if (!body || typeof body !== 'string' || body.length === 0) {
+      return res.status(400).json({ error: 'Body is required' });
+    }
+
+    const card = await prisma.idleContentCard.create({
+      data: {
+        title,
+        body,
+        icon: icon || null,
+        sortOrder: typeof sortOrder === 'number' ? sortOrder : 100,
+        enabled: typeof enabled === 'boolean' ? enabled : true,
+        expiresAt: expiresAt ? new Date(expiresAt) : null,
+        createdById: req.user?.userId || null,
+      },
+      include: {
+        createdBy: { select: { id: true, name: true, email: true } }
+      },
+    });
+
+    console.log(`[DB] INSERT into idle_content_cards - created id: ${card.id}`);
+
+    await createAuditLog('create', 'idle_content_card', card.id, req.user?.userId || null, {
+      title: title.length > 80 ? title.slice(0, 80) + '…' : title,
+      enabled,
+    });
+
+    io.emit('idle-content:update', {});
+
+    res.status(201).json(card);
+  } catch (error) {
+    console.error('Failed to create idle content card:', error);
+    res.status(500).json({ error: 'Failed to create idle content card' });
+  }
+});
+
+// PUT /api/idle-content-cards/:id - Update an idle content card
+app.put('/api/idle-content-cards/:id', authenticateToken, requireEditor, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { title, body, icon, sortOrder, enabled, expiresAt } = req.body;
+
+    const existing = await prisma.idleContentCard.findUnique({ where: { id: req.params.id } });
+    if (!existing) {
+      return res.status(404).json({ error: 'Idle content card not found' });
+    }
+
+    const updateData: Record<string, unknown> = {};
+    if (title !== undefined) {
+      if (typeof title !== 'string' || title.length === 0) {
+        return res.status(400).json({ error: 'Title must be a non-empty string' });
+      }
+      updateData.title = title;
+    }
+    if (body !== undefined) {
+      if (typeof body !== 'string' || body.length === 0) {
+        return res.status(400).json({ error: 'Body must be a non-empty string' });
+      }
+      updateData.body = body;
+    }
+    if (icon !== undefined) updateData.icon = icon || null;
+    if (sortOrder !== undefined) updateData.sortOrder = sortOrder;
+    if (enabled !== undefined) updateData.enabled = enabled;
+    if (expiresAt !== undefined) updateData.expiresAt = expiresAt ? new Date(expiresAt) : null;
+
+    const card = await prisma.idleContentCard.update({
+      where: { id: req.params.id },
+      data: updateData,
+      include: {
+        createdBy: { select: { id: true, name: true, email: true } }
+      },
+    });
+
+    console.log(`[DB] UPDATE idle_content_cards WHERE id = ${req.params.id}`);
+
+    const cardChanges: Record<string, { from: unknown; to: unknown }> = {};
+    for (const [key, newValue] of Object.entries(updateData)) {
+      const oldValue = (existing as Record<string, unknown>)[key];
+      if (String(oldValue) !== String(newValue)) {
+        cardChanges[key] = { from: oldValue, to: newValue };
+      }
+    }
+    await createAuditLog('update', 'idle_content_card', req.params.id, req.user?.userId || null,
+      Object.keys(cardChanges).length > 0 ? cardChanges : updateData);
+
+    io.emit('idle-content:update', {});
+
+    res.json(card);
+  } catch (error) {
+    console.error('Failed to update idle content card:', error);
+    res.status(500).json({ error: 'Failed to update idle content card' });
+  }
+});
+
+// DELETE /api/idle-content-cards/:id - Delete an idle content card
+app.delete('/api/idle-content-cards/:id', authenticateToken, requireEditor, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const existing = await prisma.idleContentCard.findUnique({ where: { id: req.params.id } });
+    if (!existing) {
+      return res.status(404).json({ error: 'Idle content card not found' });
+    }
+
+    await prisma.idleContentCard.delete({ where: { id: req.params.id } });
+
+    console.log(`[DB] DELETE from idle_content_cards WHERE id = ${req.params.id}`);
+
+    await createAuditLog('delete', 'idle_content_card', req.params.id, req.user?.userId || null, {
+      title: existing.title.length > 80 ? existing.title.slice(0, 80) + '…' : existing.title,
+    });
+
+    io.emit('idle-content:update', {});
+
+    res.status(204).send();
+  } catch (error) {
+    console.error('Failed to delete idle content card:', error);
+    res.status(500).json({ error: 'Failed to delete idle content card' });
+  }
+});
+
+// PATCH /api/idle-content-cards/reorder - Bulk update card sort orders
+app.patch('/api/idle-content-cards/reorder', authenticateToken, requireEditor, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { order } = req.body;
+
+    if (!Array.isArray(order) || order.length === 0) {
+      return res.status(400).json({ error: 'order must be a non-empty array of { id, sortOrder }' });
+    }
+
+    for (const item of order) {
+      if (!item.id || typeof item.sortOrder !== 'number') {
+        return res.status(400).json({ error: 'Each item must have id (string) and sortOrder (number)' });
+      }
+    }
+
+    const updates = await prisma.$transaction(
+      order.map((item: { id: string; sortOrder: number }) =>
+        prisma.idleContentCard.update({
+          where: { id: item.id },
+          data: { sortOrder: item.sortOrder },
+        })
+      )
+    );
+
+    console.log(`[DB] Reordered ${updates.length} idle content cards`);
+
+    io.emit('idle-content:update', {});
+
+    res.json({ success: true, updated: updates.length });
+  } catch (error) {
+    console.error('Failed to reorder idle content cards:', error);
+    res.status(500).json({ error: 'Failed to reorder idle content cards' });
+  }
+});
+
+// =============================================
+// News Articles Management (admin auth)
+// =============================================
+
+// GET /api/news - List cached news articles
+app.get('/api/news', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
+    const skip = (page - 1) * limit;
+
+    const [articles, total] = await Promise.all([
+      prisma.cachedNewsArticle.findMany({
+        orderBy: { fetchedAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.cachedNewsArticle.count(),
+    ]);
+
+    console.log(`[DB] SELECT from cached_news_articles - found ${articles.length} records (page ${page})`);
+    res.json({ articles, total, page, limit, totalPages: Math.ceil(total / limit) });
+  } catch (error) {
+    console.error('Failed to fetch news articles:', error);
+    res.status(500).json({ error: 'Failed to fetch news articles' });
+  }
+});
+
+// POST /api/news/scrape - Trigger manual news scrape
+app.post('/api/news/scrape', authenticateToken, requireEditor, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const newsScraperService = await import('./services/newsScraperService.js');
+    const result = await newsScraperService.runNewsScrape(io);
+    await createAuditLog('scrape', 'news', null, req.user?.userId || null, result as unknown as Record<string, unknown>);
+    res.json(result);
+  } catch (error: any) {
+    console.error('Failed to scrape news:', error);
+    res.status(500).json({ error: error.message || 'Failed to scrape news' });
+  }
+});
+
+// DELETE /api/news/:id - Remove a cached news article
+app.delete('/api/news/:id', authenticateToken, requireEditor, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const existing = await prisma.cachedNewsArticle.findUnique({ where: { id: req.params.id } });
+    if (!existing) {
+      return res.status(404).json({ error: 'News article not found' });
+    }
+
+    await prisma.cachedNewsArticle.delete({ where: { id: req.params.id } });
+
+    console.log(`[DB] DELETE from cached_news_articles WHERE id = ${req.params.id}`);
+
+    await createAuditLog('delete', 'news_article', req.params.id, req.user?.userId || null, {
+      title: existing.title.length > 80 ? existing.title.slice(0, 80) + '…' : existing.title,
+    });
+
+    res.status(204).send();
+  } catch (error) {
+    console.error('Failed to delete news article:', error);
+    res.status(500).json({ error: 'Failed to delete news article' });
+  }
+});
+
 // GET /api/displays - List all displays
 app.get('/api/displays', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -1866,7 +2276,8 @@ app.post('/api/displays', authenticateToken, requireEditor, async (req: Authenti
       cameraLabel1,
       cameraLabel2,
       cameraRotateInterval,
-      cameraConfig
+      cameraConfig,
+      showIdleContent
     } = req.body;
 
     if (!id || !name || !location) {
@@ -1921,6 +2332,7 @@ app.post('/api/displays', authenticateToken, requireEditor, async (req: Authenti
         cameraConfig: cameraConfig
           ? (typeof cameraConfig === 'string' ? cameraConfig : JSON.stringify(cameraConfig))
           : null,
+        showIdleContent: showIdleContent ?? false,
         apiKeyHash
       }
     });
@@ -1978,7 +2390,8 @@ app.put('/api/displays/:id', authenticateToken, requireEditor, async (req: Authe
       cameraLabel1,
       cameraLabel2,
       cameraRotateInterval,
-      cameraConfig
+      cameraConfig,
+      showIdleContent
     } = req.body;
 
     if (screensaverType !== undefined && !['black', 'clock', 'logo'].includes(screensaverType)) {
@@ -2034,6 +2447,7 @@ app.put('/api/displays/:id', authenticateToken, requireEditor, async (req: Authe
         ...(cameraConfig !== undefined && { cameraConfig: cameraConfig
           ? (typeof cameraConfig === 'string' ? cameraConfig : JSON.stringify(cameraConfig))
           : null }),
+        ...(showIdleContent !== undefined && { showIdleContent }),
       }
     });
 
@@ -2044,7 +2458,7 @@ app.put('/api/displays/:id', authenticateToken, requireEditor, async (req: Authe
     const trackFields = ['name', 'location', 'judgeFilter', 'courtroomFilter',
       'showStricken', 'showZoomInfo', 'highlightCurrent', 'orientation', 'theme',
       'displayType', 'docketViewMode', 'screensaverType', 'tickerEnabled',
-      'tickerSpeed', 'showWeather', 'noticeText', 'scheduleEnabled'] as const;
+      'tickerSpeed', 'showWeather', 'noticeText', 'scheduleEnabled', 'showIdleContent'] as const;
     for (const field of trackFields) {
       if (req.body[field] !== undefined && String((existingDisplay as Record<string, unknown>)[field]) !== String((display as Record<string, unknown>)[field])) {
         changedFields[field] = { from: (existingDisplay as Record<string, unknown>)[field], to: (display as Record<string, unknown>)[field] };
@@ -2980,7 +3394,7 @@ app.put('/api/settings', authenticateToken, requireAdmin, async (req: Authentica
     }
 
     // Valid settings keys that can be updated
-    const validKeys = ['court_name', 'court_subtitle', 'courthouse_name', 'chief_judge', 'clerk_of_court', 'timezone', 'default_theme'];
+    const validKeys = ['court_name', 'court_subtitle', 'courthouse_name', 'chief_judge', 'clerk_of_court', 'timezone', 'default_theme', 'court_website_url', 'idle_modules', 'idle_rotation_interval', 'news_scrape_enabled', 'news_scrape_interval'];
 
     // Update each setting
     const updatedSettings: Record<string, unknown> = {};
@@ -3011,6 +3425,22 @@ app.put('/api/settings', authenticateToken, requireAdmin, async (req: Authentica
 
     // Emit WebSocket event for real-time updates (displays may need to refresh)
     io.emit('settings:update', { settings: updatedSettings });
+
+    // Emit idle content update if any idle-related settings changed
+    const idleKeys = ['idle_modules', 'idle_rotation_interval', 'court_website_url', 'news_scrape_enabled', 'news_scrape_interval'];
+    if (Object.keys(updatedSettings).some(k => idleKeys.includes(k))) {
+      io.emit('idle-content:update', {});
+
+      // Sync news polling timer if scraping settings changed
+      if (updatedSettings.news_scrape_enabled !== undefined || updatedSettings.news_scrape_interval !== undefined) {
+        try {
+          const newsScraperService = await import('./services/newsScraperService.js');
+          await newsScraperService.syncNewsPollingTimer(io);
+        } catch (err) {
+          console.error('Failed to sync news polling timer:', err);
+        }
+      }
+    }
 
     res.json({
       message: 'Settings updated successfully',
@@ -3598,6 +4028,14 @@ httpServer.listen(PORT, async () => {
     await calendarImportService.syncPollingTimer(io);
   } catch (err) {
     console.error('Failed to initialize calendar import polling:', err);
+  }
+
+  // Start news scraper polling if enabled in settings
+  try {
+    const newsScraperService = await import('./services/newsScraperService.js');
+    await newsScraperService.syncNewsPollingTimer(io);
+  } catch (err) {
+    console.error('Failed to initialize news scraper polling:', err);
   }
 });
 

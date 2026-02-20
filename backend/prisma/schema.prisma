@@ -21,10 +21,11 @@ model User {
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   // Relations
-  docketEntries DocketEntry[]
-  announcements Announcement[]
-  auditLogs     AuditLog[]
-  settings      Setting[]
+  docketEntries    DocketEntry[]
+  announcements    Announcement[]
+  auditLogs        AuditLog[]
+  settings         Setting[]
+  idleContentCards IdleContentCard[]
 
   @@map("users")
 }
@@ -97,6 +98,7 @@ model Display {
   cameraLabel2         String?   @map("camera_label_2")
   cameraRotateInterval Int?      @map("camera_rotate_interval")
   cameraConfig         String?   @map("camera_config")
+  showIdleContent      Boolean   @default(false) @map("show_idle_content")
   apiKeyHash       String    @map("api_key_hash")
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")
@@ -234,4 +236,33 @@ model ImportLog {
   createdAt      DateTime @default(now()) @map("created_at")
 
   @@map("import_logs")
+}
+
+model IdleContentCard {
+  id          String    @id @default(uuid())
+  title       String
+  body        String
+  icon        String?   // e.g. "phone", "clock", "gavel", "info"
+  sortOrder   Int       @default(100) @map("sort_order")
+  enabled     Boolean   @default(true)
+  expiresAt   DateTime? @map("expires_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  createdById String?   @map("created_by")
+
+  createdBy User? @relation(fields: [createdById], references: [id])
+
+  @@map("idle_content_cards")
+}
+
+model CachedNewsArticle {
+  id          String    @id @default(uuid())
+  title       String
+  summary     String    // ~200 chars
+  url         String    @unique
+  publishedAt DateTime? @map("published_at")
+  fetchedAt   DateTime  @map("fetched_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@map("cached_news_articles")
 }

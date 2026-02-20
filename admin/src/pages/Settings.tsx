@@ -13,6 +13,11 @@ interface SettingsData {
   timezone: string;
   default_theme: string;
   court_logo?: string;
+  court_website_url?: string;
+  idle_modules?: string[];
+  idle_rotation_interval?: number;
+  news_scrape_enabled?: boolean;
+  news_scrape_interval?: number;
 }
 
 interface SettingsResponse {
@@ -50,6 +55,11 @@ export default function Settings() {
     clerk_of_court: '',
     timezone: 'America/Denver',
     default_theme: 'default',
+    court_website_url: '',
+    idle_modules: ['upcoming_hearings', 'info_cards', 'news', 'statistics'],
+    idle_rotation_interval: 10,
+    news_scrape_enabled: false,
+    news_scrape_interval: 60,
   });
   const [hasChanges, setHasChanges] = useState(false);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
@@ -96,6 +106,11 @@ export default function Settings() {
         timezone: data.settings.timezone || 'America/Denver',
         default_theme: data.settings.default_theme || 'default',
         court_logo: data.settings.court_logo,
+        court_website_url: data.settings.court_website_url || '',
+        idle_modules: data.settings.idle_modules || ['upcoming_hearings', 'info_cards', 'news', 'statistics'],
+        idle_rotation_interval: data.settings.idle_rotation_interval || 10,
+        news_scrape_enabled: data.settings.news_scrape_enabled || false,
+        news_scrape_interval: data.settings.news_scrape_interval || 60,
       });
       if (data.settings.court_logo) {
         setLogoPreview(`${API_URL}${data.settings.court_logo}`);
@@ -212,6 +227,11 @@ export default function Settings() {
         timezone: data.settings.timezone || 'America/Denver',
         default_theme: data.settings.default_theme || 'default',
         court_logo: data.settings.court_logo,
+        court_website_url: data.settings.court_website_url || '',
+        idle_modules: data.settings.idle_modules || ['upcoming_hearings', 'info_cards', 'news', 'statistics'],
+        idle_rotation_interval: data.settings.idle_rotation_interval || 10,
+        news_scrape_enabled: data.settings.news_scrape_enabled || false,
+        news_scrape_interval: data.settings.news_scrape_interval || 60,
       });
       setHasChanges(false);
     }
@@ -617,6 +637,116 @@ export default function Settings() {
                 The default theme for new displays. Individual displays can override this.
               </p>
             </div>
+          </div>
+
+          {/* Idle Content / No Hearings Display */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white border-b dark:border-gray-700 pb-2">Idle Content / No Hearings Display</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Configure what displays show when no hearings are scheduled. Enable idle content per-display on the Displays page.
+            </p>
+
+            <div>
+              <label htmlFor="court_website_url" className="block text-sm font-medium text-gray-700 dark:text-gray-200">
+                Court Website URL
+              </label>
+              <input
+                type="url"
+                id="court_website_url"
+                value={formData.court_website_url || ''}
+                onChange={(e) => handleInputChange('court_website_url', e.target.value)}
+                className="mt-1 w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                placeholder="https://www.utb.uscourts.gov"
+              />
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Used by the news scraper to fetch court news articles.
+              </p>
+            </div>
+
+            <div>
+              <label htmlFor="idle_rotation_interval" className="block text-sm font-medium text-gray-700 dark:text-gray-200">
+                Rotation Interval (seconds)
+              </label>
+              <input
+                type="number"
+                id="idle_rotation_interval"
+                min="3"
+                max="120"
+                value={formData.idle_rotation_interval || 10}
+                onChange={(e) => handleInputChange('idle_rotation_interval', e.target.value)}
+                className="mt-1 w-32 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+              />
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Seconds each idle content slide is displayed before rotating.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
+                Enabled Modules
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { key: 'upcoming_hearings', label: 'Upcoming Hearings' },
+                  { key: 'info_cards', label: 'Information Cards' },
+                  { key: 'news', label: 'Court News' },
+                  { key: 'statistics', label: 'Court Statistics' },
+                ].map(mod => (
+                  <label key={mod.key} className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={(formData.idle_modules || []).includes(mod.key)}
+                      onChange={(e) => {
+                        const current = formData.idle_modules || [];
+                        const updated = e.target.checked
+                          ? [...current, mod.key]
+                          : current.filter(m => m !== mod.key);
+                        setFormData(prev => ({ ...prev, idle_modules: updated }));
+                        setHasChanges(true);
+                      }}
+                      className="rounded border-gray-300 dark:border-gray-600 text-primary focus:ring-primary dark:bg-gray-700"
+                    />
+                    <span className="text-sm text-gray-700 dark:text-gray-200">{mod.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {(formData.idle_modules || []).includes('news') && (
+              <div className="ml-4 p-3 border border-gray-200 dark:border-gray-700 rounded-lg space-y-3">
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="news_scrape_enabled"
+                    checked={formData.news_scrape_enabled || false}
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, news_scrape_enabled: e.target.checked }));
+                      setHasChanges(true);
+                    }}
+                    className="h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600 rounded"
+                  />
+                  <label htmlFor="news_scrape_enabled" className="ml-2 text-sm text-gray-700 dark:text-gray-200">
+                    Enable Automatic News Scraping
+                  </label>
+                </div>
+                {formData.news_scrape_enabled && (
+                  <div>
+                    <label htmlFor="news_scrape_interval" className="block text-sm font-medium text-gray-700 dark:text-gray-200">
+                      Scrape Interval (minutes)
+                    </label>
+                    <input
+                      type="number"
+                      id="news_scrape_interval"
+                      min="15"
+                      max="1440"
+                      value={formData.news_scrape_interval || 60}
+                      onChange={(e) => handleInputChange('news_scrape_interval', e.target.value)}
+                      className="mt-1 w-32 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Save Buttons */}

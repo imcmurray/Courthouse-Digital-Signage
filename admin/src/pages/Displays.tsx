@@ -570,6 +570,18 @@ export default function Displays() {
                   <div className="flex items-center">
                     <input
                       type="checkbox"
+                      id="showIdleContent"
+                      checked={formData.showIdleContent || false}
+                      onChange={(e) => setFormData({ ...formData, showIdleContent: e.target.checked })}
+                      className="h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600 rounded"
+                    />
+                    <label htmlFor="showIdleContent" className="ml-2 text-sm text-gray-700 dark:text-gray-200">
+                      Show Idle Content
+                    </label>
+                  </div>
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
                       id="showStricken"
                       checked={formData.showStricken}
                       onChange={(e) => setFormData({ ...formData, showStricken: e.target.checked })}
