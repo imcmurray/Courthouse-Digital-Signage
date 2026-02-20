@@ -99,6 +99,7 @@ model Display {
   cameraRotateInterval Int?      @map("camera_rotate_interval")
   cameraConfig         String?   @map("camera_config")
   showIdleContent      Boolean   @default(false) @map("show_idle_content")
+  displayTemplate      String?   @map("display_template")  // JSON: future template config
   apiKeyHash       String    @map("api_key_hash")
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")

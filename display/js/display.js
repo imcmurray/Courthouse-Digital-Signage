@@ -63,6 +63,56 @@
   let idleRotationTimer = null;
   let idleContentActive = false;
 
+  // =============================================
+  // Display Component Registry & Default Templates
+  // (Groundwork for future visual template builder)
+  // =============================================
+
+  var DISPLAY_COMPONENTS = {
+    'hearing-table':    { name: 'Hearing Table', description: 'Full docket table with columns' },
+    'hearing-pills':    { name: 'Schedule Pills', description: 'Compact judge/room/time pill layout' },
+    'idle-cards':       { name: 'Idle Content Cards', description: 'Info cards, news, statistics slideshow' },
+    'direction-cards':  { name: 'Wayfinding Directions', description: 'Direction card grid' },
+    'camera-grid':      { name: 'Camera Grid', description: 'RTSP camera tile grid' },
+    'system-status':    { name: 'System Status', description: 'Database, uptime, display status' }
+  };
+
+  var DEFAULT_DISPLAY_TEMPLATES = {
+    courtroom: {
+      components: [
+        { type: 'hearing-table', config: { viewMode: 'smart' } },
+        { type: 'idle-cards', config: { mode: 'interleave-pagination' } }
+      ]
+    },
+    chambers: {
+      components: [
+        { type: 'hearing-table', config: { viewMode: 'smart', hideColumns: ['judge'] } },
+        { type: 'idle-cards', config: { mode: 'interleave-pagination' } }
+      ]
+    },
+    combined: {
+      components: [
+        { type: 'hearing-table', config: { viewMode: 'all' } },
+        { type: 'idle-cards', config: { mode: 'interleave-pagination' } }
+      ]
+    },
+    wayfinding: {
+      components: [
+        { type: 'hearing-pills', config: {} },
+        { type: 'direction-cards', config: {} },
+        { type: 'idle-cards', config: { mode: 'replace-panel', target: 'hearing-pills' } }
+      ]
+    },
+    'it-status': {
+      components: [
+        { type: 'camera-grid', config: {} },
+        { type: 'system-status', config: {} },
+        { type: 'hearing-pills', config: {} },
+        { type: 'idle-cards', config: { mode: 'replace-panel', target: 'hearing-pills' } }
+      ]
+    }
+  };
+
   // Get display ID from URL or default
   function getDisplayId() {
     const params = new URLSearchParams(window.location.search);
@@ -680,42 +730,79 @@
   }
 
   function showPage(pageIndex) {
-    const tbody = document.getElementById('docket-body');
-    if (!tbody || !paginationState.pages[pageIndex]) return;
+    var page = paginationState.pages[pageIndex];
+    if (!page) return;
 
-    tbody.innerHTML = paginationState.pages[pageIndex].html;
+    var tbody = document.getElementById('docket-body');
+    var table = document.querySelector('.docket-table');
+    var idleContainer = document.getElementById('idle-content-container');
 
-    const totalPages = paginationState.pages.length;
-    if (totalPages > 1) {
-      // Move the first separator's label into the legend bar so it matches
-      // the "(CONT.)" treatment on continuation pages.
-      let label = paginationState.pages[pageIndex].contLabel || '';
-      const firstSep = tbody.querySelector('tr.time-separator');
-      if (firstSep) {
-        const labelEl = firstSep.querySelector('.separator-label');
-        if (labelEl) label = labelEl.textContent;
-        firstSep.remove();
+    if (page.type === 'idle') {
+      // Hide docket table, show idle container with slide HTML
+      if (table) table.style.display = 'none';
+      if (idleContainer) {
+        idleContainer.style.display = 'flex';
+        idleContainer.innerHTML = page.html;
       }
-      updatePaginationInfo(pageIndex, label);
+      var totalPages = paginationState.pages.length;
+      if (totalPages > 1) {
+        updatePaginationInfo(pageIndex, '');
+      } else {
+        updatePaginationInfo(pageIndex, '');
+      }
     } else {
-      updatePaginationInfo(pageIndex, '');
+      // Docket page: show table, hide idle container
+      if (table) table.style.display = '';
+      if (idleContainer) {
+        idleContainer.style.display = 'none';
+        idleContainer.innerHTML = '';
+      }
+      if (!tbody) return;
+      tbody.innerHTML = page.html;
+
+      var totalPages = paginationState.pages.length;
+      if (totalPages > 1) {
+        // Move the first separator's label into the legend bar so it matches
+        // the "(CONT.)" treatment on continuation pages.
+        var label = page.contLabel || '';
+        var firstSep = tbody.querySelector('tr.time-separator');
+        if (firstSep) {
+          var labelEl = firstSep.querySelector('.separator-label');
+          if (labelEl) label = labelEl.textContent;
+          firstSep.remove();
+        }
+        updatePaginationInfo(pageIndex, label);
+      } else {
+        updatePaginationInfo(pageIndex, '');
+      }
     }
   }
 
   function transitionToNextPage() {
-    const tbody = document.getElementById('docket-body');
-    if (!tbody || paginationState.pages.length === 0) return;
+    if (paginationState.pages.length === 0) return;
+
+    var currentPageIdx = paginationState.rotationOrder[paginationState.currentIndex];
+    var currentPage = paginationState.pages[currentPageIdx];
 
     // Advance to next position in rotation order
     paginationState.currentIndex = (paginationState.currentIndex + 1) % paginationState.rotationOrder.length;
-    const nextPageIdx = paginationState.rotationOrder[paginationState.currentIndex];
+    var nextPageIdx = paginationState.rotationOrder[paginationState.currentIndex];
 
-    // Fade out
-    tbody.classList.add('page-fade-out');
+    var currentIsIdle = currentPage && currentPage.type === 'idle';
 
-    setTimeout(() => {
+    // Fade out the currently visible container
+    var fadeTarget;
+    if (currentIsIdle) {
+      fadeTarget = document.getElementById('idle-content-container');
+    } else {
+      fadeTarget = document.getElementById('docket-body');
+    }
+
+    if (fadeTarget) fadeTarget.classList.add('page-fade-out');
+
+    setTimeout(function() {
       showPage(nextPageIdx);
-      tbody.classList.remove('page-fade-out');
+      if (fadeTarget) fadeTarget.classList.remove('page-fade-out');
     }, PAGINATION_FADE);
   }
 
@@ -750,43 +837,78 @@
     paginationState.currentIndex = 0;
     paginationState.pageSignature = '';
 
+    // Ensure docket table is visible and idle container is hidden
+    var table = document.querySelector('.docket-table');
+    var idleContainer = document.getElementById('idle-content-container');
+    if (table) table.style.display = '';
+    if (idleContainer) { idleContainer.style.display = 'none'; idleContainer.innerHTML = ''; }
+
     // Clear pagination info from legend bar, but keep stricken notice
-    const leftEl = document.getElementById('pagination-info');
+    var leftEl = document.getElementById('pagination-info');
     if (leftEl) leftEl.innerHTML = getStrickenNotice();
     updateLegendBarVisibility();
   }
 
   // Render docket table
   function renderDocket() {
-    const tbody = document.getElementById('docket-body');
+    var tbody = document.getElementById('docket-body');
     if (!tbody) return;
 
+    var idleEnabled = displayConfig.showIdleContent && idleContentData && idleContentData.enabled;
+
+    // --- Zero hearings ---
     if (docketData.length === 0) {
-      // If idle content is available and enabled, show it instead
-      if (idleContentData && idleContentData.enabled) {
-        renderIdleContent();
-        return;
+      if (idleEnabled) {
+        var slides = buildIdleSlides(true); // with schedule summary
+        if (slides.length > 0) {
+          renderZoomLegend(null);
+          var pages = slides.map(function(s) {
+            return { html: s, type: 'idle', priority: 'low', contLabel: null };
+          });
+          softRefreshOrStartPagination(pages);
+          adjustDocketPadding();
+          return;
+        }
       }
-      tbody.innerHTML = `
-        <tr class="placeholder-row">
-          <td colspan="7">No hearings scheduled for today</td>
-        </tr>
-      `;
+      stopPagination();
+      tbody.innerHTML = '<tr class="placeholder-row"><td colspan="7">No hearings scheduled for today</td></tr>';
       renderZoomLegend(null);
+      adjustDocketPadding();
       return;
     }
 
-    // If idle content was active and hearings appeared, deactivate it
-    if (idleContentActive) {
-      deactivateIdleContent();
+    var now = new Date();
+    var isSmartMode = displayConfig.docketViewMode === 'smart';
+
+    // --- Smart mode: all entries filtered out ---
+    if (isSmartMode && docketData.length > 8) {
+      var classified = classifyEntries(docketData, now);
+      var totalVisible = classified.inProgress.length + classified.upcomingSoon.length +
+                         classified.upcomingLater.length + classified.pastRecent.length;
+      if (totalVisible === 0) {
+        if (idleEnabled) {
+          var slides2 = buildIdleSlides(true); // with schedule summary (shows faded past pills)
+          if (slides2.length > 0) {
+            renderZoomLegend(null);
+            var pages2 = slides2.map(function(s) {
+              return { html: s, type: 'idle', priority: 'low', contLabel: null };
+            });
+            softRefreshOrStartPagination(pages2);
+            adjustDocketPadding();
+            return;
+          }
+        }
+        stopPagination();
+        tbody.innerHTML = '<tr class="placeholder-row"><td colspan="7">All hearings completed for today</td></tr>';
+        renderZoomLegend(null);
+        adjustDocketPadding();
+        return;
+      }
     }
 
-    const now = new Date();
-    const isSmartMode = displayConfig.docketViewMode === 'smart';
-    const showZoomInfo = displayConfig.showZoomInfo !== false;
-
-    // Collect zoom meetings from all entries (for pill coloring on rows)
-    const zoomMap = showZoomInfo ? collectAllZoomMeetings(docketData) : null;
+    // --- Active hearings ---
+    var showZoomInfo = displayConfig.showZoomInfo !== false;
+    var zoomMap = showZoomInfo ? collectAllZoomMeetings(docketData) : null;
 
     if (isSmartMode) {
       renderSmartDocket(tbody, docketData, now, zoomMap);
@@ -795,79 +917,103 @@
     }
 
     // Pre-render zoom legend BEFORE pagination so getRowsPerPage() sees the real height.
-    // Start with all classified visible entries (maximum legend height — safe direction).
-    let legendMap = zoomMap;
+    var legendMap = zoomMap;
     if (showZoomInfo && zoomMap && isSmartMode && docketData.length > 8) {
-      const classified = classifyEntries(docketData, now);
-      const visibleEntries = [
-        ...classified.inProgress,
-        ...classified.upcomingSoon,
-        ...classified.upcomingLater,
-        ...classified.pastRecent
-      ].map(item => item.entry);
-      const visibleMeetingIds = new Set(
-        visibleEntries.filter(e => e.isZoom && e.zoomMeetingId).map(e => e.zoomMeetingId)
+      var classifiedForLegend = classifyEntries(docketData, now);
+      var visibleEntries = [
+        ...classifiedForLegend.inProgress,
+        ...classifiedForLegend.upcomingSoon,
+        ...classifiedForLegend.upcomingLater,
+        ...classifiedForLegend.pastRecent
+      ].map(function(item) { return item.entry; });
+      var visibleMeetingIds = new Set(
+        visibleEntries.filter(function(e) { return e.isZoom && e.zoomMeetingId; }).map(function(e) { return e.zoomMeetingId; })
       );
-      legendMap = new Map([...zoomMap].filter(([id]) => visibleMeetingIds.has(id)));
+      legendMap = new Map([...zoomMap].filter(function(pair) { return visibleMeetingIds.has(pair[0]); }));
     }
     renderZoomLegend(legendMap);
 
-    // Activate pagination if needed (may change which entries are actually visible)
-    const container = document.getElementById('docket-container');
-    const scrollThreshold = document.body.classList.contains('portrait') ? 18 : 8;
-    const rowCount = tbody.querySelectorAll('tr:not(.time-separator)').length;
+    // Build pagination pages
+    var container = document.getElementById('docket-container');
+    var scrollThreshold = document.body.classList.contains('portrait') ? 18 : 8;
+    var rowCount = tbody.querySelectorAll('tr:not(.time-separator)').length;
 
     if (container && rowCount > scrollThreshold) {
-      container.classList.remove('scrolling'); // Remove legacy auto-scroll class
-      const rowsPerPage = getRowsPerPage();
-      const sections = isSmartMode
+      container.classList.remove('scrolling');
+      var rowsPerPage = getRowsPerPage();
+      var sections = isSmartMode
         ? buildSectionsForPagination(docketData, now, zoomMap)
         : buildAllSectionsForPagination(docketData, now, zoomMap);
-      const pages = buildPaginatedPages(sections, rowsPerPage);
+      var pages = buildPaginatedPages(sections, rowsPerPage);
+
+      // Append idle slides as additional pages
+      if (idleEnabled) {
+        var idleSlideHtmls = buildIdleSlides(false); // no schedule summary (docket IS the schedule)
+        idleSlideHtmls.forEach(function(slideHtml) {
+          pages.push({ html: slideHtml, type: 'idle', priority: 'low', contLabel: null });
+        });
+      }
 
       if (pages.length > 0) {
-        // Check if EARLIER section was dropped (smart mode drops pastRecent > 3)
-        let paginationDroppedEarlier = false;
+        var paginationDroppedEarlier = false;
         if (isSmartMode) {
-          paginationDroppedEarlier = !sections.some(s => s.label === 'EARLIER');
-        }
-        // Soft refresh: if page structure is similar, just update current page content
-        const newSig = pages.map(p => p.html.length + ':' + p.priority).join('|');
-        if (paginationState.active && newSig === paginationState.pageSignature) {
-          // Soft refresh — update pages in place without restarting rotation
-          paginationState.pages = pages;
-          const currentPageIdx = paginationState.rotationOrder[paginationState.currentIndex];
-          if (currentPageIdx !== undefined) {
-            showPage(currentPageIdx);
-          }
-        } else {
-          startPagination(pages);
+          paginationDroppedEarlier = !sections.some(function(s) { return s.label === 'EARLIER'; });
         }
 
-        // Post-pagination: if EARLIER was dropped, re-filter legend to remove pastRecent
-        // entries. Legend can only shrink (fewer zoom connections), so pagination still has
-        // enough space — no overlap possible.
+        softRefreshOrStartPagination(pages);
+
+        // Post-pagination: if EARLIER was dropped, re-filter legend
         if (paginationDroppedEarlier && showZoomInfo && zoomMap && isSmartMode && docketData.length > 8) {
-          const postClassified = classifyEntries(docketData, now);
-          const finalEntries = [
+          var postClassified = classifyEntries(docketData, now);
+          var finalEntries = [
             ...postClassified.inProgress,
             ...postClassified.upcomingSoon,
             ...postClassified.upcomingLater
-          ].map(item => item.entry);
-          const finalMeetingIds = new Set(
-            finalEntries.filter(e => e.isZoom && e.zoomMeetingId).map(e => e.zoomMeetingId)
+          ].map(function(item) { return item.entry; });
+          var finalMeetingIds = new Set(
+            finalEntries.filter(function(e) { return e.isZoom && e.zoomMeetingId; }).map(function(e) { return e.zoomMeetingId; })
           );
-          legendMap = new Map([...zoomMap].filter(([id]) => finalMeetingIds.has(id)));
+          legendMap = new Map([...zoomMap].filter(function(pair) { return finalMeetingIds.has(pair[0]); }));
           renderZoomLegend(legendMap);
         }
       }
     } else if (container) {
       container.classList.remove('scrolling');
-      stopPagination();
+
+      // Even though docket fits on one page, idle slides may create multi-page rotation
+      if (idleEnabled) {
+        var idleSlideHtmls2 = buildIdleSlides(false);
+        if (idleSlideHtmls2.length > 0) {
+          var docketPageHtml = tbody.innerHTML;
+          var pages3 = [{ html: docketPageHtml, type: 'docket', priority: 'low', contLabel: null }];
+          idleSlideHtmls2.forEach(function(slideHtml) {
+            pages3.push({ html: slideHtml, type: 'idle', priority: 'low', contLabel: null });
+          });
+          softRefreshOrStartPagination(pages3);
+        } else {
+          stopPagination();
+        }
+      } else {
+        stopPagination();
+      }
     }
 
-    // Adjust docket section bottom padding to avoid zoom legend overlap
     adjustDocketPadding();
+  }
+
+  // Soft-refresh pagination if page structure is similar, otherwise restart
+  function softRefreshOrStartPagination(pages) {
+    var newSig = pages.map(function(p) { return (p.html ? p.html.length : 0) + ':' + p.priority; }).join('|');
+    if (paginationState.active && newSig === paginationState.pageSignature) {
+      paginationState.pages = pages;
+      paginationState.rotationOrder = buildRotationOrder(pages);
+      var currentPageIdx = paginationState.rotationOrder[paginationState.currentIndex];
+      if (currentPageIdx !== undefined) {
+        showPage(currentPageIdx);
+      }
+    } else {
+      startPagination(pages);
+    }
   }
 
   // Build sections for "all" mode pagination
@@ -1439,13 +1585,19 @@
       );
       if (response.ok) {
         idleContentData = await response.json();
-        // If we're currently showing idle content, re-render to pick up changes
-        if (idleContentActive && docketData.length === 0) {
+        // If idle content is currently active, re-render with fresh data
+        var hasIdlePages = paginationState.active && paginationState.pages.some(function(p) { return p.type === 'idle'; });
+        if (idleContentActive || hasIdlePages) {
           var type = displayConfig.displayType || 'courtroom';
           if (type === 'wayfinding') {
-            renderWayfindingIdleContent();
+            deactivateWayfindingIdleContent();
+            renderWayfinding();
+          } else if (type === 'it-status') {
+            deactivateItIdleContent();
+            renderItHearings();
           } else {
-            renderIdleContent();
+            // Docket displays: re-trigger render which rebuilds pagination pages with fresh idle data
+            renderDocket();
           }
         }
       }
@@ -1454,93 +1606,7 @@
     }
   }
 
-  function renderIdleContent() {
-    var container = document.getElementById('idle-content-container');
-    var table = document.querySelector('.docket-table');
-    var tbody = document.getElementById('docket-body');
-    if (!container || !table) return;
-
-    if (!idleContentData || !idleContentData.enabled) {
-      // Fallback to standard placeholder
-      if (tbody) {
-        tbody.innerHTML = '<tr class="placeholder-row"><td colspan="7">No hearings scheduled for today</td></tr>';
-      }
-      renderZoomLegend(null);
-      return;
-    }
-
-    // Build slides from enabled modules
-    idleSlides = [];
-    var modules = idleContentData.modules || {};
-
-    // Upcoming Hearings slide
-    if (modules.upcoming_hearings && modules.upcoming_hearings.entries && modules.upcoming_hearings.entries.length > 0) {
-      idleSlides.push(buildUpcomingHearingsSlide(modules.upcoming_hearings));
-    }
-
-    // Info Card slides — one per card
-    if (modules.info_cards && modules.info_cards.cards) {
-      modules.info_cards.cards.forEach(function(card) {
-        idleSlides.push(buildInfoCardSlide(card));
-      });
-    }
-
-    // News slides — one per article
-    if (modules.news && modules.news.articles) {
-      modules.news.articles.forEach(function(article) {
-        idleSlides.push(buildNewsSlide(article));
-      });
-    }
-
-    // Statistics slide
-    if (modules.statistics && modules.statistics.stats) {
-      idleSlides.push(buildStatisticsSlide(modules.statistics.stats));
-    }
-
-    if (idleSlides.length === 0) {
-      // No slides to show, fall back to placeholder
-      if (tbody) {
-        tbody.innerHTML = '<tr class="placeholder-row"><td colspan="7">No hearings scheduled for today</td></tr>';
-      }
-      renderZoomLegend(null);
-      return;
-    }
-
-    // Hide the table, show the idle container
-    table.style.display = 'none';
-    container.style.display = 'flex';
-    renderZoomLegend(null);
-    stopPagination();
-    idleContentActive = true;
-    idleCurrentSlide = 0;
-
-    // Render first slide
-    showIdleSlide(0, container);
-
-    // Build dot indicators
-    var dotsHtml = '<div class="idle-dots">';
-    for (var i = 0; i < idleSlides.length; i++) {
-      dotsHtml += '<span class="idle-dot' + (i === 0 ? ' active' : '') + '"></span>';
-    }
-    dotsHtml += '</div>';
-
-    // Only add dots and progress bar if more than 1 slide
-    if (idleSlides.length > 1) {
-      container.insertAdjacentHTML('beforeend', dotsHtml);
-      var progressInterval = idleContentData.rotationInterval || 10;
-      container.insertAdjacentHTML('beforeend', '<div class="idle-progress-bar"><div class="idle-progress-bar-fill" style="animation-duration: ' + progressInterval + 's;"></div></div>');
-    }
-
-    // Start rotation
-    if (idleSlides.length > 1) {
-      var interval = (idleContentData.rotationInterval || 10) * 1000;
-      if (idleRotationTimer) clearInterval(idleRotationTimer);
-      idleRotationTimer = setInterval(function() {
-        idleCurrentSlide = (idleCurrentSlide + 1) % idleSlides.length;
-        showIdleSlide(idleCurrentSlide, container);
-      }, interval);
-    }
-  }
+  // buildIdleSlides is defined below after buildStatisticsSlide
 
   function showIdleSlide(index, container) {
     // Fade out current
@@ -1582,99 +1648,17 @@
   }
 
   function deactivateIdleContent() {
-    if (idleRotationTimer) {
-      clearInterval(idleRotationTimer);
-      idleRotationTimer = null;
-    }
-    var container = document.getElementById('idle-content-container');
+    deactivateIdleContentForType('idle-content-container', null);
     var table = document.querySelector('.docket-table');
-    if (container) {
-      container.style.display = 'none';
-      container.innerHTML = '';
-    }
-    if (table) {
-      table.style.display = '';
-    }
-    idleContentActive = false;
-    idleSlides = [];
-    idleCurrentSlide = 0;
-  }
-
-  function renderWayfindingIdleContent() {
-    // Don't re-initialize if already running (timer would get reset on each render cycle)
-    if (idleContentActive) return;
-
-    var container = document.getElementById('wayfinding-idle-content-container');
-    var hearingsEl = document.getElementById('wayfinding-hearings');
-    if (!container || !hearingsEl) return;
-
-    if (!idleContentData || !idleContentData.enabled) return;
-
-    // Build slides from enabled modules (same logic as renderIdleContent)
-    idleSlides = [];
-    var modules = idleContentData.modules || {};
-
-    if (modules.upcoming_hearings && modules.upcoming_hearings.entries && modules.upcoming_hearings.entries.length > 0) {
-      idleSlides.push(buildUpcomingHearingsSlide(modules.upcoming_hearings));
-    }
-    if (modules.info_cards && modules.info_cards.cards) {
-      modules.info_cards.cards.forEach(function(card) {
-        idleSlides.push(buildInfoCardSlide(card));
-      });
-    }
-    if (modules.news && modules.news.articles) {
-      modules.news.articles.forEach(function(article) {
-        idleSlides.push(buildNewsSlide(article));
-      });
-    }
-    if (modules.statistics && modules.statistics.stats) {
-      idleSlides.push(buildStatisticsSlide(modules.statistics.stats));
-    }
-
-    if (idleSlides.length === 0) return;
-
-    // Hide hearings panel only, show idle container in its place
-    hearingsEl.style.display = 'none';
-    container.style.display = 'flex';
-    idleContentActive = true;
-    idleCurrentSlide = 0;
-
-    showIdleSlide(0, container);
-
-    if (idleSlides.length > 1) {
-      var dotsHtml = '<div class="idle-dots">';
-      for (var i = 0; i < idleSlides.length; i++) {
-        dotsHtml += '<span class="idle-dot' + (i === 0 ? ' active' : '') + '"></span>';
-      }
-      dotsHtml += '</div>';
-      container.insertAdjacentHTML('beforeend', dotsHtml);
-
-      var interval = (idleContentData.rotationInterval || 10) * 1000;
-      if (idleRotationTimer) clearInterval(idleRotationTimer);
-      idleRotationTimer = setInterval(function() {
-        idleCurrentSlide = (idleCurrentSlide + 1) % idleSlides.length;
-        showIdleSlide(idleCurrentSlide, container);
-      }, interval);
-    }
+    if (table) table.style.display = '';
   }
 
   function deactivateWayfindingIdleContent() {
-    if (idleRotationTimer) {
-      clearInterval(idleRotationTimer);
-      idleRotationTimer = null;
-    }
-    var container = document.getElementById('wayfinding-idle-content-container');
-    var hearingsEl = document.getElementById('wayfinding-hearings');
-    if (container) {
-      container.style.display = 'none';
-      container.innerHTML = '';
-    }
-    if (hearingsEl) {
-      hearingsEl.style.display = '';
-    }
-    idleContentActive = false;
-    idleSlides = [];
-    idleCurrentSlide = 0;
+    deactivateIdleContentForType('wayfinding-idle-content-container', 'wayfinding-hearings');
+  }
+
+  function deactivateItIdleContent() {
+    deactivateIdleContentForType('it-idle-content-container', 'it-schedule-panel');
   }
 
   function buildUpcomingHearingsSlide(data) {
@@ -1803,6 +1787,108 @@
       '</div>' +
       (nextDateStr ? '<div class="idle-stats-next">Next Hearing Day: ' + escapeHtml(nextDateStr) + '</div>' : '') +
       '</div>';
+  }
+
+  // Build a "Today's Schedule" slide using the judge-grouped pill layout
+  function buildTodayScheduleSummarySlide(entries, now) {
+    if (!entries || entries.length === 0) {
+      return '<div class="idle-slide idle-schedule-summary">' +
+        '<div class="idle-slide-title">TODAY\'S SCHEDULE</div>' +
+        '<div class="idle-schedule-empty">No hearings scheduled</div>' +
+        '</div>';
+    }
+    var result = buildJudgeScheduleHtml(entries, now);
+    // Strip the <h4> title since the slide has its own idle-slide-title
+    var body = result.html.replace(/<h4>[\s\S]*?<\/h4>/, '');
+    return '<div class="idle-slide idle-schedule-summary">' +
+      '<div class="idle-slide-title">TODAY\'S SCHEDULE</div>' +
+      '<div class="idle-schedule-body">' + body + '</div>' +
+      '</div>';
+  }
+
+  // Build array of idle slide HTML strings from enabled modules
+  function buildIdleSlides(includeScheduleSummary) {
+    var slides = [];
+
+    // Schedule summary slide (pill view of today's schedule)
+    if (includeScheduleSummary) {
+      slides.push(buildTodayScheduleSummarySlide(docketData, new Date()));
+    }
+
+    if (!idleContentData || !idleContentData.enabled) return slides;
+
+    var modules = idleContentData.modules || {};
+
+    // Info Card slides — one per card
+    if (modules.info_cards && modules.info_cards.cards) {
+      modules.info_cards.cards.forEach(function(card) {
+        slides.push(buildInfoCardSlide(card));
+      });
+    }
+
+    // News slides — one per article
+    if (modules.news && modules.news.articles) {
+      modules.news.articles.forEach(function(article) {
+        slides.push(buildNewsSlide(article));
+      });
+    }
+
+    // Statistics slide
+    if (modules.statistics && modules.statistics.stats) {
+      slides.push(buildStatisticsSlide(modules.statistics.stats));
+    }
+
+    return slides;
+  }
+
+  // Activate an idle content slideshow in a container (used by wayfinding and IT status)
+  function activateIdleSlideshow(container, slides) {
+    if (!container || slides.length === 0) return;
+
+    idleSlides = slides;
+    idleContentActive = true;
+    idleCurrentSlide = 0;
+
+    container.style.display = 'flex';
+    showIdleSlide(0, container);
+
+    if (slides.length > 1) {
+      var dotsHtml = '<div class="idle-dots">';
+      for (var i = 0; i < slides.length; i++) {
+        dotsHtml += '<span class="idle-dot' + (i === 0 ? ' active' : '') + '"></span>';
+      }
+      dotsHtml += '</div>';
+      container.insertAdjacentHTML('beforeend', dotsHtml);
+
+      var progressInterval = idleContentData ? (idleContentData.rotationInterval || 10) : 10;
+      container.insertAdjacentHTML('beforeend', '<div class="idle-progress-bar"><div class="idle-progress-bar-fill" style="animation-duration: ' + progressInterval + 's;"></div></div>');
+
+      if (idleRotationTimer) clearInterval(idleRotationTimer);
+      idleRotationTimer = setInterval(function() {
+        idleCurrentSlide = (idleCurrentSlide + 1) % idleSlides.length;
+        showIdleSlide(idleCurrentSlide, container);
+      }, progressInterval * 1000);
+    }
+  }
+
+  // Shared deactivation for idle content slideshows (wayfinding, IT status)
+  function deactivateIdleContentForType(containerId, restoreElId) {
+    if (idleRotationTimer) {
+      clearInterval(idleRotationTimer);
+      idleRotationTimer = null;
+    }
+    var container = document.getElementById(containerId);
+    if (container) {
+      container.style.display = 'none';
+      container.innerHTML = '';
+    }
+    if (restoreElId) {
+      var restoreEl = document.getElementById(restoreElId);
+      if (restoreEl) restoreEl.style.display = '';
+    }
+    idleContentActive = false;
+    idleSlides = [];
+    idleCurrentSlide = 0;
   }
 
   // =============================================
@@ -1935,9 +2021,16 @@
 
     directionsEl.innerHTML = directionsHtml;
 
-    // Show idle content in left panel when no hearings and idle content is enabled
+    // Show idle content slideshow in left panel when no hearings and idle content is enabled
     if (docketData.length === 0 && idleContentData && idleContentData.enabled) {
-      renderWayfindingIdleContent();
+      if (!idleContentActive) {
+        hearingsEl.style.display = 'none';
+        var idleSlideHtmls = buildIdleSlides(true); // with schedule summary
+        var wayfindingIdleContainer = document.getElementById('wayfinding-idle-content-container');
+        if (idleSlideHtmls.length > 0 && wayfindingIdleContainer) {
+          activateIdleSlideshow(wayfindingIdleContainer, idleSlideHtmls);
+        }
+      }
       return;
     }
 
@@ -2239,6 +2332,24 @@
   function renderItHearings() {
     var scheduleEl = document.getElementById('it-schedule-panel');
     if (!scheduleEl) return;
+
+    // When no hearings and idle content is enabled, show idle slideshow
+    if (docketData.length === 0 && idleContentData && idleContentData.enabled) {
+      if (!idleContentActive) {
+        scheduleEl.style.display = 'none';
+        var slides = buildIdleSlides(true); // with schedule summary
+        var itIdleContainer = document.getElementById('it-idle-content-container');
+        if (slides.length > 0 && itIdleContainer) {
+          activateIdleSlideshow(itIdleContainer, slides);
+        }
+      }
+      return;
+    }
+
+    // Deactivate idle content if hearings reappeared
+    if (idleContentActive) {
+      deactivateItIdleContent();
+    }
 
     var result = buildJudgeScheduleHtml(docketData, new Date());
     scheduleEl.innerHTML = result.html;

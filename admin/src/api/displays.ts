@@ -40,12 +40,31 @@ export interface Display {
   cameraRotateInterval: number | null;
   cameraConfig: string | object | null;
   showIdleContent: boolean;
+  displayTemplate: DisplayTemplate | null;
   status: string;
   lastHeartbeat: string | null;
   ipAddress: string | null;
   apiKey?: string;  // Only returned on creation
   createdAt: string;
   updatedAt: string;
+}
+
+// Template builder types (groundwork for future visual template builder)
+export interface DisplayTemplateComponent {
+  type: 'hearing-table' | 'hearing-pills' | 'idle-cards' | 'direction-cards' | 'camera-grid' | 'system-status';
+  config: Record<string, any>;
+  gridArea?: string;  // CSS grid area for visual builder layout
+}
+
+export interface DisplayTemplate {
+  name: string;
+  displayType: string;
+  components: DisplayTemplateComponent[];
+  layout?: {
+    type: 'single' | 'two-column' | 'grid';
+    columns?: string;
+    rows?: string;
+  };
 }
 
 export interface CreateDisplayInput {

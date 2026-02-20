@@ -566,6 +566,14 @@ html, body {
   opacity: 0;
 }
 
+.idle-content-container {
+  transition: opacity 600ms ease-in-out;
+}
+
+.idle-content-container.page-fade-out {
+  opacity: 0;
+}
+
 /* Page dots (rendered in legend bar left section) */
 .page-dots {
   display: flex;
@@ -1510,4 +1518,35 @@ body.portrait .idle-stats-number {
 
 body.portrait .idle-stats-label {
   font-size: 16px;
+}
+
+/* Schedule summary slide (today's schedule in pill layout) */
+.idle-schedule-summary {
+  align-items: flex-start;
+  padding: 0 40px;
+}
+
+.idle-schedule-body {
+  width: 100%;
+  max-height: 80%;
+  overflow-y: auto;
+}
+
+.idle-schedule-empty {
+  color: rgba(255, 255, 255, 0.5);
+  font-style: italic;
+  font-size: 28px;
+  text-align: center;
+  margin-top: 60px;
+}
+
+/* IT Status idle content container placement */
+#it-idle-content-container {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+body.portrait #it-idle-content-container {
+  grid-column: 1;
+  grid-row: 2;
 }

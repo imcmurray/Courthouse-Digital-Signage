@@ -1425,6 +1425,16 @@ app.get('/api/displays/:id/config', displayLimiter, authenticateApiKey, async (r
         return cameras.length > 0 ? { cameras } : null;
       })(),
       showIdleContent: display.showIdleContent,
+      displayTemplate: (() => {
+        if (!display.displayTemplate) return null;
+        try {
+          let parsed = JSON.parse(display.displayTemplate);
+          if (typeof parsed === 'string') parsed = JSON.parse(parsed);
+          return parsed;
+        } catch (e) {
+          return null;
+        }
+      })(),
       // Global settings
       courtName: settingsMap.court_name || 'U.S. Bankruptcy Court',
       courtSubtitle: settingsMap.court_subtitle || 'District of Utah',
