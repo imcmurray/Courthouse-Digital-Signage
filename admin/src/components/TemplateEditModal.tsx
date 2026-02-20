@@ -558,7 +558,7 @@ function GridPreview({ orientation, orientationLayout, components, onAssignCompo
                   type="button"
                   onClick={() => onSplitArea(areaName, 'vertical')}
                   className="w-5 h-5 flex items-center justify-center bg-gray-200 dark:bg-gray-600 rounded text-[10px] text-gray-600 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 hover:text-blue-600 dark:hover:text-blue-400"
-                  title="Split top/bottom"
+                  title="Split this cell into two stacked areas (top and bottom)"
                 >
                   ↕
                 </button>
@@ -566,7 +566,7 @@ function GridPreview({ orientation, orientationLayout, components, onAssignCompo
                   type="button"
                   onClick={() => onSplitArea(areaName, 'horizontal')}
                   className="w-5 h-5 flex items-center justify-center bg-gray-200 dark:bg-gray-600 rounded text-[10px] text-gray-600 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 hover:text-blue-600 dark:hover:text-blue-400"
-                  title="Split left/right"
+                  title="Split this cell into two side-by-side areas (left and right)"
                 >
                   ↔
                 </button>
@@ -614,9 +614,10 @@ interface SortableComponentProps {
   onUpdateConfig: (config: Record<string, unknown>) => void;
   isExpanded: boolean;
   onToggleExpand: () => void;
+  assignedComponentTypes: { type: string; name: string }[];
 }
 
-function SortableComponent({ component, onRemove, onUpdateConfig, isExpanded, onToggleExpand }: SortableComponentProps) {
+function SortableComponent({ component, onRemove, onUpdateConfig, isExpanded, onToggleExpand, assignedComponentTypes }: SortableComponentProps) {
   const {
     attributes,
     listeners,
@@ -686,7 +687,7 @@ function SortableComponent({ component, onRemove, onUpdateConfig, isExpanded, on
 
       {isExpanded && (
         <div className="px-3 pb-3 pt-1 border-t border-gray-200 dark:border-gray-600">
-          <ComponentConfigEditor type={component.type} config={component.config} onChange={onUpdateConfig} />
+          <ComponentConfigEditor type={component.type} config={component.config} onChange={onUpdateConfig} assignedComponentTypes={assignedComponentTypes} />
         </div>
       )}
     </div>
@@ -695,10 +696,11 @@ function SortableComponent({ component, onRemove, onUpdateConfig, isExpanded, on
 
 // --- Per-component config editor ---
 
-function ComponentConfigEditor({ type, config, onChange }: {
+function ComponentConfigEditor({ type, config, onChange, assignedComponentTypes }: {
   type: ComponentType;
   config: Record<string, unknown>;
   onChange: (config: Record<string, unknown>) => void;
+  assignedComponentTypes: { type: string; name: string }[];
 }) {
   switch (type) {
     case 'hearing-table':
@@ -747,13 +749,16 @@ function ComponentConfigEditor({ type, config, onChange }: {
           {config.mode === 'replace-panel' && (
             <div>
               <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Target Panel</label>
-              <input
-                type="text"
+              <select
                 value={(config.target as string) || ''}
                 onChange={e => onChange({ ...config, target: e.target.value })}
-                placeholder="e.g., hearing-pills"
                 className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white"
-              />
+              >
+                <option value="">Select a component...</option>
+                {assignedComponentTypes
+                  .filter(c => c.type !== 'idle-cards')
+                  .map(c => <option key={c.type} value={c.type}>{c.name}</option>)}
+              </select>
             </div>
           )}
         </div>
@@ -944,6 +949,10 @@ export default function TemplateEditModal({ template, onClose }: TemplateEditMod
 
   const isPending = createMutation.isPending || updateMutation.isPending;
 
+  const assignedComponentTypes = components
+    .filter(c => c.gridArea?.[activeTab])
+    .map(c => ({ type: c.type, name: DISPLAY_COMPONENTS[c.type]?.name || c.type }));
+
   const availableComponents = COMPONENT_TYPE_LIST.filter(
     c => !components.some(existing => existing.type === c.type)
   );
@@ -1118,6 +1127,7 @@ export default function TemplateEditModal({ template, onClose }: TemplateEditMod
                         onUpdateConfig={config => updateComponentConfig(comp.id, config)}
                         isExpanded={expandedId === comp.id}
                         onToggleExpand={() => setExpandedId(expandedId === comp.id ? null : comp.id)}
+                        assignedComponentTypes={assignedComponentTypes}
                       />
                     ))}
                   </div>
