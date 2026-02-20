@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import {
@@ -167,6 +167,155 @@ function isDefaultLayout(layout: LayoutConfig): boolean {
   );
 }
 
+// --- Track sizing helpers ---
+
+interface TrackSize {
+  value: number;
+  unit: '%' | 'fr' | 'px';
+  raw: string;
+  resizable: boolean;
+}
+
+function parseTrackSizes(trackString: string): TrackSize[] {
+  return trackString.trim().split(/\s+/).map(token => {
+    const pctMatch = token.match(/^([\d.]+)%$/);
+    if (pctMatch) return { value: parseFloat(pctMatch[1]), unit: '%' as const, raw: token, resizable: true };
+    const frMatch = token.match(/^([\d.]+)fr$/);
+    if (frMatch) return { value: parseFloat(frMatch[1]), unit: 'fr' as const, raw: token, resizable: true };
+    const pxMatch = token.match(/^([\d.]+)px$/);
+    if (pxMatch) return { value: parseFloat(pxMatch[1]), unit: 'px' as const, raw: token, resizable: true };
+    return { value: 0, unit: '%' as const, raw: token, resizable: false };
+  });
+}
+
+function serializeTrackSizes(tracks: TrackSize[]): string {
+  return tracks.map(t => {
+    if (!t.resizable) return t.raw;
+    if (t.unit === '%') return `${Math.round(t.value * 10) / 10}%`;
+    if (t.unit === 'fr') return `${Math.round(t.value * 100) / 100}fr`;
+    return `${Math.round(t.value)}px`;
+  }).join(' ');
+}
+
+function ensureTrackSizes(trackString: string | undefined, count: number): string {
+  if (trackString) return trackString;
+  return Array(count).fill('1fr').join(' ');
+}
+
+// --- Cell split helper ---
+
+function splitAreaInGrid(layout: OrientationLayout, areaName: string, direction: 'horizontal' | 'vertical'): OrientationLayout {
+  const areas = layout.areas.map(row => [...row]);
+
+  const areaRows: number[] = [];
+  const areaCols: number[] = [];
+  for (let r = 0; r < areas.length; r++) {
+    for (let c = 0; c < areas[r].length; c++) {
+      if (areas[r][c] === areaName) {
+        if (!areaRows.includes(r)) areaRows.push(r);
+        if (!areaCols.includes(c)) areaCols.push(c);
+      }
+    }
+  }
+
+  if (areaRows.length === 0) return layout;
+
+  const allNames = new Set<string>();
+  for (const row of areas) for (const cell of row) allNames.add(cell);
+
+  function uniqueName(base: string): string {
+    if (!allNames.has(base)) { allNames.add(base); return base; }
+    let i = 2;
+    while (allNames.has(`${base}${i}`)) i++;
+    allNames.add(`${base}${i}`);
+    return `${base}${i}`;
+  }
+
+  if (direction === 'vertical') {
+    const topName = uniqueName(`${areaName}-top`);
+    const bottomName = uniqueName(`${areaName}-bottom`);
+    const rowTracks = parseTrackSizes(ensureTrackSizes(layout.rows, areas.length));
+
+    if (areaRows.length === 1) {
+      const rowIdx = areaRows[0];
+      const topRow = areas[rowIdx].map(cell => cell === areaName ? topName : cell);
+      const bottomRow = areas[rowIdx].map(cell => cell === areaName ? bottomName : cell);
+      const newAreas = [...areas.slice(0, rowIdx), topRow, bottomRow, ...areas.slice(rowIdx + 1)];
+
+      const newRowTracks = [...rowTracks];
+      const orig = newRowTracks[rowIdx];
+      if (orig.resizable) {
+        const half = orig.value / 2;
+        newRowTracks.splice(rowIdx, 1, { ...orig, value: half }, { ...orig, value: half });
+      } else {
+        newRowTracks.splice(rowIdx, 1,
+          { value: 1, unit: 'fr' as const, raw: '1fr', resizable: true },
+          { value: 1, unit: 'fr' as const, raw: '1fr', resizable: true });
+      }
+      return { ...layout, rows: serializeTrackSizes(newRowTracks), areas: newAreas };
+    }
+
+    // Multi-row: partition at midpoint
+    const mid = Math.ceil(areaRows.length / 2);
+    const topSet = new Set(areaRows.slice(0, mid));
+    const bottomSet = new Set(areaRows.slice(mid));
+    const newAreas = areas.map((row, r) =>
+      row.map(cell => {
+        if (cell !== areaName) return cell;
+        if (topSet.has(r)) return topName;
+        if (bottomSet.has(r)) return bottomName;
+        return cell;
+      })
+    );
+    return { ...layout, areas: newAreas };
+  }
+
+  // Horizontal split (left/right — adds a column)
+  const leftName = uniqueName(`${areaName}-left`);
+  const rightName = uniqueName(`${areaName}-right`);
+  const colTracks = parseTrackSizes(ensureTrackSizes(layout.columns, areas[0]?.length || 1));
+
+  if (areaCols.length === 1) {
+    const colIdx = areaCols[0];
+    const newAreas = areas.map(row => {
+      const newRow = [...row];
+      const cell = newRow[colIdx];
+      if (cell === areaName) {
+        newRow.splice(colIdx, 1, leftName, rightName);
+      } else {
+        newRow.splice(colIdx, 1, cell, cell);
+      }
+      return newRow;
+    });
+
+    const newColTracks = [...colTracks];
+    const orig = newColTracks[colIdx];
+    if (orig.resizable) {
+      const half = orig.value / 2;
+      newColTracks.splice(colIdx, 1, { ...orig, value: half }, { ...orig, value: half });
+    } else {
+      newColTracks.splice(colIdx, 1,
+        { value: 1, unit: 'fr' as const, raw: '1fr', resizable: true },
+        { value: 1, unit: 'fr' as const, raw: '1fr', resizable: true });
+    }
+    return { ...layout, columns: serializeTrackSizes(newColTracks), areas: newAreas };
+  }
+
+  // Multi-column: partition at midpoint
+  const mid = Math.ceil(areaCols.length / 2);
+  const leftSet = new Set(areaCols.slice(0, mid));
+  const rightSet = new Set(areaCols.slice(mid));
+  const newAreas = areas.map(row =>
+    row.map((cell, c) => {
+      if (cell !== areaName) return cell;
+      if (leftSet.has(c)) return leftName;
+      if (rightSet.has(c)) return rightName;
+      return cell;
+    })
+  );
+  return { ...layout, areas: newAreas };
+}
+
 // --- GridPreview Component ---
 
 interface GridPreviewProps {
@@ -175,10 +324,21 @@ interface GridPreviewProps {
   components: TemplateComponent[];
   onAssignComponent: (areaName: string, componentId: string) => void;
   onUnassignComponent: (areaName: string, componentId: string) => void;
+  onUpdateColumns: (columns: string) => void;
+  onUpdateRows: (rows: string) => void;
+  onSplitArea: (areaName: string, direction: 'horizontal' | 'vertical') => void;
 }
 
-function GridPreview({ orientation, orientationLayout, components, onAssignComponent, onUnassignComponent }: GridPreviewProps) {
+interface BoundaryInfo {
+  position: number;
+  trackIndex: number;
+  axis: 'column' | 'row';
+}
+
+function GridPreview({ orientation, orientationLayout, components, onAssignComponent, onUnassignComponent, onUpdateColumns, onUpdateRows, onSplitArea }: GridPreviewProps) {
   const [dropdownArea, setDropdownArea] = useState<string | null>(null);
+  const [boundaries, setBoundaries] = useState<BoundaryInfo[]>([]);
+  const gridContainerRef = useRef<HTMLDivElement>(null);
 
   const areaNames = getAreaNames(orientationLayout);
 
@@ -196,11 +356,127 @@ function GridPreview({ orientation, orientationLayout, components, onAssignCompo
 
   // Components not assigned to any area in this orientation (and have gridArea capability — i.e., no behavioral overlays)
   const unassigned = components.filter(comp => {
-    // idle-cards with replace-panel mode is behavioral, skip
     if (comp.type === 'idle-cards' && comp.config.mode === 'replace-panel') return false;
     const area = comp.gridArea?.[orientation];
     return !area || !areaNames.includes(area);
   });
+
+  // Compute boundary positions from rendered cells
+  useEffect(() => {
+    const container = gridContainerRef.current;
+    if (!container) return;
+
+    const computeBoundaries = () => {
+      const next: BoundaryInfo[] = [];
+      const cr = container.getBoundingClientRect();
+      const numCols = orientationLayout.areas[0]?.length || 1;
+      const numRows = orientationLayout.areas.length;
+
+      const cellRects: Record<string, DOMRect> = {};
+      container.querySelectorAll('[data-area]').forEach(el => {
+        const a = el.getAttribute('data-area');
+        if (a) cellRects[a] = el.getBoundingClientRect();
+      });
+
+      for (let c = 0; c < numCols - 1; c++) {
+        for (let r = 0; r < numRows; r++) {
+          const la = orientationLayout.areas[r][c];
+          const ra = orientationLayout.areas[r][c + 1];
+          if (la !== ra && cellRects[la] && cellRects[ra]) {
+            next.push({ position: (cellRects[la].right - cr.left + cellRects[ra].left - cr.left) / 2, trackIndex: c, axis: 'column' });
+            break;
+          }
+        }
+      }
+
+      for (let r = 0; r < numRows - 1; r++) {
+        for (let c = 0; c < numCols; c++) {
+          const ta = orientationLayout.areas[r][c];
+          const ba = orientationLayout.areas[r + 1][c];
+          if (ta !== ba && cellRects[ta] && cellRects[ba]) {
+            next.push({ position: (cellRects[ta].bottom - cr.top + cellRects[ba].top - cr.top) / 2, trackIndex: r, axis: 'row' });
+            break;
+          }
+        }
+      }
+
+      setBoundaries(next);
+    };
+
+    const rafId = requestAnimationFrame(computeBoundaries);
+    const observer = new ResizeObserver(computeBoundaries);
+    observer.observe(container);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      observer.disconnect();
+    };
+  }, [orientationLayout, orientation]);
+
+  const handlePointerDown = (e: React.PointerEvent, boundary: BoundaryInfo) => {
+    e.preventDefault();
+    const container = gridContainerRef.current;
+    if (!container) return;
+
+    const containerRect = container.getBoundingClientRect();
+    const trackString = boundary.axis === 'column'
+      ? ensureTrackSizes(orientationLayout.columns, orientationLayout.areas[0]?.length || 1)
+      : ensureTrackSizes(orientationLayout.rows, orientationLayout.areas.length);
+    const tracks = parseTrackSizes(trackString);
+    const containerDim = boundary.axis === 'column' ? containerRect.width : containerRect.height;
+    const startPos = boundary.axis === 'column' ? e.clientX : e.clientY;
+    const idx = boundary.trackIndex;
+
+    if (!tracks[idx].resizable || !tracks[idx + 1].resizable || tracks[idx].unit !== tracks[idx + 1].unit) return;
+
+    const startVal = tracks[idx].value;
+    const startNext = tracks[idx + 1].value;
+    const unit = tracks[idx].unit;
+    const updateFn = boundary.axis === 'column' ? onUpdateColumns : onUpdateRows;
+
+    const onMove = (ev: PointerEvent) => {
+      const delta = (boundary.axis === 'column' ? ev.clientX : ev.clientY) - startPos;
+      let deltaUnits: number;
+      if (unit === '%') {
+        deltaUnits = (delta / containerDim) * 100;
+      } else if (unit === 'fr') {
+        const totalFr = tracks.reduce((s, t) => s + (t.unit === 'fr' && t.resizable ? t.value : 0), 0);
+        deltaUnits = (delta / containerDim) * totalFr;
+      } else {
+        deltaUnits = delta;
+      }
+
+      const min = unit === '%' ? 5 : unit === 'fr' ? 0.1 : 20;
+      let newI = startVal + deltaUnits;
+      let newN = startNext - deltaUnits;
+      if (newI < min) { newI = min; newN = startVal + startNext - min; }
+      if (newN < min) { newN = min; newI = startVal + startNext - min; }
+
+      const newTracks = tracks.map((t, ti) => {
+        if (ti === idx) return { ...t, value: newI };
+        if (ti === idx + 1) return { ...t, value: newN };
+        return t;
+      });
+      updateFn(serializeTrackSizes(newTracks));
+    };
+
+    const onUp = () => {
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+    };
+
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+  };
+
+  const isBoundaryResizable = (b: BoundaryInfo): boolean => {
+    const ts = b.axis === 'column'
+      ? ensureTrackSizes(orientationLayout.columns, orientationLayout.areas[0]?.length || 1)
+      : ensureTrackSizes(orientationLayout.rows, orientationLayout.areas.length);
+    const tracks = parseTrackSizes(ts);
+    return tracks[b.trackIndex].resizable && tracks[b.trackIndex + 1].resizable
+      && tracks[b.trackIndex].unit === tracks[b.trackIndex + 1].unit;
+  };
 
   const gridStyle: React.CSSProperties = {
     display: 'grid',
@@ -216,14 +492,15 @@ function GridPreview({ orientation, orientationLayout, components, onAssignCompo
     <div className={`border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-100 dark:bg-gray-900 p-2 ${
       orientation === 'landscape' ? 'aspect-video max-h-[280px]' : 'aspect-[9/16] max-h-[400px]'
     }`}>
-      <div style={gridStyle} className="h-full">
+      <div ref={gridContainerRef} style={gridStyle} className="h-full relative">
         {areaNames.map(areaName => {
           const assigned = areaAssignments[areaName];
           return (
             <div
               key={areaName}
+              data-area={areaName}
               style={{ gridArea: areaName }}
-              className="relative border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-md p-2 flex flex-col items-center justify-center min-h-[40px] bg-white/50 dark:bg-gray-800/50"
+              className="group/cell relative border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-md p-2 flex flex-col items-center justify-center min-h-[40px] bg-white/50 dark:bg-gray-800/50"
             >
               <span className="text-[10px] font-mono text-gray-400 dark:text-gray-500 absolute top-1 left-2">{areaName}</span>
               {assigned.length > 0 ? (
@@ -252,7 +529,7 @@ function GridPreview({ orientation, orientationLayout, components, onAssignCompo
                     Click to assign
                   </button>
                   {dropdownArea === areaName && unassigned.length > 0 && (
-                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg z-10 min-w-[160px] py-1">
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg z-30 min-w-[160px] py-1">
                       {unassigned.map(comp => (
                         <button
                           key={comp.id}
@@ -269,15 +546,61 @@ function GridPreview({ orientation, orientationLayout, components, onAssignCompo
                     </div>
                   )}
                   {dropdownArea === areaName && unassigned.length === 0 && (
-                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg z-10 min-w-[160px] py-2 px-3">
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg z-30 min-w-[160px] py-2 px-3">
                       <span className="text-xs text-gray-400 italic">No unassigned components</span>
                     </div>
                   )}
                 </div>
               )}
+              {/* Split buttons */}
+              <div className="absolute bottom-1 right-1 flex gap-0.5 opacity-0 group-hover/cell:opacity-100 transition-opacity z-10">
+                <button
+                  type="button"
+                  onClick={() => onSplitArea(areaName, 'vertical')}
+                  className="w-5 h-5 flex items-center justify-center bg-gray-200 dark:bg-gray-600 rounded text-[10px] text-gray-600 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 hover:text-blue-600 dark:hover:text-blue-400"
+                  title="Split top/bottom"
+                >
+                  ↕
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onSplitArea(areaName, 'horizontal')}
+                  className="w-5 h-5 flex items-center justify-center bg-gray-200 dark:bg-gray-600 rounded text-[10px] text-gray-600 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 hover:text-blue-600 dark:hover:text-blue-400"
+                  title="Split left/right"
+                >
+                  ↔
+                </button>
+              </div>
             </div>
           );
         })}
+        {/* Resize handles */}
+        {boundaries.filter(isBoundaryResizable).map(b => (
+          <div
+            key={`handle-${b.axis}-${b.trackIndex}`}
+            className="group/handle"
+            style={{
+              position: 'absolute',
+              ...(b.axis === 'column'
+                ? { left: b.position - 6, top: 0, width: 12, height: '100%', cursor: 'col-resize' }
+                : { top: b.position - 6, left: 0, height: 12, width: '100%', cursor: 'row-resize' }),
+              zIndex: 20,
+            }}
+            onPointerDown={e => handlePointerDown(e, b)}
+          >
+            <div
+              className="opacity-0 group-hover/handle:opacity-100 transition-opacity"
+              style={{
+                position: 'absolute',
+                ...(b.axis === 'column'
+                  ? { left: 5, top: 0, width: 2, height: '100%' }
+                  : { top: 5, left: 0, height: 2, width: '100%' }),
+                backgroundColor: 'rgb(59 130 246 / 0.5)',
+                borderRadius: 1,
+              }}
+            />
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -587,6 +910,28 @@ export default function TemplateEditModal({ template, onClose }: TemplateEditMod
     }));
   };
 
+  const handleSplitArea = (areaName: string, direction: 'horizontal' | 'vertical') => {
+    const newOrientationLayout = splitAreaInGrid(layout[activeTab], areaName, direction);
+
+    // Find newly-added area names to reassign components
+    const oldNames = new Set(getAreaNames(layout[activeTab]));
+    const newNames = getAreaNames(newOrientationLayout);
+    const added = newNames.filter(n => !oldNames.has(n));
+
+    const firstSub = direction === 'vertical'
+      ? added.find(n => n.includes('-top')) || added[0]
+      : added.find(n => n.includes('-left')) || added[0];
+
+    if (firstSub) {
+      setComponents(prev => prev.map(c => {
+        if (c.gridArea?.[activeTab] !== areaName) return c;
+        return { ...c, gridArea: { ...c.gridArea, [activeTab]: firstSub } };
+      }));
+    }
+
+    setLayout(prev => ({ ...prev, [activeTab]: newOrientationLayout }));
+  };
+
   const updateOrientationLayout = (field: 'columns' | 'rows', value: string) => {
     setLayout(prev => ({
       ...prev,
@@ -737,6 +1082,9 @@ export default function TemplateEditModal({ template, onClose }: TemplateEditMod
                   components={components}
                   onAssignComponent={handleAssignComponent}
                   onUnassignComponent={handleUnassignComponent}
+                  onUpdateColumns={v => updateOrientationLayout('columns', v)}
+                  onUpdateRows={v => updateOrientationLayout('rows', v)}
+                  onSplitArea={handleSplitArea}
                 />
               </div>
             </div>
