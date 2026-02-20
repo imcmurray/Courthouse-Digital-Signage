@@ -1519,9 +1519,14 @@ app.get('/api/displays/:id/idle-content', displayLimiter, authenticateApiKey, as
             { expiresAt: { gte: new Date() } }
           ],
         },
+        include: { displays: true },
         orderBy: { sortOrder: 'asc' },
       });
-      modules.info_cards = { cards };
+      const id = req.params.id;
+      const filteredCards = cards.filter(c =>
+        c.displays.length === 0 || c.displays.some(d => d.displayId === id)
+      );
+      modules.info_cards = { cards: filteredCards.map(({ displays, ...rest }) => rest) };
     }
 
     // News articles
@@ -1986,7 +1991,8 @@ app.get('/api/idle-content-cards', authenticateToken, async (req: AuthenticatedR
     const cards = await prisma.idleContentCard.findMany({
       where: Object.keys(where).length > 0 ? where : undefined,
       include: {
-        createdBy: { select: { id: true, name: true, email: true } }
+        createdBy: { select: { id: true, name: true, email: true } },
+        displays: { include: { display: { select: { id: true, name: true } } } },
       },
       orderBy: { sortOrder: 'asc' },
     });
@@ -2002,7 +2008,7 @@ app.get('/api/idle-content-cards', authenticateToken, async (req: AuthenticatedR
 // POST /api/idle-content-cards - Create an idle content card
 app.post('/api/idle-content-cards', authenticateToken, requireEditor, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { title, body, icon, sortOrder = 100, enabled = true, expiresAt } = req.body;
+    const { title, body, icon, sortOrder = 100, enabled = true, expiresAt, displayIds } = req.body;
 
     if (!title || typeof title !== 'string' || title.length === 0) {
       return res.status(400).json({ error: 'Title is required' });
@@ -2020,9 +2026,13 @@ app.post('/api/idle-content-cards', authenticateToken, requireEditor, async (req
         enabled: typeof enabled === 'boolean' ? enabled : true,
         expiresAt: expiresAt ? new Date(expiresAt) : null,
         createdById: req.user?.userId || null,
+        ...(Array.isArray(displayIds) && displayIds.length > 0
+          ? { displays: { create: displayIds.map((id: string) => ({ displayId: id })) } }
+          : {}),
       },
       include: {
-        createdBy: { select: { id: true, name: true, email: true } }
+        createdBy: { select: { id: true, name: true, email: true } },
+        displays: { include: { display: { select: { id: true, name: true } } } },
       },
     });
 
@@ -2045,9 +2055,10 @@ app.post('/api/idle-content-cards', authenticateToken, requireEditor, async (req
 // PUT /api/idle-content-cards/:id - Update an idle content card
 app.put('/api/idle-content-cards/:id', authenticateToken, requireEditor, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { title, body, icon, sortOrder, enabled, expiresAt } = req.body;
+    const { title, body, icon, sortOrder, enabled, expiresAt, displayIds } = req.body;
+    const id = req.params.id;
 
-    const existing = await prisma.idleContentCard.findUnique({ where: { id: req.params.id } });
+    const existing = await prisma.idleContentCard.findUnique({ where: { id } });
     if (!existing) {
       return res.status(404).json({ error: 'Idle content card not found' });
     }
@@ -2070,15 +2081,34 @@ app.put('/api/idle-content-cards/:id', authenticateToken, requireEditor, async (
     if (enabled !== undefined) updateData.enabled = enabled;
     if (expiresAt !== undefined) updateData.expiresAt = expiresAt ? new Date(expiresAt) : null;
 
-    const card = await prisma.idleContentCard.update({
-      where: { id: req.params.id },
-      data: updateData,
+    // If displayIds explicitly provided, replace display assignments in a transaction
+    if (displayIds !== undefined) {
+      await prisma.$transaction([
+        prisma.displayIdleContentCard.deleteMany({ where: { idleContentCardId: id } }),
+        prisma.idleContentCard.update({ where: { id }, data: updateData }),
+        ...(Array.isArray(displayIds) && displayIds.length > 0
+          ? [prisma.displayIdleContentCard.createMany({
+              data: displayIds.map((did: string) => ({ displayId: did, idleContentCardId: id })),
+            })]
+          : []),
+      ]);
+    } else {
+      await prisma.idleContentCard.update({
+        where: { id },
+        data: updateData,
+      });
+    }
+
+    // Re-fetch with displays included
+    const card = await prisma.idleContentCard.findUnique({
+      where: { id },
       include: {
-        createdBy: { select: { id: true, name: true, email: true } }
+        createdBy: { select: { id: true, name: true, email: true } },
+        displays: { include: { display: { select: { id: true, name: true } } } },
       },
     });
 
-    console.log(`[DB] UPDATE idle_content_cards WHERE id = ${req.params.id}`);
+    console.log(`[DB] UPDATE idle_content_cards WHERE id = ${id}`);
 
     const cardChanges: Record<string, { from: unknown; to: unknown }> = {};
     for (const [key, newValue] of Object.entries(updateData)) {
@@ -2087,7 +2117,7 @@ app.put('/api/idle-content-cards/:id', authenticateToken, requireEditor, async (
         cardChanges[key] = { from: oldValue, to: newValue };
       }
     }
-    await createAuditLog('update', 'idle_content_card', req.params.id, req.user?.userId || null,
+    await createAuditLog('update', 'idle_content_card', id, req.user?.userId || null,
       Object.keys(cardChanges).length > 0 ? cardChanges : updateData);
 
     io.emit('idle-content:update', {});

@@ -104,9 +104,10 @@ model Display {
   updatedAt        DateTime  @updatedAt @map("updated_at")
 
   // Relations
-  docketEntries DisplayDocketEntry[]
-  announcements DisplayAnnouncement[]
-  apiKeys       ApiKey[]
+  docketEntries    DisplayDocketEntry[]
+  announcements    DisplayAnnouncement[]
+  idleContentCards DisplayIdleContentCard[]
+  apiKeys          ApiKey[]
 
   @@map("displays")
 }
@@ -132,6 +133,17 @@ model DisplayAnnouncement {
 
   @@id([displayId, announcementId])
   @@map("display_announcements")
+}
+
+model DisplayIdleContentCard {
+  displayId         String @map("display_id")
+  idleContentCardId String @map("idle_content_card_id")
+
+  display         Display         @relation(fields: [displayId], references: [id], onDelete: Cascade)
+  idleContentCard IdleContentCard @relation(fields: [idleContentCardId], references: [id], onDelete: Cascade)
+
+  @@id([displayId, idleContentCardId])
+  @@map("display_idle_content_cards")
 }
 
 model Announcement {
@@ -250,7 +262,8 @@ model IdleContentCard {
   updatedAt   DateTime  @updatedAt @map("updated_at")
   createdById String?   @map("created_by")
 
-  createdBy User? @relation(fields: [createdById], references: [id])
+  createdBy User?                    @relation(fields: [createdById], references: [id])
+  displays  DisplayIdleContentCard[]
 
   @@map("idle_content_cards")
 }

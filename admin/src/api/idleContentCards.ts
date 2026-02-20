@@ -1,5 +1,10 @@
 import apiClient from './client';
 
+export interface IdleContentCardDisplay {
+  displayId: string;
+  display: { id: string; name: string };
+}
+
 export interface IdleContentCard {
   id: string;
   title: string;
@@ -15,6 +20,7 @@ export interface IdleContentCard {
     name: string;
     email: string;
   } | null;
+  displays?: IdleContentCardDisplay[];
 }
 
 export interface CreateIdleContentCardInput {
@@ -24,6 +30,7 @@ export interface CreateIdleContentCardInput {
   sortOrder?: number;
   enabled?: boolean;
   expiresAt?: string | null;
+  displayIds?: string[];
 }
 
 export interface UpdateIdleContentCardInput extends Partial<CreateIdleContentCardInput> {}
