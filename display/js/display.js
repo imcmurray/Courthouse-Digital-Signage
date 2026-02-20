@@ -1785,16 +1785,16 @@
       '<div class="idle-slide-title">COURT STATISTICS</div>' +
       '<div class="idle-stats-grid">' +
         '<div class="idle-stats-item">' +
-          '<div class="idle-stats-number">' + (stats.hearingsThisMonth || 0) + '</div>' +
-          '<div class="idle-stats-label">Hearings This Month</div>' +
+          '<div class="idle-stats-number">' + (stats.hearingsNext30 || 0) + '</div>' +
+          '<div class="idle-stats-label">Next 30 Days</div>' +
         '</div>' +
         '<div class="idle-stats-item">' +
-          '<div class="idle-stats-number">' + (stats.hearingsThisWeek || 0) + '</div>' +
-          '<div class="idle-stats-label">Hearings This Week</div>' +
+          '<div class="idle-stats-number">' + (stats.hearingsNext7 || 0) + '</div>' +
+          '<div class="idle-stats-label">Next 7 Days</div>' +
         '</div>' +
         '<div class="idle-stats-item">' +
-          '<div class="idle-stats-number">' + (stats.casesThisMonth || 0) + '</div>' +
-          '<div class="idle-stats-label">Cases This Month</div>' +
+          '<div class="idle-stats-number">' + (stats.casesNext30 || 0) + '</div>' +
+          '<div class="idle-stats-label">Cases Next 30 Days</div>' +
         '</div>' +
         '<div class="idle-stats-item">' +
           '<div class="idle-stats-number">' + (stats.judgesActive || 0) + '</div>' +

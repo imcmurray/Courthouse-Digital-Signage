@@ -1536,21 +1536,22 @@ app.get('/api/displays/:id/idle-content', displayLimiter, authenticateApiKey, as
     // Statistics
     if (enabledModules.includes('statistics')) {
       const now = new Date();
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      const weekStart = new Date(now);
-      weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-      weekStart.setHours(0, 0, 0, 0);
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const next7 = new Date(today);
+      next7.setDate(next7.getDate() + 7);
+      const next30 = new Date(today);
+      next30.setDate(next30.getDate() + 30);
 
-      const [hearingsThisMonth, hearingsThisWeek, casesThisMonth, nextHearingEntry] = await Promise.all([
+      const [hearingsNext30, hearingsNext7, casesNext30, nextHearingEntry] = await Promise.all([
         prisma.docketEntry.count({
-          where: { hearingDate: { gte: monthStart }, status: { notIn: ['cancelled', 'stricken'] } },
+          where: { hearingDate: { gte: today, lt: next30 }, status: { notIn: ['cancelled', 'stricken'] } },
         }),
         prisma.docketEntry.count({
-          where: { hearingDate: { gte: weekStart }, status: { notIn: ['cancelled', 'stricken'] } },
+          where: { hearingDate: { gte: today, lt: next7 }, status: { notIn: ['cancelled', 'stricken'] } },
         }),
         prisma.docketEntry.groupBy({
           by: ['caseNumber'],
-          where: { hearingDate: { gte: monthStart }, status: { notIn: ['cancelled', 'stricken'] } },
+          where: { hearingDate: { gte: today, lt: next30 }, status: { notIn: ['cancelled', 'stricken'] } },
         }),
         prisma.docketEntry.findFirst({
           where: {
@@ -1562,17 +1563,17 @@ app.get('/api/displays/:id/idle-content', displayLimiter, authenticateApiKey, as
         }),
       ]);
 
-      // Count distinct judges active this month
+      // Count distinct judges active in next 30 days
       const judgesActive = await prisma.docketEntry.groupBy({
         by: ['hearingJudge'],
-        where: { hearingDate: { gte: monthStart }, status: { notIn: ['cancelled', 'stricken'] } },
+        where: { hearingDate: { gte: today, lt: next30 }, status: { notIn: ['cancelled', 'stricken'] } },
       });
 
       modules.statistics = {
         stats: {
-          hearingsThisMonth,
-          hearingsThisWeek,
-          casesThisMonth: casesThisMonth.length,
+          hearingsNext30,
+          hearingsNext7,
+          casesNext30: casesNext30.length,
           judgesActive: judgesActive.length,
           nextHearingDate: nextHearingEntry?.hearingDate?.toISOString() || null,
         },
