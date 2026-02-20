@@ -746,21 +746,19 @@ function ComponentConfigEditor({ type, config, onChange, assignedComponentTypes 
               <option value="replace-panel">Replace Panel</option>
             </select>
           </div>
-          {config.mode === 'replace-panel' && (
-            <div>
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Target Panel</label>
-              <select
-                value={(config.target as string) || ''}
-                onChange={e => onChange({ ...config, target: e.target.value })}
-                className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white"
-              >
-                <option value="">Select a component...</option>
-                {assignedComponentTypes
-                  .filter(c => c.type !== 'idle-cards')
-                  .map(c => <option key={c.type} value={c.type}>{c.name}</option>)}
-              </select>
-            </div>
-          )}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Target Panel</label>
+            <select
+              value={(config.target as string) || ''}
+              onChange={e => onChange({ ...config, target: e.target.value })}
+              className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white"
+            >
+              <option value="">Select a component...</option>
+              {assignedComponentTypes
+                .filter(c => c.type !== 'idle-cards')
+                .map(c => <option key={c.type} value={c.type}>{c.name}</option>)}
+            </select>
+          </div>
         </div>
       );
     default:
