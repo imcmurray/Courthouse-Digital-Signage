@@ -2157,6 +2157,11 @@
 
     var modules = idleContentData.modules || {};
 
+    // Upcoming hearings slide (next scheduled date)
+    if (modules.upcoming_hearings && modules.upcoming_hearings.date && modules.upcoming_hearings.entries && modules.upcoming_hearings.entries.length > 0) {
+      slides.push(buildUpcomingHearingsSlide(modules.upcoming_hearings));
+    }
+
     // Info Card slides — one per card
     if (modules.info_cards && modules.info_cards.cards) {
       modules.info_cards.cards.forEach(function(card) {
@@ -2176,7 +2181,11 @@
       slides.push(buildStatisticsSlide(modules.statistics.stats));
     }
 
-    console.log('[idle] buildIdleSlides(summary=' + includeScheduleSummary + '): ' + slides.length + ' total slides (info_cards=' + ((modules.info_cards && modules.info_cards.cards) || []).length + ', news=' + ((modules.news && modules.news.articles) || []).length + ', stats=' + (modules.statistics && modules.statistics.stats ? 'yes' : 'no') + ')');
+    console.log('[idle] buildIdleSlides(summary=' + includeScheduleSummary + '): ' + slides.length + ' total slides (' +
+      'upcoming=' + (modules.upcoming_hearings && modules.upcoming_hearings.entries ? modules.upcoming_hearings.entries.length + ' entries' : 'none') +
+      ', info_cards=' + ((modules.info_cards && modules.info_cards.cards) || []).length +
+      ', news=' + ((modules.news && modules.news.articles) || []).length +
+      ', stats=' + (modules.statistics && modules.statistics.stats ? 'yes' : 'no') + ')');
     return slides;
   }
 
