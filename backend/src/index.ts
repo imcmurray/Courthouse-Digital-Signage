@@ -2378,6 +2378,13 @@ app.post('/api/content-cards/:id/activate', authenticateToken, requireEditor, as
 
     console.log(`[EMERGENCY] Activated card ${id}, level ${updated.emergencyLevel}, displays: ${displayIds ? displayIds.join(',') : 'ALL'}`);
 
+    // Backup: force a full page reload on displays after a delay.
+    // The 2s delay lets the primary emergency:activate handler render first;
+    // on reload, fetchEmergencyStatus() picks up the active emergency from the API.
+    setTimeout(() => {
+      io.emit('display:refresh');
+    }, 2000);
+
     await createAuditLog('emergency_activate', 'content_card', id, req.user?.userId || null, {
       emergencyLevel: updated.emergencyLevel,
       title: updated.title.length > 80 ? updated.title.slice(0, 80) + '…' : updated.title,
@@ -2419,6 +2426,11 @@ app.post('/api/content-cards/:id/deactivate', authenticateToken, requireEditor, 
     io.emit('emergency:deactivate', { cardId: id });
 
     console.log(`[EMERGENCY] Deactivated card ${id}`);
+
+    // Backup: force a full page reload so displays clear the emergency state.
+    setTimeout(() => {
+      io.emit('display:refresh');
+    }, 2000);
 
     await createAuditLog('emergency_deactivate', 'content_card', id, req.user?.userId || null, {
       emergencyLevel: card.emergencyLevel,
