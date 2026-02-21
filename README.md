@@ -151,6 +151,25 @@ cd display && npx serve -l 8080 .
 - Drag-to-reorder priority
 - Enable/disable toggle
 
+### Idle Content Cards
+- Slideshow content displayed on idle screens between docket views
+- System cards: upcoming hearings, court statistics (auto-generated)
+- Custom info cards with icons, expiration dates, and display targeting
+- Drag-to-reorder with per-display assignment
+- Configurable rotation interval
+
+### News
+- Automated scraping of court news articles
+- Manual scrape trigger from admin portal
+- Cached articles with pagination
+- Displays news on idle content slideshow
+
+### Display Templates
+- Configurable layout templates for different display types (courtroom, lobby, wayfinding, IT status)
+- Built-in templates with factory reset capability
+- Custom template creation with validated component types
+- Component types: hearing table, hearing pills, idle cards, direction cards, camera grid, system status
+
 ### Real-Time Updates
 - Socket.IO WebSocket connections between backend and all displays
 - Docket changes, announcement updates, and settings changes push instantly
@@ -180,6 +199,8 @@ Interactive API documentation (Swagger UI) is available at `/api-docs` — e.g. 
 ### Display Client (API Key)
 - `GET /api/displays/:id/config` - Display configuration + global settings
 - `GET /api/displays/:id/docket` - Filtered docket entries for display
+- `GET /api/displays/:id/idle-content` - Aggregated idle content modules
+- `GET /api/displays/:id/system-status` - System health, display statuses, calendar sync
 - `POST /api/displays/:id/heartbeat` - Heartbeat
 
 ### Admin Portal (JWT)
@@ -190,6 +211,9 @@ Interactive API documentation (Swagger UI) is available at `/api-docs` — e.g. 
 - `/api/settings/*` - Settings CRUD, logo upload
 - `/api/calendar-import/*` - Import trigger, config, history
 - `/api/users/*` - User management
+- `/api/idle-content-cards/*` - Idle content card CRUD, reorder
+- `/api/news/*` - News article listing, scrape trigger
+- `/api/display-templates/*` - Display template CRUD, reset
 - `/api/audit-logs` - Audit log queries
 - `/api/stats` - Dashboard statistics
 - `/api/export`, `/api/import`, `/api/clear` - Data management
