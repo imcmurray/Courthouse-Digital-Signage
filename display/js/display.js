@@ -869,6 +869,7 @@
     if (!tbody) return;
 
     var idleEnabled = displayConfig.showIdleContent && idleContentData && idleContentData.enabled;
+    console.log('[idle-interleave] renderDocket: showIdleContent=' + displayConfig.showIdleContent + ', data=' + !!idleContentData + ', dataEnabled=' + (idleContentData && idleContentData.enabled) + ', idleEnabled=' + idleEnabled + ', hearings=' + docketData.length);
 
     // --- Zero hearings ---
     if (docketData.length === 0) {
@@ -963,6 +964,10 @@
       // Append idle slides as additional pages
       if (idleEnabled) {
         var idleSlideHtmls = buildIdleSlides(false); // no schedule summary (docket IS the schedule)
+        console.log('[idle-interleave] Paginated docket: appending ' + idleSlideHtmls.length + ' idle slides to ' + pages.length + ' docket pages');
+        if (idleSlideHtmls.length === 0) {
+          console.log('[idle-interleave] No idle slides: check that info_cards, news, or statistics modules have content');
+        }
         idleSlideHtmls.forEach(function(slideHtml) {
           pages.push({ html: slideHtml, type: 'idle', priority: 'low', contLabel: null });
         });
@@ -997,6 +1002,10 @@
       // Even though docket fits on one page, idle slides may create multi-page rotation
       if (idleEnabled) {
         var idleSlideHtmls2 = buildIdleSlides(false);
+        console.log('[idle-interleave] Single-page docket: ' + idleSlideHtmls2.length + ' idle slides');
+        if (idleSlideHtmls2.length === 0) {
+          console.log('[idle-interleave] No idle slides: check that info_cards, news, or statistics modules have content');
+        }
         if (idleSlideHtmls2.length > 0) {
           var docketPageHtml = tbody.innerHTML;
           var pages3 = [{ html: docketPageHtml, type: 'docket', priority: 'low', contLabel: null }];
@@ -1603,6 +1612,11 @@
     // Store active template for renderer access
     activeTemplate = template;
 
+    var idleCompLog = components.find(function(c) { return c.type === 'idle-cards'; });
+    console.log('[template] Applied template: ' + (template.slug || displayConfig.displayType || 'fallback') +
+      ', components: ' + components.map(function(c) { return c.type; }).join(', ') +
+      ', idle-cards config: ' + JSON.stringify(idleCompLog ? idleCompLog.config : null));
+
     // Apply display-type-specific tweaks (title changes, CSS classes)
     applyTypeSpecificTweaks();
   }
@@ -1826,38 +1840,60 @@
 
   // Handle idle-cards component behavior
   function handleIdleCards() {
-    if (!activeTemplate) return;
+    if (!activeTemplate) { console.log('[idle] No activeTemplate'); return; }
 
     var idleComp = null;
     activeTemplate.components.forEach(function(comp) {
       if (comp.type === 'idle-cards') idleComp = comp;
     });
-    if (!idleComp) return;
+    if (!idleComp) { console.log('[idle] No idle-cards component in template'); return; }
 
     var config = idleComp.config || {};
     var mode = config.mode || 'interleave-pagination';
 
+    // Auto-correct: if mode is interleave-pagination but template has no hearing-table,
+    // interleave has nowhere to run (renderDocket needs #docket-body). Fall back to
+    // replace-panel when a target is specified.
+    if (mode === 'interleave-pagination' && config.target) {
+      var hasHearingTable = activeTemplate.components.some(function(c) { return c.type === 'hearing-table'; });
+      if (!hasHearingTable) {
+        console.log('[idle] Auto-correcting mode: interleave-pagination → replace-panel (no hearing-table in template, target=' + config.target + ')');
+        mode = 'replace-panel';
+      }
+    }
+
+    console.log('[idle] handleIdleCards: mode=' + mode + ', target=' + (config.target || 'none') + ', showWhen=' + (config.showWhen || 'when-idle'));
+
     if (mode === 'replace-panel' && config.target) {
       var targetCell = document.querySelector('.template-cell[data-component-type="' + config.target + '"]');
       var idleOverlay = document.getElementById('idle-content-overlay');
-      if (!targetCell || !idleOverlay) return;
+      if (!targetCell || !idleOverlay) {
+        console.log('[idle] replace-panel DOM not found: targetCell=' + !!targetCell + ', overlay=' + !!idleOverlay);
+        return;
+      }
 
       var showWhen = config.showWhen || 'when-idle';
       var isIdle = (showWhen === 'always') || (docketData.length === 0);
       var idleEnabled = idleContentData && idleContentData.enabled;
+      console.log('[idle] replace-panel check: isIdle=' + isIdle + ' (showWhen=' + showWhen + ', hearings=' + docketData.length + '), idleEnabled=' + idleEnabled + ' (data=' + !!idleContentData + ', enabled=' + (idleContentData && idleContentData.enabled) + '), idleContentActive=' + idleContentActive);
 
       if (isIdle && idleEnabled) {
         if (!idleContentActive) {
           targetCell.style.display = 'none';
           // Position idle overlay in the target's grid area
           idleOverlay.style.gridArea = targetCell.style.gridArea;
+          idleOverlay.style.backgroundColor = 'var(--navy-dark)';
           var slides = buildIdleSlides(true);
+          console.log('[idle] Activating replace-panel: ' + slides.length + ' slides');
           if (slides.length > 0) {
             activateIdleSlideshow(idleOverlay, slides);
+          } else {
+            console.log('[idle] replace-panel: no slides to show');
           }
         }
       } else {
         if (idleContentActive) {
+          console.log('[idle] Deactivating replace-panel idle content');
           deactivateIdleContentForType('idle-content-overlay', null);
           targetCell.style.display = '';
           idleOverlay.style.display = 'none';
@@ -1872,7 +1908,8 @@
   // =============================================
 
   async function fetchIdleContent() {
-    if (screensaverActive) return;
+    if (screensaverActive) { console.log('[idle] fetchIdleContent skipped: screensaver active'); return; }
+    console.log('[idle] fetchIdleContent: fetching from /api/displays/' + CONFIG.displayId + '/idle-content');
     try {
       var response = await fetch(
         CONFIG.apiBaseUrl + '/api/displays/' + encodeURIComponent(CONFIG.displayId) + '/idle-content',
@@ -1880,15 +1917,22 @@
       );
       if (response.ok) {
         idleContentData = await response.json();
+        console.log('[idle] fetchIdleContent result:', JSON.stringify({
+          enabled: idleContentData.enabled,
+          modules: Object.keys(idleContentData.modules || {}),
+          rotationInterval: idleContentData.rotationInterval
+        }));
         // Re-render to pick up idle content (handles both first-load race
         // condition and periodic refreshes with updated data)
         if (idleContentActive) {
           deactivateIdleContentForType('idle-content-overlay', null);
         }
         renderAllComponents();
+      } else {
+        console.log('[idle] fetchIdleContent failed: HTTP ' + response.status);
       }
     } catch (error) {
-      console.error('Failed to fetch idle content:', error);
+      console.error('[idle] fetchIdleContent error:', error);
     }
   }
 
@@ -2106,7 +2150,10 @@
       slides.push(buildTodayScheduleSummarySlide(docketData, new Date()));
     }
 
-    if (!idleContentData || !idleContentData.enabled) return slides;
+    if (!idleContentData || !idleContentData.enabled) {
+      console.log('[idle] buildIdleSlides(summary=' + includeScheduleSummary + '): data=' + !!idleContentData + ', enabled=' + (idleContentData && idleContentData.enabled) + ' → returning ' + slides.length + ' slides (schedule only)');
+      return slides;
+    }
 
     var modules = idleContentData.modules || {};
 
@@ -2129,11 +2176,13 @@
       slides.push(buildStatisticsSlide(modules.statistics.stats));
     }
 
+    console.log('[idle] buildIdleSlides(summary=' + includeScheduleSummary + '): ' + slides.length + ' total slides (info_cards=' + ((modules.info_cards && modules.info_cards.cards) || []).length + ', news=' + ((modules.news && modules.news.articles) || []).length + ', stats=' + (modules.statistics && modules.statistics.stats ? 'yes' : 'no') + ')');
     return slides;
   }
 
   // Activate an idle content slideshow in a container (used by wayfinding and IT status)
   function activateIdleSlideshow(container, slides) {
+    console.log('[idle] activateIdleSlideshow: container=' + (container ? container.id : 'null') + ', slides=' + slides.length);
     if (!container || slides.length === 0) return;
 
     idleSlides = slides;

@@ -2370,6 +2370,13 @@ function validateComponents(components: unknown): string | null {
   for (const comp of components) {
     if (!comp || typeof comp !== 'object') return 'Each component must be an object';
     if (!VALID_COMPONENT_TYPES.includes(comp.type)) return `Invalid component type: ${comp.type}`;
+    // Validate idle-cards config
+    if (comp.type === 'idle-cards' && comp.config) {
+      const mode = comp.config.mode || 'interleave-pagination';
+      if (mode === 'replace-panel' && !comp.config.target) {
+        return 'idle-cards in replace-panel mode requires a target component';
+      }
+    }
     // Validate gridArea if present
     if (comp.gridArea !== undefined) {
       if (typeof comp.gridArea === 'string') continue; // legacy string format is OK

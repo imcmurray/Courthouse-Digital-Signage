@@ -740,7 +740,15 @@ function ComponentConfigEditor({ type, config, onChange, assignedComponentTypes 
             <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Mode</label>
             <select
               value={(config.mode as string) || 'interleave-pagination'}
-              onChange={e => onChange({ ...config, mode: e.target.value })}
+              onChange={e => {
+                const newMode = e.target.value;
+                // Clear target when switching to interleave (it doesn't use a target)
+                if (newMode === 'interleave-pagination') {
+                  onChange({ ...config, mode: newMode, target: undefined });
+                } else {
+                  onChange({ ...config, mode: newMode });
+                }
+              }}
               className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white"
             >
               <option value="interleave-pagination">Interleave with Pagination</option>
@@ -749,14 +757,15 @@ function ComponentConfigEditor({ type, config, onChange, assignedComponentTypes 
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
               {(config.mode || 'interleave-pagination') === 'replace-panel'
                 ? 'Replaces the target panel with idle content cards when no hearings are scheduled.'
-                : 'Idle content cards are mixed into the target panel\u2019s pagination cycle.'}
+                : 'Idle content cards are added as extra pages in the hearing table\u2019s pagination cycle.'}
             </p>
           </div>
+          {(config.mode || 'interleave-pagination') === 'replace-panel' && (
           <div>
             <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Target Panel</label>
             <select
               value={(config.target as string) || ''}
-              onChange={e => onChange({ ...config, target: e.target.value })}
+              onChange={e => onChange({ ...config, target: e.target.value || undefined })}
               className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white"
             >
               <option value="">Select a component...</option>
@@ -765,6 +774,7 @@ function ComponentConfigEditor({ type, config, onChange, assignedComponentTypes 
                 .map(c => <option key={c.type} value={c.type}>{c.name}</option>)}
             </select>
           </div>
+          )}
           <div>
             <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Show When</label>
             <select
