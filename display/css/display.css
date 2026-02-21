@@ -46,6 +46,30 @@ html, body {
   padding-bottom: calc(var(--notice-height) + var(--ticker-height));
 }
 
+/* Template-driven main content area */
+#template-content {
+  position: relative;
+  height: calc(100vh - var(--header-height) - var(--notice-height) - var(--ticker-height));
+  overflow: hidden;
+}
+
+.template-cell {
+  position: relative;
+  overflow: hidden;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Hearing pills panel (used in wayfinding and IT status templates) */
+#hearing-pills-panel h4 {
+  color: var(--primary-yellow);
+  font-size: 22px;
+  font-weight: bold;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 16px;
+}
+
 /* Header Section */
 .header {
   height: var(--header-height);

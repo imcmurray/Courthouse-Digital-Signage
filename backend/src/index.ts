@@ -1366,6 +1366,11 @@ app.get('/api/displays/:id/config', displayLimiter, authenticateApiKey, async (r
       return res.status(404).json({ error: 'Display not found' });
     }
 
+    // Look up the display type template for this display
+    const template = await prisma.displayTypeTemplate.findUnique({
+      where: { slug: display.displayType || 'courtroom' }
+    });
+
     // Fetch global settings for court name, subtitle, and logo
     const settings = await prisma.setting.findMany({
       where: {
@@ -1425,6 +1430,11 @@ app.get('/api/displays/:id/config', displayLimiter, authenticateApiKey, async (r
         return cameras.length > 0 ? { cameras } : null;
       })(),
       showIdleContent: display.showIdleContent,
+      template: template ? {
+        slug: template.slug,
+        components: JSON.parse(template.components),
+        layout: template.layout ? JSON.parse(template.layout) : null,
+      } : null,
       displayTemplate: (() => {
         if (!display.displayTemplate) return null;
         try {

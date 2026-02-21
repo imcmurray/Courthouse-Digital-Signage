@@ -634,7 +634,8 @@ function SortableComponent({ component, onRemove, onUpdateConfig, isExpanded, on
   };
 
   const info = DISPLAY_COMPONENTS[component.type];
-  const isBehavioral = component.type === 'idle-cards' && component.config.mode === 'replace-panel';
+  const idleMode = component.type === 'idle-cards' ? (component.config.mode as string) || 'interleave-pagination' : null;
+  const idleBadgeLabel = idleMode === 'replace-panel' ? 'Replace' : idleMode ? 'Interleave' : null;
 
   // Placement badges
   const lArea = component.gridArea?.landscape;
@@ -661,8 +662,8 @@ function SortableComponent({ component, onRemove, onUpdateConfig, isExpanded, on
         </button>
         <div className="flex-1 min-w-0 flex items-center gap-2">
           <span className="text-sm font-medium text-gray-900 dark:text-white">{info?.name || component.type}</span>
-          {isBehavioral ? (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400">Overlay</span>
+          {idleBadgeLabel ? (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400">{idleBadgeLabel}</span>
           ) : (lArea || pArea) ? (
             <span className="text-[10px] font-mono text-gray-400 dark:text-gray-500">
               {lArea && `L:${lArea}`}{lArea && pArea && ' '}{pArea && `P:${pArea}`}
@@ -745,6 +746,11 @@ function ComponentConfigEditor({ type, config, onChange, assignedComponentTypes 
               <option value="interleave-pagination">Interleave with Pagination</option>
               <option value="replace-panel">Replace Panel</option>
             </select>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              {(config.mode || 'interleave-pagination') === 'replace-panel'
+                ? 'Replaces the target panel with idle content cards when no hearings are scheduled.'
+                : 'Idle content cards are mixed into the target panel\u2019s pagination cycle.'}
+            </p>
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Target Panel</label>
@@ -758,6 +764,22 @@ function ComponentConfigEditor({ type, config, onChange, assignedComponentTypes 
                 .filter(c => c.type !== 'idle-cards')
                 .map(c => <option key={c.type} value={c.type}>{c.name}</option>)}
             </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Show When</label>
+            <select
+              value={(config.showWhen as string) || 'when-idle'}
+              onChange={e => onChange({ ...config, showWhen: e.target.value })}
+              className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white"
+            >
+              <option value="when-idle">When no hearings</option>
+              <option value="always">Always</option>
+            </select>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              {(config.showWhen || 'when-idle') === 'always'
+                ? 'Idle cards display regardless of hearing schedule.'
+                : 'Idle cards only appear when the target panel has no hearings to show.'}
+            </p>
           </div>
         </div>
       );

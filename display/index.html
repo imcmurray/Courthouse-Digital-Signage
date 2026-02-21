@@ -37,73 +37,14 @@
     </div>
   </header>
 
-  <!-- Docket Table (courtroom, combined, chambers) -->
-  <section id="display-docket" class="display-type-section">
-    <section class="docket-section">
-      <div class="docket-header">
-        <h3 id="docket-title">TODAY'S HEARING CALENDAR</h3>
-      </div>
-      <div class="docket-table-container" id="docket-container">
-        <table class="docket-table">
-          <thead>
-            <tr>
-              <th>NAME</th>
-              <th>CH</th>
-              <th>TIME</th>
-              <th>CASE #</th>
-              <th>MATTER</th>
-              <th>ROOM</th>
-              <th>JUDGE</th>
-            </tr>
-          </thead>
-          <tbody id="docket-body">
-            <!-- Docket entries will be populated here -->
-            <tr class="placeholder-row">
-              <td colspan="7">Loading docket entries...</td>
-            </tr>
-          </tbody>
-        </table>
-        <div id="idle-content-container" class="idle-content-container" style="display: none;"></div>
-      </div>
-    </section>
+  <!-- Template-driven main content area -->
+  <main id="template-content"></main>
 
-    <!-- Legend Bar: pagination info (left) + Zoom connection details (right) -->
-    <div id="zoom-legend">
-      <div class="legend-bar-left" id="pagination-info"></div>
-      <div class="legend-bar-right" id="zoom-legend-content"></div>
-    </div>
-  </section>
-
-  <!-- Wayfinding Directory -->
-  <section id="display-wayfinding" class="display-type-section" style="display: none;">
-    <div class="wayfinding-container">
-      <div id="wayfinding-idle-content-container" class="idle-content-container" style="display: none;"></div>
-      <div class="wayfinding-hearings" id="wayfinding-hearings">
-        <!-- Simplified hearing list grouped by location -->
-      </div>
-      <div class="wayfinding-directions" id="wayfinding-directions">
-        <!-- Directional cards -->
-      </div>
-    </div>
-  </section>
-
-  <!-- IT Status Monitor -->
-  <section id="display-it-status" class="display-type-section" style="display: none;">
-    <div class="it-status-container">
-      <div class="it-left-column">
-        <div class="it-video-panel" id="it-camera-grid">
-          <!-- Camera tiles created dynamically by JS -->
-        </div>
-        <div class="it-system-status" id="it-system-status">
-          <!-- System status populated by JS -->
-        </div>
-      </div>
-      <div class="it-info-panel" id="it-schedule-panel">
-        <!-- Judge schedule populated by renderItHearings() -->
-      </div>
-      <div id="it-idle-content-container" class="idle-content-container" style="display: none;"></div>
-    </div>
-  </section>
+  <!-- Legend Bar: pagination info (left) + Zoom connection details (right) -->
+  <div id="zoom-legend">
+    <div class="legend-bar-left" id="pagination-info"></div>
+    <div class="legend-bar-right" id="zoom-legend-content"></div>
+  </div>
 
   <!-- Bottom Bar: Notice Banner + Announcement Ticker -->
   <footer class="bottom-bar">

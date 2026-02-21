@@ -63,9 +63,12 @@
   let idleRotationTimer = null;
   let idleContentActive = false;
 
+  // Template engine state
+  var activeTemplate = null;
+  var cameraGridInitialized = false;
+
   // =============================================
   // Display Component Registry & Default Templates
-  // (Groundwork for future visual template builder)
   // =============================================
 
   var DISPLAY_COMPONENTS = {
@@ -82,34 +85,45 @@
       components: [
         { type: 'hearing-table', config: { viewMode: 'smart' } },
         { type: 'idle-cards', config: { mode: 'interleave-pagination' } }
-      ]
+      ],
+      layout: null // single flex column
     },
     chambers: {
       components: [
         { type: 'hearing-table', config: { viewMode: 'smart', hideColumns: ['judge'] } },
         { type: 'idle-cards', config: { mode: 'interleave-pagination' } }
-      ]
+      ],
+      layout: null
     },
     combined: {
       components: [
         { type: 'hearing-table', config: { viewMode: 'all' } },
         { type: 'idle-cards', config: { mode: 'interleave-pagination' } }
-      ]
+      ],
+      layout: null
     },
     wayfinding: {
       components: [
-        { type: 'hearing-pills', config: {} },
-        { type: 'direction-cards', config: {} },
+        { type: 'hearing-pills', config: {}, gridArea: { landscape: 'left', portrait: 'top' } },
+        { type: 'direction-cards', config: {}, gridArea: { landscape: 'right', portrait: 'bottom' } },
         { type: 'idle-cards', config: { mode: 'replace-panel', target: 'hearing-pills' } }
-      ]
+      ],
+      layout: {
+        landscape: { columns: '40% 60%', rows: '1fr', areas: [['left', 'right']] },
+        portrait: { columns: '1fr', rows: '45% 55%', areas: [['top'], ['bottom']] }
+      }
     },
     'it-status': {
       components: [
-        { type: 'camera-grid', config: {} },
-        { type: 'system-status', config: {} },
-        { type: 'hearing-pills', config: {} },
+        { type: 'camera-grid', config: {}, gridArea: { landscape: 'cameras', portrait: 'cameras' } },
+        { type: 'system-status', config: {}, gridArea: { landscape: 'status', portrait: 'status' } },
+        { type: 'hearing-pills', config: {}, gridArea: { landscape: 'pills', portrait: 'pills' } },
         { type: 'idle-cards', config: { mode: 'replace-panel', target: 'hearing-pills' } }
-      ]
+      ],
+      layout: {
+        landscape: { columns: '60% 40%', rows: '1fr auto', areas: [['cameras', 'pills'], ['status', 'pills']] },
+        portrait: { columns: '1fr', rows: '1fr auto 1fr', areas: [['cameras'], ['status'], ['pills']] }
+      }
     }
   };
 
@@ -338,8 +352,8 @@
       startTickerAnimation();
     }
 
-    // Apply display type (shows/hides sections, applies type-specific tweaks)
-    applyDisplayType();
+    // Apply template (creates component grid, scaffolds DOM)
+    applyTemplate();
 
     // Check schedule after config loads
     checkSchedule();
@@ -362,7 +376,7 @@
       if (response.ok) {
         const data = await response.json();
         docketData = data.entries || [];
-        renderForDisplayType();
+        renderAllComponents();
         handleConnectionChange(true);
         lastUpdate = new Date();
       }
@@ -1507,69 +1521,349 @@
   }
 
   // =============================================
-  // Display Type Routing
+  // Template Engine
   // =============================================
 
   // IT Status state
   let hlsPlayers = [];
   let testPatternTimers = [];
 
-  // Show/hide sections based on display type
-  function applyDisplayType() {
-    const type = displayConfig.displayType || 'courtroom';
-    const sections = document.querySelectorAll('.display-type-section');
-    sections.forEach(function(s) { s.style.display = 'none'; });
+  // Component renderer registry
+  var COMPONENT_RENDERERS = {
+    'hearing-table': renderHearingTableComponent,
+    'hearing-pills': renderHearingPillsComponent,
+    'direction-cards': renderDirectionCardsComponent,
+    'camera-grid': renderCameraGridComponent,
+    'system-status': renderSystemStatusComponent
+  };
 
-    if (type === 'wayfinding') {
-      var el = document.getElementById('display-wayfinding');
-      if (el) el.style.display = 'block';
-    } else if (type === 'it-status') {
-      var el2 = document.getElementById('display-it-status');
-      if (el2) el2.style.display = 'block';
-      initItStatus();
+  // Apply the active template: create CSS Grid layout and scaffold component DOM
+  function applyTemplate() {
+    var container = document.getElementById('template-content');
+    if (!container) return;
+    container.innerHTML = '';
+
+    // Reset camera grid state so it re-initializes
+    cameraGridInitialized = false;
+
+    // Resolve template: from server config, or local fallback
+    var template = displayConfig.template;
+    if (!template) {
+      var slug = displayConfig.displayType || 'courtroom';
+      template = DEFAULT_DISPLAY_TEMPLATES[slug] || DEFAULT_DISPLAY_TEMPLATES.courtroom;
+    }
+
+    var orientation = displayConfig.orientation || 'landscape';
+    var layout = template.layout && template.layout[orientation];
+
+    if (layout && layout.areas && layout.areas.length > 0) {
+      // Multi-cell CSS Grid
+      container.style.display = 'grid';
+      container.style.gridTemplateColumns = layout.columns || '1fr';
+      container.style.gridTemplateRows = layout.rows || '1fr';
+      container.style.gap = layout.gap || '0px';
+      container.style.gridTemplateAreas = layout.areas
+        .map(function(row) { return '"' + row.join(' ') + '"'; })
+        .join(' ');
     } else {
-      // courtroom, combined, chambers all use the docket section
-      var el3 = document.getElementById('display-docket');
-      if (el3) el3.style.display = 'block';
-      if (type === 'chambers') {
-        applyChambersTweaks();
+      // Single-column default
+      container.style.display = 'flex';
+      container.style.flexDirection = 'column';
+    }
+
+    // Create cells for each component
+    var components = template.components || [];
+    components.forEach(function(comp) {
+      // Skip idle-cards — it's a behavior, not a visual cell
+      if (comp.type === 'idle-cards') return;
+
+      var cell = document.createElement('div');
+      cell.className = 'template-cell';
+      cell.dataset.componentType = comp.type;
+
+      // Apply grid area if defined
+      var area = comp.gridArea && comp.gridArea[orientation];
+      if (area) {
+        cell.style.gridArea = area;
       }
-      // Customize courtroom displays with a room filter
-      if (type === 'courtroom' && displayConfig.courtroomFilter) {
-        document.body.classList.add('courtroom-mode');
-        var titleEl = document.getElementById('docket-title');
-        if (titleEl) {
-          titleEl.textContent = "TODAY'S HEARING CALENDAR For Courtroom " + displayConfig.courtroomFilter;
+
+      // Scaffold the inner DOM for this component type
+      scaffoldComponent(cell, comp.type);
+
+      container.appendChild(cell);
+    });
+
+    // Create idle content overlay (hidden by default, activated by idle system)
+    var idleCell = document.createElement('div');
+    idleCell.id = 'idle-content-overlay';
+    idleCell.className = 'idle-content-container';
+    idleCell.style.display = 'none';
+    container.appendChild(idleCell);
+
+    // Store active template for renderer access
+    activeTemplate = template;
+
+    // Apply display-type-specific tweaks (title changes, CSS classes)
+    applyTypeSpecificTweaks();
+  }
+
+  // Create the inner DOM structure for a given component type
+  function scaffoldComponent(cell, type) {
+    if (type === 'hearing-table') {
+      cell.style.flex = '1';
+      cell.style.display = 'flex';
+      cell.style.flexDirection = 'column';
+      cell.innerHTML =
+        '<section class="docket-section">' +
+          '<div class="docket-header">' +
+            '<h3 id="docket-title">TODAY\'S HEARING CALENDAR</h3>' +
+          '</div>' +
+          '<div class="docket-table-container" id="docket-container">' +
+            '<table class="docket-table">' +
+              '<thead><tr>' +
+                '<th>NAME</th><th>CH</th><th>TIME</th><th>CASE #</th><th>MATTER</th><th>ROOM</th><th>JUDGE</th>' +
+              '</tr></thead>' +
+              '<tbody id="docket-body">' +
+                '<tr class="placeholder-row"><td colspan="7">Loading docket entries...</td></tr>' +
+              '</tbody>' +
+            '</table>' +
+            '<div id="idle-content-container" class="idle-content-container" style="display: none;"></div>' +
+          '</div>' +
+        '</section>';
+    } else if (type === 'hearing-pills') {
+      cell.style.backgroundColor = 'var(--navy-dark)';
+      cell.style.padding = '20px';
+      cell.style.overflowY = 'auto';
+      cell.innerHTML = '<div id="hearing-pills-panel"></div>';
+    } else if (type === 'direction-cards') {
+      cell.style.overflowY = 'auto';
+      cell.style.alignContent = 'start';
+      cell.className += ' wayfinding-directions';
+      cell.id = 'direction-cards-panel';
+    } else if (type === 'camera-grid') {
+      cell.style.backgroundColor = 'var(--black)';
+      cell.style.display = 'grid';
+      cell.style.gridTemplateColumns = 'repeat(2, 1fr)';
+      cell.style.gridTemplateRows = 'repeat(2, 1fr)';
+      cell.style.gap = '2px';
+      cell.style.overflow = 'hidden';
+      cell.id = 'it-camera-grid';
+    } else if (type === 'system-status') {
+      cell.className += ' it-system-status';
+      cell.id = 'it-system-status';
+    }
+  }
+
+  // Apply display-type-specific CSS classes and title customizations
+  function applyTypeSpecificTweaks() {
+    var type = displayConfig.displayType || 'courtroom';
+
+    // Chambers: add CSS class for column hiding, set title
+    if (type === 'chambers') {
+      document.body.classList.add('chambers-mode');
+      var titleEl = document.getElementById('docket-title');
+      if (titleEl && displayConfig.judgeFilter) {
+        titleEl.textContent = "TODAY'S HEARING CALENDAR For " + displayConfig.judgeFilter;
+      }
+    }
+
+    // Courtroom with room filter: customize title
+    if (type === 'courtroom' && displayConfig.courtroomFilter) {
+      document.body.classList.add('courtroom-mode');
+      var titleEl2 = document.getElementById('docket-title');
+      if (titleEl2) {
+        titleEl2.textContent = "TODAY'S HEARING CALENDAR For Courtroom " + displayConfig.courtroomFilter;
+      }
+    }
+
+    // Wayfinding: add separator border between columns
+    var hearingPillsCell = document.querySelector('.template-cell[data-component-type="hearing-pills"]');
+    if (type === 'wayfinding' && hearingPillsCell) {
+      if (displayConfig.orientation === 'portrait') {
+        hearingPillsCell.style.borderBottom = '3px solid var(--primary-yellow)';
+      } else {
+        hearingPillsCell.style.borderRight = '3px solid var(--primary-yellow)';
+      }
+    }
+
+    // IT Status: add separator border for hearing-pills panel
+    if (type === 'it-status' && hearingPillsCell) {
+      if (displayConfig.orientation === 'portrait') {
+        hearingPillsCell.style.borderTop = '3px solid var(--primary-yellow)';
+      } else {
+        hearingPillsCell.style.borderLeft = '3px solid var(--primary-yellow)';
+      }
+    }
+
+    // IT Status: system-status cell already gets border-top from .it-system-status CSS class
+  }
+
+  // Unified render function — dispatches to component renderers
+  function renderAllComponents() {
+    if (!activeTemplate) return;
+
+    activeTemplate.components.forEach(function(comp) {
+      if (comp.type === 'idle-cards') return; // handled separately
+
+      var renderer = COMPONENT_RENDERERS[comp.type];
+      if (renderer) {
+        renderer(comp.config || {});
+      }
+    });
+
+    // Handle idle-cards behavior
+    handleIdleCards();
+  }
+
+  // Component renderers
+
+  function renderHearingTableComponent(config) {
+    // Existing renderDocket() handles all docket table rendering
+    renderDocket();
+  }
+
+  function renderHearingPillsComponent(config) {
+    var panel = document.getElementById('hearing-pills-panel');
+    if (!panel) return;
+
+    if (docketData.length === 0) {
+      panel.innerHTML = '<h4>Today\'s Schedule by Judge</h4>' +
+        '<p style="color: rgba(255,255,255,0.5); font-style: italic;">No hearings scheduled</p>';
+      return;
+    }
+
+    var result = buildJudgeScheduleHtml(docketData, new Date());
+    panel.innerHTML = result.html;
+  }
+
+  function renderDirectionCardsComponent(config) {
+    var directionsEl = document.getElementById('direction-cards-panel');
+    if (!directionsEl) return;
+
+    // Need hearing counts for badges
+    var hearingCounts = {};
+    docketData.forEach(function(entry) {
+      var room = entry.courtroom || 'Unassigned';
+      if (!hearingCounts[room]) hearingCounts[room] = 0;
+      hearingCounts[room]++;
+    });
+
+    var directions = (displayConfig.wayfindingConfig && displayConfig.wayfindingConfig.directions) || [];
+    var directionsHtml = '';
+    directions.forEach(function(dir, index) {
+      // Count hearings matching this direction name (fuzzy case-insensitive)
+      var count = 0;
+      var dirNameLower = (dir.name || '').toLowerCase();
+      Object.keys(hearingCounts).forEach(function(room) {
+        if (room.toLowerCase().indexOf(dirNameLower) !== -1 || dirNameLower.indexOf(room.toLowerCase()) !== -1) {
+          count += hearingCounts[room];
+        }
+      });
+
+      var col = dir.column || 1;
+      var row = dir.row || (index + 1);
+      var cardClass = 'wayfinding-direction-card';
+      if (col === 2) cardClass += ' wayfinding-col-right';
+      if (dir.icon === 'emergency') cardClass += ' wayfinding-card-emergency';
+      directionsHtml += '<div class="' + cardClass + '" style="grid-column:' + col + ';grid-row:' + row + ';">';
+      directionsHtml += '<div class="wayfinding-arrow">' + getDirectionArrowSvg(dir.arrow || dir.direction) + '</div>';
+      directionsHtml += '<div class="wayfinding-card-info">';
+      directionsHtml += '<div class="wayfinding-card-name">' + escapeHtml(dir.name) + '</div>';
+      directionsHtml += '<div class="wayfinding-card-desc">' + escapeHtml(dir.description) + '</div>';
+      directionsHtml += '</div>';
+      if (count > 0 && dir.icon !== 'informational' && dir.icon !== 'emergency') {
+        directionsHtml += '<div class="wayfinding-card-badge">' + count + ' hearing' + (count !== 1 ? 's' : '') + '</div>';
+      }
+      directionsHtml += '</div>';
+    });
+
+    if (directions.length === 0) {
+      directionsHtml = '<p style="color: rgba(255,255,255,0.5); font-size: 24px; text-align: center; margin-top: 40px;">No directions configured</p>';
+    }
+
+    directionsEl.innerHTML = directionsHtml;
+  }
+
+  function renderCameraGridComponent(config) {
+    if (cameraGridInitialized) return;
+    cameraGridInitialized = true;
+
+    var gridEl = document.getElementById('it-camera-grid');
+    if (!gridEl) return;
+
+    // Clean up previous state
+    hlsPlayers.forEach(function(p) { if (p) p.destroy(); });
+    hlsPlayers = [];
+    testPatternTimers.forEach(function(t) { if (t) clearInterval(t); });
+    testPatternTimers = [];
+
+    var cameras = parseCamerasFromConfig();
+
+    if (cameras.length === 0) {
+      var tile = createCameraTile('No Camera Configured', '');
+      gridEl.appendChild(tile);
+    } else {
+      cameras.forEach(function(cam) {
+        var tile = createCameraTile(cam.name || '', cam.url || '');
+        gridEl.appendChild(tile);
+      });
+    }
+
+    // Start system status polling
+    fetchSystemStatus();
+    if (systemStatusTimer) clearInterval(systemStatusTimer);
+    systemStatusTimer = setInterval(fetchSystemStatus, 30000);
+  }
+
+  function renderSystemStatusComponent(config) {
+    // System status is polled on interval by renderCameraGridComponent.
+    // Trigger a fetch in case it hasn't started yet.
+    if (!systemStatusTimer) {
+      fetchSystemStatus();
+      systemStatusTimer = setInterval(fetchSystemStatus, 30000);
+    }
+  }
+
+  // Handle idle-cards component behavior
+  function handleIdleCards() {
+    if (!activeTemplate) return;
+
+    var idleComp = null;
+    activeTemplate.components.forEach(function(comp) {
+      if (comp.type === 'idle-cards') idleComp = comp;
+    });
+    if (!idleComp) return;
+
+    var config = idleComp.config || {};
+    var mode = config.mode || 'interleave-pagination';
+
+    if (mode === 'replace-panel' && config.target) {
+      var targetCell = document.querySelector('.template-cell[data-component-type="' + config.target + '"]');
+      var idleOverlay = document.getElementById('idle-content-overlay');
+      if (!targetCell || !idleOverlay) return;
+
+      var isIdle = docketData.length === 0;
+      var idleEnabled = displayConfig.showIdleContent && idleContentData && idleContentData.enabled;
+
+      if (isIdle && idleEnabled) {
+        if (!idleContentActive) {
+          targetCell.style.display = 'none';
+          // Position idle overlay in the target's grid area
+          idleOverlay.style.gridArea = targetCell.style.gridArea;
+          var slides = buildIdleSlides(true);
+          if (slides.length > 0) {
+            activateIdleSlideshow(idleOverlay, slides);
+          }
+        }
+      } else {
+        if (idleContentActive) {
+          deactivateIdleContentForType('idle-content-overlay', null);
+          targetCell.style.display = '';
+          idleOverlay.style.display = 'none';
         }
       }
     }
-  }
-
-  // Route to the correct renderer based on display type
-  function renderForDisplayType() {
-    var type = displayConfig.displayType || 'courtroom';
-    if (type === 'wayfinding') {
-      renderWayfinding();
-    } else if (type === 'it-status') {
-      renderItHearings();
-    } else {
-      renderDocket();
-    }
-  }
-
-  // =============================================
-  // Chambers Display
-  // =============================================
-
-  function applyChambersTweaks() {
-    // Add chambers-mode class to body for CSS column hiding
-    document.body.classList.add('chambers-mode');
-
-    // Change docket title to include judge name
-    var titleEl = document.getElementById('docket-title');
-    if (titleEl && displayConfig.judgeFilter) {
-      titleEl.textContent = "TODAY'S HEARING CALENDAR For " + displayConfig.judgeFilter;
-    }
+    // interleave-pagination mode is handled inside renderDocket() — no action needed here
   }
 
   // =============================================
@@ -1588,17 +1882,10 @@
         // If idle content is currently active, re-render with fresh data
         var hasIdlePages = paginationState.active && paginationState.pages.some(function(p) { return p.type === 'idle'; });
         if (idleContentActive || hasIdlePages) {
-          var type = displayConfig.displayType || 'courtroom';
-          if (type === 'wayfinding') {
-            deactivateWayfindingIdleContent();
-            renderWayfinding();
-          } else if (type === 'it-status') {
-            deactivateItIdleContent();
-            renderItHearings();
-          } else {
-            // Docket displays: re-trigger render which rebuilds pagination pages with fresh idle data
-            renderDocket();
+          if (idleContentActive) {
+            deactivateIdleContentForType('idle-content-overlay', null);
           }
+          renderAllComponents();
         }
       }
     } catch (error) {
@@ -1653,12 +1940,17 @@
     if (table) table.style.display = '';
   }
 
-  function deactivateWayfindingIdleContent() {
-    deactivateIdleContentForType('wayfinding-idle-content-container', 'wayfinding-hearings');
-  }
-
-  function deactivateItIdleContent() {
-    deactivateIdleContentForType('it-idle-content-container', 'it-schedule-panel');
+  function deactivateTemplateIdleContent() {
+    deactivateIdleContentForType('idle-content-overlay', null);
+    // Restore the hidden target cell
+    if (activeTemplate) {
+      activeTemplate.components.forEach(function(comp) {
+        if (comp.type === 'idle-cards' && comp.config && comp.config.target) {
+          var targetCell = document.querySelector('.template-cell[data-component-type="' + comp.config.target + '"]');
+          if (targetCell) targetCell.style.display = '';
+        }
+      });
+    }
   }
 
   function buildUpcomingHearingsSlide(data) {
@@ -1976,72 +2268,7 @@
     return { html: html, hearingCounts: hearingCounts };
   }
 
-  function renderWayfinding() {
-    var hearingsEl = document.getElementById('wayfinding-hearings');
-    var directionsEl = document.getElementById('wayfinding-directions');
-    if (!hearingsEl || !directionsEl) return;
-
-    // Build hearings data (needed for both hearings panel and direction badges)
-    var result = buildJudgeScheduleHtml(docketData, new Date());
-    var hearingCounts = result.hearingCounts;
-
-    // Always render direction cards (right panel)
-    var directions = (displayConfig.wayfindingConfig && displayConfig.wayfindingConfig.directions) || [];
-    var directionsHtml = '';
-    directions.forEach(function(dir, index) {
-      // Count hearings matching this direction name (fuzzy case-insensitive)
-      var count = 0;
-      var dirNameLower = (dir.name || '').toLowerCase();
-      Object.keys(hearingCounts).forEach(function(room) {
-        if (room.toLowerCase().indexOf(dirNameLower) !== -1 || dirNameLower.indexOf(room.toLowerCase()) !== -1) {
-          count += hearingCounts[room];
-        }
-      });
-
-      var col = dir.column || 1;
-      var row = dir.row || (index + 1);
-      var cardClass = 'wayfinding-direction-card';
-      if (col === 2) cardClass += ' wayfinding-col-right';
-      if (dir.icon === 'emergency') cardClass += ' wayfinding-card-emergency';
-      directionsHtml += '<div class="' + cardClass + '" style="grid-column:' + col + ';grid-row:' + row + ';">';
-      directionsHtml += '<div class="wayfinding-arrow">' + getDirectionArrowSvg(dir.arrow || dir.direction) + '</div>';
-      directionsHtml += '<div class="wayfinding-card-info">';
-      directionsHtml += '<div class="wayfinding-card-name">' + escapeHtml(dir.name) + '</div>';
-      directionsHtml += '<div class="wayfinding-card-desc">' + escapeHtml(dir.description) + '</div>';
-      directionsHtml += '</div>';
-      if (count > 0 && dir.icon !== 'informational' && dir.icon !== 'emergency') {
-        directionsHtml += '<div class="wayfinding-card-badge">' + count + ' hearing' + (count !== 1 ? 's' : '') + '</div>';
-      }
-      directionsHtml += '</div>';
-    });
-
-    if (directions.length === 0) {
-      directionsHtml = '<p style="color: rgba(255,255,255,0.5); font-size: 24px; text-align: center; margin-top: 40px;">No directions configured</p>';
-    }
-
-    directionsEl.innerHTML = directionsHtml;
-
-    // Show idle content slideshow in left panel when no hearings and idle content is enabled
-    if (docketData.length === 0 && idleContentData && idleContentData.enabled) {
-      if (!idleContentActive) {
-        hearingsEl.style.display = 'none';
-        var idleSlideHtmls = buildIdleSlides(true); // with schedule summary
-        var wayfindingIdleContainer = document.getElementById('wayfinding-idle-content-container');
-        if (idleSlideHtmls.length > 0 && wayfindingIdleContainer) {
-          activateIdleSlideshow(wayfindingIdleContainer, idleSlideHtmls);
-        }
-      }
-      return;
-    }
-
-    // Deactivate idle content if hearings appeared
-    if (idleContentActive) {
-      deactivateWayfindingIdleContent();
-    }
-
-    // Render hearings in left panel
-    hearingsEl.innerHTML = result.html;
-  }
+  // renderWayfinding() — removed; replaced by renderHearingPillsComponent() + renderDirectionCardsComponent()
 
   function getDirectionArrowSvg(direction) {
     // L-shaped compound arrows (custom path, no rotation)
@@ -2099,35 +2326,7 @@
     return cameras;
   }
 
-  function initItStatus() {
-    var gridEl = document.getElementById('it-camera-grid');
-    if (!gridEl) return;
-
-    // Clean up previous state
-    hlsPlayers.forEach(function(p) { if (p) p.destroy(); });
-    hlsPlayers = [];
-    testPatternTimers.forEach(function(t) { if (t) clearInterval(t); });
-    testPatternTimers = [];
-    gridEl.innerHTML = '';
-
-    var cameras = parseCamerasFromConfig();
-
-    if (cameras.length === 0) {
-      // Show a single test pattern tile
-      var tile = createCameraTile('No Camera Configured', '');
-      gridEl.appendChild(tile);
-    } else {
-      cameras.forEach(function(cam) {
-        var tile = createCameraTile(cam.name || '', cam.url || '');
-        gridEl.appendChild(tile);
-      });
-    }
-
-    // Start system status polling
-    fetchSystemStatus();
-    if (systemStatusTimer) clearInterval(systemStatusTimer);
-    systemStatusTimer = setInterval(fetchSystemStatus, 30000);
-  }
+  // initItStatus() — removed; replaced by renderCameraGridComponent() + renderSystemStatusComponent()
 
   function createCameraTile(name, url) {
     var tile = document.createElement('div');
@@ -2329,31 +2528,7 @@
     el.innerHTML = html;
   }
 
-  function renderItHearings() {
-    var scheduleEl = document.getElementById('it-schedule-panel');
-    if (!scheduleEl) return;
-
-    // When no hearings and idle content is enabled, show idle slideshow
-    if (docketData.length === 0 && idleContentData && idleContentData.enabled) {
-      if (!idleContentActive) {
-        scheduleEl.style.display = 'none';
-        var slides = buildIdleSlides(true); // with schedule summary
-        var itIdleContainer = document.getElementById('it-idle-content-container');
-        if (slides.length > 0 && itIdleContainer) {
-          activateIdleSlideshow(itIdleContainer, slides);
-        }
-      }
-      return;
-    }
-
-    // Deactivate idle content if hearings reappeared
-    if (idleContentActive) {
-      deactivateItIdleContent();
-    }
-
-    var result = buildJudgeScheduleHtml(docketData, new Date());
-    scheduleEl.innerHTML = result.html;
-  }
+  // renderItHearings() — removed; replaced by renderHearingPillsComponent()
 
   // =============================================
   // Screensaver Logic
