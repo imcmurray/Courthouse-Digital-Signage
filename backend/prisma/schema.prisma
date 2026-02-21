@@ -256,6 +256,7 @@ model IdleContentCard {
   id          String    @id @default(uuid())
   title       String
   body        String
+  type        String    @default("info") // "info" | "upcoming_hearings" | "statistics"
   icon        String?   // e.g. "phone", "clock", "gavel", "info"
   sortOrder   Int       @default(100) @map("sort_order")
   enabled     Boolean   @default(true)

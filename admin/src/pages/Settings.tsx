@@ -56,7 +56,7 @@ export default function Settings() {
     timezone: 'America/Denver',
     default_theme: 'default',
     court_website_url: '',
-    idle_modules: ['upcoming_hearings', 'info_cards', 'news', 'statistics'],
+    idle_modules: ['info_cards', 'news'],
     idle_rotation_interval: 10,
     news_scrape_enabled: false,
     news_scrape_interval: 60,
@@ -107,7 +107,7 @@ export default function Settings() {
         default_theme: data.settings.default_theme || 'default',
         court_logo: data.settings.court_logo,
         court_website_url: data.settings.court_website_url || '',
-        idle_modules: data.settings.idle_modules || ['upcoming_hearings', 'info_cards', 'news', 'statistics'],
+        idle_modules: data.settings.idle_modules || ['info_cards', 'news'],
         idle_rotation_interval: data.settings.idle_rotation_interval || 10,
         news_scrape_enabled: data.settings.news_scrape_enabled || false,
         news_scrape_interval: data.settings.news_scrape_interval || 60,
@@ -228,7 +228,7 @@ export default function Settings() {
         default_theme: data.settings.default_theme || 'default',
         court_logo: data.settings.court_logo,
         court_website_url: data.settings.court_website_url || '',
-        idle_modules: data.settings.idle_modules || ['upcoming_hearings', 'info_cards', 'news', 'statistics'],
+        idle_modules: data.settings.idle_modules || ['info_cards', 'news'],
         idle_rotation_interval: data.settings.idle_rotation_interval || 10,
         news_scrape_enabled: data.settings.news_scrape_enabled || false,
         news_scrape_interval: data.settings.news_scrape_interval || 60,
@@ -687,10 +687,8 @@ export default function Settings() {
               </label>
               <div className="grid grid-cols-2 gap-3">
                 {[
-                  { key: 'upcoming_hearings', label: 'Upcoming Hearings' },
                   { key: 'info_cards', label: 'Information Cards' },
                   { key: 'news', label: 'Court News' },
-                  { key: 'statistics', label: 'Court Statistics' },
                 ].map(mod => (
                   <label key={mod.key} className="flex items-center space-x-2 cursor-pointer">
                     <input

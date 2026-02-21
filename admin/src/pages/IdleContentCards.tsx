@@ -63,6 +63,8 @@ function SortableRow({ card, position, onEdit, onDelete, onToggle, isToggling }:
     opacity: isDragging ? 0.5 : 1,
   };
 
+  const isSystem = card.type !== 'info';
+
   return (
     <tr
       ref={setNodeRef}
@@ -92,12 +94,23 @@ function SortableRow({ card, position, onEdit, onDelete, onToggle, isToggling }:
         </span>
       </td>
       <td className="px-6 py-4">
-        <button
-          onClick={() => onEdit(card)}
-          className="text-sm font-medium text-gray-900 dark:text-white text-left hover:text-primary dark:hover:text-primary-light transition-colors"
-        >
-          {card.title}
-        </button>
+        {isSystem ? (
+          <span className="text-sm font-medium text-gray-900 dark:text-white">
+            {card.title}
+          </span>
+        ) : (
+          <button
+            onClick={() => onEdit(card)}
+            className="text-sm font-medium text-gray-900 dark:text-white text-left hover:text-primary dark:hover:text-primary-light transition-colors"
+          >
+            {card.title}
+          </button>
+        )}
+        {isSystem && (
+          <span className="ml-2 inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300">
+            System
+          </span>
+        )}
         <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 max-w-xs truncate">
           {card.body}
         </div>
@@ -151,18 +164,22 @@ function SortableRow({ card, position, onEdit, onDelete, onToggle, isToggling }:
           : 'Never'}
       </td>
       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-        <button
-          onClick={() => onEdit(card)}
-          className="text-primary dark:text-primary-light hover:text-primary/80 dark:hover:text-primary-light/80 mr-4"
-        >
-          Edit
-        </button>
-        <button
-          onClick={() => onDelete(card)}
-          className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
-        >
-          Delete
-        </button>
+        {!isSystem && (
+          <>
+            <button
+              onClick={() => onEdit(card)}
+              className="text-primary dark:text-primary-light hover:text-primary/80 dark:hover:text-primary-light/80 mr-4"
+            >
+              Edit
+            </button>
+            <button
+              onClick={() => onDelete(card)}
+              className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+            >
+              Delete
+            </button>
+          </>
+        )}
       </td>
     </tr>
   );

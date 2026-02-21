@@ -9,6 +9,7 @@ export interface IdleContentCard {
   id: string;
   title: string;
   body: string;
+  type: string; // 'info' | 'upcoming_hearings' | 'statistics'
   icon: string | null;
   sortOrder: number;
   enabled: boolean;

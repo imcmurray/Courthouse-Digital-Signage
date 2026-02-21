@@ -1487,13 +1487,31 @@ app.get('/api/displays/:id/idle-content', displayLimiter, authenticateApiKey, as
 
     const enabledModules: string[] = Array.isArray(settingsMap.idle_modules)
       ? settingsMap.idle_modules
-      : ['upcoming_hearings', 'info_cards', 'news', 'statistics'];
+      : ['info_cards', 'news'];
     const rotationInterval = parseInt(settingsMap.idle_rotation_interval as string) || 10;
+
+    // Query ALL enabled idle content cards (info + system) for display targeting
+    const allCards = await prisma.idleContentCard.findMany({
+      where: {
+        enabled: true,
+        OR: [{ expiresAt: null }, { expiresAt: { gte: new Date() } }],
+      },
+      include: { displays: true },
+      orderBy: { sortOrder: 'asc' },
+    });
+    const displayId = req.params.id;
+    const cardsForDisplay = allCards.filter(c =>
+      c.displays.length === 0 || c.displays.some(d => d.displayId === displayId)
+    );
+
+    // Check system card enablement from card records (not settings)
+    const upcomingEnabled = cardsForDisplay.some(c => c.type === 'upcoming_hearings');
+    const statisticsEnabled = cardsForDisplay.some(c => c.type === 'statistics');
 
     const modules: Record<string, unknown> = {};
 
     // Upcoming hearings — find the next date with hearings (earliest hearingDate > today)
-    if (enabledModules.includes('upcoming_hearings')) {
+    if (upcomingEnabled) {
       const now = new Date();
       const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       todayStart.setDate(todayStart.getDate() + 1); // Start from tomorrow
@@ -1529,24 +1547,10 @@ app.get('/api/displays/:id/idle-content', displayLimiter, authenticateApiKey, as
       }
     }
 
-    // Info cards
+    // Info cards (global kill switch from settings, per-card filtering from unified query)
     if (enabledModules.includes('info_cards')) {
-      const cards = await prisma.idleContentCard.findMany({
-        where: {
-          enabled: true,
-          OR: [
-            { expiresAt: null },
-            { expiresAt: { gte: new Date() } }
-          ],
-        },
-        include: { displays: true },
-        orderBy: { sortOrder: 'asc' },
-      });
-      const id = req.params.id;
-      const filteredCards = cards.filter(c =>
-        c.displays.length === 0 || c.displays.some(d => d.displayId === id)
-      );
-      modules.info_cards = { cards: filteredCards.map(({ displays, ...rest }) => rest) };
+      const infoCards = cardsForDisplay.filter(c => c.type === 'info');
+      modules.info_cards = { cards: infoCards.map(({ displays, ...rest }) => rest) };
     }
 
     // News articles
@@ -1559,7 +1563,7 @@ app.get('/api/displays/:id/idle-content', displayLimiter, authenticateApiKey, as
     }
 
     // Statistics
-    if (enabledModules.includes('statistics')) {
+    if (statisticsEnabled) {
       const now = new Date();
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const next7 = new Date(today);
@@ -2028,6 +2032,10 @@ app.get('/api/idle-content-cards', authenticateToken, async (req: AuthenticatedR
 // POST /api/idle-content-cards - Create an idle content card
 app.post('/api/idle-content-cards', authenticateToken, requireEditor, async (req: AuthenticatedRequest, res: Response) => {
   try {
+    if (req.body.type && req.body.type !== 'info') {
+      return res.status(400).json({ error: 'Cannot create system cards manually' });
+    }
+
     const { title, body, icon, sortOrder = 100, enabled = true, expiresAt, displayIds } = req.body;
 
     if (!title || typeof title !== 'string' || title.length === 0) {
@@ -2081,6 +2089,40 @@ app.put('/api/idle-content-cards/:id', authenticateToken, requireEditor, async (
     const existing = await prisma.idleContentCard.findUnique({ where: { id } });
     if (!existing) {
       return res.status(404).json({ error: 'Idle content card not found' });
+    }
+
+    // System cards: only allow toggling enabled, reordering, and display assignment
+    if (existing.type !== 'info') {
+      const updateData: Record<string, unknown> = {};
+      if (enabled !== undefined) updateData.enabled = enabled;
+      if (sortOrder !== undefined) updateData.sortOrder = sortOrder;
+
+      if (displayIds !== undefined) {
+        await prisma.$transaction([
+          prisma.displayIdleContentCard.deleteMany({ where: { idleContentCardId: id } }),
+          prisma.idleContentCard.update({ where: { id }, data: updateData }),
+          ...(Array.isArray(displayIds) && displayIds.length > 0
+            ? [prisma.displayIdleContentCard.createMany({
+                data: displayIds.map((did: string) => ({ displayId: did, idleContentCardId: id })),
+              })]
+            : []),
+        ]);
+      } else if (Object.keys(updateData).length > 0) {
+        await prisma.idleContentCard.update({ where: { id }, data: updateData });
+      }
+
+      const card = await prisma.idleContentCard.findUnique({
+        where: { id },
+        include: {
+          createdBy: { select: { id: true, name: true, email: true } },
+          displays: { include: { display: { select: { id: true, name: true } } } },
+        },
+      });
+
+      console.log(`[DB] UPDATE idle_content_cards (system) WHERE id = ${id}`);
+      await createAuditLog('update', 'idle_content_card', id, req.user?.userId || null, updateData);
+      io.emit('idle-content:update', {});
+      return res.json(card);
     }
 
     const updateData: Record<string, unknown> = {};
@@ -2155,6 +2197,10 @@ app.delete('/api/idle-content-cards/:id', authenticateToken, requireEditor, asyn
     const existing = await prisma.idleContentCard.findUnique({ where: { id: req.params.id } });
     if (!existing) {
       return res.status(404).json({ error: 'Idle content card not found' });
+    }
+
+    if (existing.type !== 'info') {
+      return res.status(403).json({ error: 'System cards cannot be deleted' });
     }
 
     await prisma.idleContentCard.delete({ where: { id: req.params.id } });
@@ -4427,6 +4473,23 @@ httpServer.listen(PORT, async () => {
     await seedBuiltInTemplates();
   } catch (err) {
     console.error('Failed to seed built-in templates:', err);
+  }
+
+  // Seed system idle content cards (upcoming hearings, statistics)
+  try {
+    const systemTypes = [
+      { type: 'upcoming_hearings', title: 'Upcoming Hearings', body: 'Next scheduled hearing date with judge-grouped time pills.', icon: 'calendar', sortOrder: -2 },
+      { type: 'statistics', title: 'Court Statistics', body: 'Hearing counts, case counts, and active judges for the next 30 days.', icon: 'gavel', sortOrder: -1 },
+    ];
+    for (const sys of systemTypes) {
+      const existing = await prisma.idleContentCard.findFirst({ where: { type: sys.type } });
+      if (!existing) {
+        await prisma.idleContentCard.create({ data: sys });
+        console.log(`[seed] Created system idle card: ${sys.type}`);
+      }
+    }
+  } catch (err) {
+    console.error('Failed to seed system idle cards:', err);
   }
 
   // Start auto-import polling if enabled in settings
