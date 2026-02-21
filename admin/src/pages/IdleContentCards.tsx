@@ -94,18 +94,12 @@ function SortableRow({ card, position, onEdit, onDelete, onToggle, isToggling }:
         </span>
       </td>
       <td className="px-6 py-4">
-        {isSystem ? (
-          <span className="text-sm font-medium text-gray-900 dark:text-white">
-            {card.title}
-          </span>
-        ) : (
-          <button
-            onClick={() => onEdit(card)}
-            className="text-sm font-medium text-gray-900 dark:text-white text-left hover:text-primary dark:hover:text-primary-light transition-colors"
-          >
-            {card.title}
-          </button>
-        )}
+        <button
+          onClick={() => onEdit(card)}
+          className="text-sm font-medium text-gray-900 dark:text-white text-left hover:text-primary dark:hover:text-primary-light transition-colors"
+        >
+          {card.title}
+        </button>
         {isSystem && (
           <span className="ml-2 inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300">
             System
@@ -164,21 +158,19 @@ function SortableRow({ card, position, onEdit, onDelete, onToggle, isToggling }:
           : 'Never'}
       </td>
       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+        <button
+          onClick={() => onEdit(card)}
+          className="text-primary dark:text-primary-light hover:text-primary/80 dark:hover:text-primary-light/80 mr-4"
+        >
+          Edit
+        </button>
         {!isSystem && (
-          <>
-            <button
-              onClick={() => onEdit(card)}
-              className="text-primary dark:text-primary-light hover:text-primary/80 dark:hover:text-primary-light/80 mr-4"
-            >
-              Edit
-            </button>
-            <button
-              onClick={() => onDelete(card)}
-              className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
-            >
-              Delete
-            </button>
-          </>
+          <button
+            onClick={() => onDelete(card)}
+            className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+          >
+            Delete
+          </button>
         )}
       </td>
     </tr>
@@ -363,6 +355,7 @@ export default function IdleContentCards() {
   }
 
   const cards = data?.cards || [];
+  const isSystemEdit = editingCard != null && editingCard.type !== 'info';
 
   return (
     <div className="space-y-6">
@@ -432,9 +425,10 @@ export default function IdleContentCards() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-lg w-full mx-4">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-              {editingCard ? 'Edit Card' : 'Create Card'}
+              {editingCard ? (isSystemEdit ? 'Edit System Card' : 'Edit Card') : 'Create Card'}
             </h3>
             <form onSubmit={editingCard ? handleUpdate : handleCreate} className="mt-4 space-y-4">
+              {!isSystemEdit && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                   Title *
@@ -448,7 +442,9 @@ export default function IdleContentCards() {
                   placeholder="e.g., Phone Policy"
                 />
               </div>
+              )}
 
+              {!isSystemEdit && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                   Body *
@@ -462,7 +458,9 @@ export default function IdleContentCards() {
                   placeholder="Content displayed on the idle slide..."
                 />
               </div>
+              )}
 
+              {!isSystemEdit && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                   Icon
@@ -477,7 +475,9 @@ export default function IdleContentCards() {
                   ))}
                 </select>
               </div>
+              )}
 
+              {!isSystemEdit && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                   Expires At
@@ -493,6 +493,7 @@ export default function IdleContentCards() {
                 />
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Leave empty for no expiration</p>
               </div>
+              )}
 
               <div className="flex items-center">
                 <input
