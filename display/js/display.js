@@ -2853,7 +2853,7 @@
   }
 
   function activateEmergencyLevel1(data, cardHtml) {
-    // Section override - replace a single template component
+    // Section override - replaces a single template component and expands to fill the content area
     var targetSlug = data.target;
     if (!targetSlug) {
       console.warn('[EMERGENCY] Level 1 requires a target component slug');
@@ -2873,7 +2873,18 @@
     }
     // Hide the target cell content and show emergency in its place
     targetCell.dataset.emergencyBackup = targetCell.innerHTML;
+    targetCell.dataset.emergencyGridArea = targetCell.style.gridArea || '';
     targetCell.innerHTML = '<div class="emergency-section" style="width:100%;height:100%;display:flex;">' + cardHtml + '</div>';
+    // Expand the target cell to fill the entire grid and hide siblings
+    targetCell.style.gridColumn = '1 / -1';
+    targetCell.style.gridRow = '1 / -1';
+    targetCell.style.gridArea = '';
+    cells.forEach(function(cell) {
+      if (cell !== targetCell) {
+        cell.dataset.emergencyHidden = 'true';
+        cell.style.display = 'none';
+      }
+    });
     console.log('[EMERGENCY] Level 1: section override on "' + targetSlug + '" active');
   }
 
@@ -2900,12 +2911,23 @@
         }
       }
     } else if (emergencyLevel === 1) {
-      // Restore the original cell content
+      // Restore the original cell content, grid area, and hidden siblings
       var cells = document.querySelectorAll('.template-cell');
       cells.forEach(function(cell) {
         if (cell.dataset.emergencyBackup !== undefined) {
           cell.innerHTML = cell.dataset.emergencyBackup;
           delete cell.dataset.emergencyBackup;
+          // Restore original grid placement
+          cell.style.gridColumn = '';
+          cell.style.gridRow = '';
+          if (cell.dataset.emergencyGridArea !== undefined) {
+            cell.style.gridArea = cell.dataset.emergencyGridArea;
+            delete cell.dataset.emergencyGridArea;
+          }
+        }
+        if (cell.dataset.emergencyHidden) {
+          cell.style.display = '';
+          delete cell.dataset.emergencyHidden;
         }
       });
     }
@@ -2939,7 +2961,7 @@
       // Default: warning icon for emergencies
       iconHtml = '<div class="emergency-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg></div>';
     }
-    return '<div class="emergency-card">' +
+    return '<div class="emergency-card emergency-level-' + (data.level || 3) + '">' +
       iconHtml +
       '<div class="emergency-title">' + escapeHtml(data.title) + '</div>' +
       '<div class="emergency-body">' + renderMarkdown(data.body) + '</div>' +

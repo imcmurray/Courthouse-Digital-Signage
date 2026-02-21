@@ -1601,7 +1601,7 @@ body.portrait #it-content-card-container {
   width: 100%;
   height: 100%;
   z-index: 500;
-  background: linear-gradient(135deg, #4a0000, #1a0000);
+  background: linear-gradient(135deg, #3a0000, #1a0000);
 }
 
 /* Level 3: Full screen takeover */
@@ -1621,11 +1621,10 @@ body.portrait #it-content-card-container {
   align-items: center;
   justify-content: center;
   flex-direction: column;
-  background: linear-gradient(135deg, #4a0000, #2a0000);
-  border: 3px solid #cc0000;
+  background: linear-gradient(135deg, #3d2800, #1a1200);
+  border: 3px solid #cc8800;
   border-radius: 8px;
   z-index: 200;
-  animation: emergency-pulse 3s ease-in-out infinite;
 }
 
 /* Emergency card content */
@@ -1719,15 +1718,114 @@ body.portrait .emergency-body {
   font-size: 28px;
 }
 
-body.portrait .emergency-section .emergency-title {
-  font-size: 36px;
+/* ==============================
+   Level-specific card overrides
+   ============================== */
+
+/* Level 2: Slightly toned-down warning */
+.emergency-card.emergency-level-2 {
+  animation: emergency-pulse-gentle 3s ease-in-out infinite;
 }
 
-body.portrait .emergency-section .emergency-body {
-  font-size: 22px;
+.emergency-card.emergency-level-2 .emergency-icon {
+  width: 100px;
+  height: 100px;
+  animation: emergency-icon-glow 2s ease-in-out infinite;
 }
 
-body.portrait .emergency-section .emergency-icon {
-  width: 60px;
-  height: 60px;
+.emergency-card.emergency-level-2 .emergency-title {
+  font-size: 52px;
+}
+
+.emergency-card.emergency-level-2 .emergency-body {
+  font-size: 30px;
+}
+
+/* Level 1: Informational notice — amber tones, no pulsing */
+.emergency-card.emergency-level-1 {
+  padding: 40px;
+  animation: none;
+}
+
+.emergency-card.emergency-level-1 .emergency-icon {
+  width: 80px;
+  height: 80px;
+  color: #E6A817;
+  animation: emergency-icon-glow-amber 3s ease-in-out infinite;
+}
+
+.emergency-card.emergency-level-1 .emergency-title {
+  font-size: 44px;
+  text-transform: none;
+  letter-spacing: 2px;
+  text-shadow: 0 0 30px rgba(230, 168, 23, 0.5);
+}
+
+.emergency-card.emergency-level-1 .emergency-body {
+  font-size: 26px;
+}
+
+/* Gentle pulse for Level 2 */
+@keyframes emergency-pulse-gentle {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+/* Amber glow for Level 1 icon */
+@keyframes emergency-icon-glow-amber {
+  0%, 100% {
+    filter: drop-shadow(0 0 8px rgba(230, 168, 23, 0.3))
+            drop-shadow(0 0 20px rgba(204, 136, 0, 0.15));
+  }
+  50% {
+    filter: drop-shadow(0 0 16px rgba(230, 168, 23, 0.7))
+            drop-shadow(0 0 35px rgba(204, 136, 0, 0.4));
+  }
+}
+
+/* ==============================
+   Portrait overrides per level
+   ============================== */
+
+/* Level 3 portrait (existing — unchanged) */
+/* Already handled by body.portrait .emergency-card/icon/title/body above */
+
+/* Level 2 portrait */
+body.portrait .emergency-card.emergency-level-2 {
+  padding: 35px;
+}
+
+body.portrait .emergency-card.emergency-level-2 .emergency-icon {
+  width: 75px;
+  height: 75px;
+}
+
+body.portrait .emergency-card.emergency-level-2 .emergency-title {
+  font-size: 40px;
+}
+
+body.portrait .emergency-card.emergency-level-2 .emergency-body {
+  font-size: 24px;
+}
+
+/* Level 1 portrait */
+body.portrait .emergency-card.emergency-level-1 {
+  padding: 30px;
+}
+
+body.portrait .emergency-card.emergency-level-1 .emergency-icon {
+  width: 55px;
+  height: 55px;
+}
+
+body.portrait .emergency-card.emergency-level-1 .emergency-title {
+  font-size: 32px;
+}
+
+body.portrait .emergency-card.emergency-level-1 .emergency-body {
+  font-size: 20px;
 }
