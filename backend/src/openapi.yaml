@@ -38,8 +38,8 @@ tags:
     description: Court calendar PDF import
   - name: System
     description: Data export, import, and clearing
-  - name: Idle Content Cards
-    description: Idle content card management for display slideshows
+  - name: Content Cards
+    description: Content card and emergency card management for display slideshows
   - name: News
     description: Court news article scraping and management
   - name: Display Templates
@@ -880,7 +880,7 @@ components:
           type: object
           nullable: true
 
-    IdleContentCard:
+    ContentCard:
       type: object
       properties:
         id:
@@ -901,6 +901,35 @@ components:
           type: integer
         enabled:
           type: boolean
+        isEmergency:
+          type: boolean
+          default: false
+        emergencyLevel:
+          type: integer
+          nullable: true
+          enum: [1, 2, 3]
+          description: "1=section override, 2=content area override, 3=full screen takeover"
+        emergencyTarget:
+          type: string
+          nullable: true
+          description: Component slug for level 1 (e.g. "hearing-table")
+        activatedAt:
+          type: string
+          format: date-time
+          nullable: true
+        activatedById:
+          type: string
+          nullable: true
+        activatedBy:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: string
+            name:
+              type: string
+            email:
+              type: string
         expiresAt:
           type: string
           format: date-time
@@ -932,7 +961,7 @@ components:
             properties:
               displayId:
                 type: string
-              idleContentCardId:
+              contentCardId:
                 type: string
               display:
                 type: object
@@ -942,7 +971,7 @@ components:
                   name:
                     type: string
 
-    CreateIdleContentCardRequest:
+    CreateContentCardRequest:
       type: object
       properties:
         title:
@@ -968,7 +997,40 @@ components:
             type: string
       required: [title, body]
 
-    UpdateIdleContentCardRequest:
+    CreateEmergencyCardRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        body:
+          type: string
+        icon:
+          type: string
+          description: Icon name (e.g. "warning", "shield")
+        emergencyLevel:
+          type: integer
+          enum: [1, 2, 3]
+          description: "1=section override, 2=content area override, 3=full screen takeover"
+        emergencyTarget:
+          type: string
+          description: Component slug for level 1 (e.g. "hearing-table"). Required when emergencyLevel is 1.
+        sortOrder:
+          type: integer
+          default: 0
+        enabled:
+          type: boolean
+          default: false
+        expiresAt:
+          type: string
+          format: date-time
+        displayIds:
+          type: array
+          description: Display IDs to target. Omit or send empty array for all displays.
+          items:
+            type: string
+      required: [title, body, emergencyLevel]
+
+    UpdateContentCardRequest:
       type: object
       description: |
         For system cards (type != "info"), only enabled, sortOrder, and displayIds are accepted.
@@ -1089,8 +1151,9 @@ components:
             - type: string
       required: [slug, name, components]
 
-    IdleContentResponse:
+    ContentCardsResponse:
       type: object
+      description: Aggregated content card data for display clients
       properties:
         enabled:
           type: boolean
@@ -1117,7 +1180,7 @@ components:
                 cards:
                   type: array
                   items:
-                    $ref: '#/components/schemas/IdleContentCard'
+                    $ref: '#/components/schemas/ContentCard'
             news:
               type: object
               properties:
@@ -1145,6 +1208,28 @@ components:
                       type: string
                       format: date
                       nullable: true
+
+    EmergencyStatusResponse:
+      type: object
+      properties:
+        active:
+          type: boolean
+        cardId:
+          type: string
+          format: uuid
+        level:
+          type: integer
+          enum: [1, 2, 3]
+        target:
+          type: string
+          nullable: true
+        title:
+          type: string
+        body:
+          type: string
+        icon:
+          type: string
+          nullable: true
 
     SystemStatusResponse:
       type: object
@@ -2369,12 +2454,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /api/displays/{id}/idle-content:
+  /api/displays/{id}/content-cards:
     get:
       tags: [Displays]
-      summary: Get aggregated idle content for a display client
+      summary: Get aggregated content cards for a display client
       description: |
-        Returns all enabled idle content modules (upcoming hearings, info cards, news,
+        Returns all enabled content card modules (upcoming hearings, info cards, news,
         statistics) for a specific display. Cards are filtered by display assignment
         and expiration. Updates display heartbeat on each call.
       security:
@@ -2387,11 +2472,48 @@ paths:
             type: string
       responses:
         '200':
-          description: Idle content modules for the display
+          description: Content card modules for the display
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/IdleContentResponse'
+                $ref: '#/components/schemas/ContentCardsResponse'
+        '401':
+          description: Invalid or missing API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Display not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/displays/{id}/emergency:
+    get:
+      tags: [Displays]
+      summary: Get active emergency for a display
+      description: |
+        Returns the highest-priority active emergency card for this display.
+        Priority is determined by emergency level (highest wins), then sortOrder
+        (lowest wins). Returns { active: false } if no emergency is active.
+        Used by display clients for polling emergency status.
+      security:
+        - apiKeyAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Emergency status for the display
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmergencyStatusResponse'
         '401':
           description: Invalid or missing API key
           content:
@@ -3748,12 +3870,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  # ── Idle Content Cards ───────────────────────────
-  /api/idle-content-cards:
+  # ── Content Cards ─────────────────────────────────
+  /api/content-cards:
     get:
-      tags: [Idle Content Cards]
-      summary: List all idle content cards
-      description: Returns all idle content cards with their display assignments and creator info.
+      tags: [Content Cards]
+      summary: List all content cards
+      description: Returns all content cards with their display assignments and creator info.
       security:
         - bearerAuth: []
       parameters:
@@ -3763,9 +3885,15 @@ paths:
             type: string
             enum: ['true']
           description: When "true", only return enabled cards
+        - name: isEmergency
+          in: query
+          schema:
+            type: string
+            enum: ['true', 'false']
+          description: Filter by emergency status. "true" for emergency cards only, "false" for regular cards only.
       responses:
         '200':
-          description: List of idle content cards
+          description: List of content cards
           content:
             application/json:
               schema:
@@ -3774,7 +3902,7 @@ paths:
                   cards:
                     type: array
                     items:
-                      $ref: '#/components/schemas/IdleContentCard'
+                      $ref: '#/components/schemas/ContentCard'
                   total:
                     type: integer
         '401':
@@ -3784,10 +3912,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
     post:
-      tags: [Idle Content Cards]
+      tags: [Content Cards]
       summary: Create an info card
       description: |
-        Creates a new idle content card of type "info". System card types
+        Creates a new content card of type "info". System card types
         (upcoming_hearings, statistics) cannot be created manually.
       security:
         - bearerAuth: []
@@ -3796,14 +3924,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateIdleContentCardRequest'
+              $ref: '#/components/schemas/CreateContentCardRequest'
       responses:
         '201':
           description: Card created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/IdleContentCard'
+                $ref: '#/components/schemas/ContentCard'
         '400':
           description: Missing required fields or attempted to create system card
           content:
@@ -3823,13 +3951,55 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /api/idle-content-cards/reorder:
+  /api/content-cards/emergency:
+    post:
+      tags: [Content Cards]
+      summary: Create an emergency card
+      description: |
+        Creates a new emergency content card. Emergency cards can override display
+        content at 3 severity levels when activated. Cards are created in standby
+        (enabled: false) by default.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateEmergencyCardRequest'
+      responses:
+        '201':
+          description: Emergency card created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContentCard'
+        '400':
+          description: Missing required fields or invalid emergency level
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Editor or admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/content-cards/reorder:
     patch:
-      tags: [Idle Content Cards]
-      summary: Bulk reorder idle content cards
+      tags: [Content Cards]
+      summary: Bulk reorder content cards
       description: |
         Updates the sortOrder of multiple cards at once. All updates are
-        applied in a transaction. Emits an idle-content:update WebSocket event.
+        applied in a transaction. Emits a content-cards:update WebSocket event.
       security:
         - bearerAuth: []
       requestBody:
@@ -3882,10 +4052,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /api/idle-content-cards/{id}:
+  /api/content-cards/{id}:
     put:
-      tags: [Idle Content Cards]
-      summary: Update an idle content card
+      tags: [Content Cards]
+      summary: Update a content card
       description: |
         Updates a card. System cards (type != "info") only accept enabled,
         sortOrder, and displayIds changes. Info cards accept all fields.
@@ -3903,14 +4073,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UpdateIdleContentCardRequest'
+              $ref: '#/components/schemas/UpdateContentCardRequest'
       responses:
         '200':
           description: Card updated
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/IdleContentCard'
+                $ref: '#/components/schemas/ContentCard'
         '400':
           description: Validation error (empty title or body)
           content:
@@ -3936,7 +4106,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
     delete:
-      tags: [Idle Content Cards]
+      tags: [Content Cards]
       summary: Delete an info card
       description: Deletes a user-created info card. System cards cannot be deleted.
       security:
@@ -3959,6 +4129,105 @@ paths:
                 $ref: '#/components/schemas/Error'
         '403':
           description: Editor or admin access required, or system card cannot be deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Card not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/content-cards/{id}/activate:
+    post:
+      tags: [Content Cards]
+      summary: Activate an emergency card
+      description: |
+        Activates an emergency card, immediately overriding display content.
+        Sets enabled to true, records activatedAt timestamp and activating user.
+        Emits an emergency:activate WebSocket event with full card content for
+        instant display rendering.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Emergency card activated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContentCard'
+        '400':
+          description: Only emergency cards can be activated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Editor or admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Card not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/content-cards/{id}/deactivate:
+    post:
+      tags: [Content Cards]
+      summary: Deactivate an emergency card
+      description: |
+        Deactivates an emergency card, restoring normal display content.
+        Sets enabled to false and clears activatedAt. Emits an
+        emergency:deactivate WebSocket event.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Emergency card deactivated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContentCard'
+        '400':
+          description: Only emergency cards can be deactivated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Editor or admin access required
           content:
             application/json:
               schema:

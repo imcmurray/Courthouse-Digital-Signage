@@ -151,24 +151,34 @@ cd display && npx serve -l 8080 .
 - Drag-to-reorder priority
 - Enable/disable toggle
 
-### Idle Content Cards
-- Slideshow content displayed on idle screens between docket views
+### Content Cards
+- Slideshow content cards displayed alongside docket views
 - System cards: upcoming hearings, court statistics (auto-generated)
-- Custom info cards with icons, expiration dates, and display targeting
+- Custom info cards with markdown support, icons, expiration dates, and display targeting
 - Drag-to-reorder with per-display assignment
 - Configurable rotation interval
+
+### Emergency Cards
+- Emergency override system with 3 severity levels:
+  - **Level 1 (Section)**: Replaces a single display component
+  - **Level 2 (Content Area)**: Replaces entire content area, header and ticker remain
+  - **Level 3 (Full Screen)**: Full screen takeover of all display content
+- Create cards on standby, activate instantly when needed
+- WebSocket push for immediate display rendering (<1 second)
+- Activation/deactivation with confirmation modals and audit logging
+- Per-display targeting or broadcast to all displays
 
 ### News
 - Automated scraping of court news articles
 - Manual scrape trigger from admin portal
 - Cached articles with pagination
-- Displays news on idle content slideshow
+- Displays news in content card slideshow
 
 ### Display Templates
 - Configurable layout templates for different display types (courtroom, lobby, wayfinding, IT status)
 - Built-in templates with factory reset capability
 - Custom template creation with validated component types
-- Component types: hearing table, hearing pills, idle cards, direction cards, camera grid, system status
+- Component types: hearing table, hearing pills, content cards, direction cards, camera grid, system status
 
 ### Real-Time Updates
 - Socket.IO WebSocket connections between backend and all displays
@@ -199,7 +209,8 @@ Interactive API documentation (Swagger UI) is available at `/api-docs` — e.g. 
 ### Display Client (API Key)
 - `GET /api/displays/:id/config` - Display configuration + global settings
 - `GET /api/displays/:id/docket` - Filtered docket entries for display
-- `GET /api/displays/:id/idle-content` - Aggregated idle content modules
+- `GET /api/displays/:id/content-cards` - Aggregated content card modules
+- `GET /api/displays/:id/emergency` - Active emergency card for display
 - `GET /api/displays/:id/system-status` - System health, display statuses, calendar sync
 - `POST /api/displays/:id/heartbeat` - Heartbeat
 
@@ -211,7 +222,7 @@ Interactive API documentation (Swagger UI) is available at `/api-docs` — e.g. 
 - `/api/settings/*` - Settings CRUD, logo upload
 - `/api/calendar-import/*` - Import trigger, config, history
 - `/api/users/*` - User management
-- `/api/idle-content-cards/*` - Idle content card CRUD, reorder
+- `/api/content-cards/*` - Content card CRUD, reorder, emergency create/activate/deactivate
 - `/api/news/*` - News article listing, scrape trigger
 - `/api/display-templates/*` - Display template CRUD, reset
 - `/api/audit-logs` - Audit log queries
