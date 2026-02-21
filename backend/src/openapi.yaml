@@ -38,6 +38,12 @@ tags:
     description: Court calendar PDF import
   - name: System
     description: Data export, import, and clearing
+  - name: Idle Content Cards
+    description: Idle content card management for display slideshows
+  - name: News
+    description: Court news article scraping and management
+  - name: Display Templates
+    description: Display layout template management
 
 components:
   securitySchemes:
@@ -873,6 +879,321 @@ components:
         changes:
           type: object
           nullable: true
+
+    IdleContentCard:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        body:
+          type: string
+        type:
+          type: string
+          enum: [info, upcoming_hearings, statistics]
+        icon:
+          type: string
+          nullable: true
+          description: Icon name (e.g. "phone", "clock", "gavel", "info")
+        sortOrder:
+          type: integer
+        enabled:
+          type: boolean
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        createdById:
+          type: string
+          nullable: true
+        createdBy:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: string
+            name:
+              type: string
+            email:
+              type: string
+        displays:
+          type: array
+          description: Display assignments. Empty array = shows on all displays.
+          items:
+            type: object
+            properties:
+              displayId:
+                type: string
+              idleContentCardId:
+                type: string
+              display:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+
+    CreateIdleContentCardRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        body:
+          type: string
+        icon:
+          type: string
+          description: Icon name (e.g. "phone", "clock", "gavel", "info")
+        sortOrder:
+          type: integer
+          default: 100
+        enabled:
+          type: boolean
+          default: true
+        expiresAt:
+          type: string
+          format: date-time
+        displayIds:
+          type: array
+          description: Display IDs to target. Omit or send empty array for all displays.
+          items:
+            type: string
+      required: [title, body]
+
+    UpdateIdleContentCardRequest:
+      type: object
+      description: |
+        For system cards (type != "info"), only enabled, sortOrder, and displayIds are accepted.
+        For info cards, all fields can be updated.
+      properties:
+        title:
+          type: string
+        body:
+          type: string
+        icon:
+          type: string
+          nullable: true
+        sortOrder:
+          type: integer
+        enabled:
+          type: boolean
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        displayIds:
+          type: array
+          items:
+            type: string
+
+    NewsArticle:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        summary:
+          type: string
+          description: Truncated summary (~200 chars)
+        url:
+          type: string
+          format: uri
+        publishedAt:
+          type: string
+          format: date-time
+          nullable: true
+        fetchedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+
+    DisplayTemplate:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+          description: Unique slug (lowercase letters, numbers, hyphens)
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        isBuiltIn:
+          type: boolean
+        components:
+          type: string
+          description: JSON-stringified array of component configurations
+        layout:
+          type: string
+          nullable: true
+          description: JSON-stringified layout definition
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        createdById:
+          type: string
+          nullable: true
+        createdBy:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: string
+            name:
+              type: string
+            email:
+              type: string
+        usageCount:
+          type: integer
+          description: Number of displays using this template
+
+    CreateDisplayTemplateRequest:
+      type: object
+      properties:
+        slug:
+          type: string
+          pattern: '^[a-z0-9-]+$'
+        name:
+          type: string
+        description:
+          type: string
+        components:
+          description: Array of component configs (or JSON string)
+          oneOf:
+            - type: array
+              items:
+                type: object
+            - type: string
+        layout:
+          description: Layout definition (or JSON string)
+          oneOf:
+            - type: object
+            - type: string
+      required: [slug, name, components]
+
+    IdleContentResponse:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        rotationInterval:
+          type: integer
+          description: Rotation interval in milliseconds
+        modules:
+          type: object
+          properties:
+            upcoming_hearings:
+              type: object
+              properties:
+                date:
+                  type: string
+                  format: date
+                  nullable: true
+                entries:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/DocketEntry'
+            info_cards:
+              type: object
+              properties:
+                cards:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/IdleContentCard'
+            news:
+              type: object
+              properties:
+                articles:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/NewsArticle'
+            statistics:
+              type: object
+              properties:
+                stats:
+                  type: object
+                  properties:
+                    hearingsNext30:
+                      type: integer
+                    hearingsNext7:
+                      type: integer
+                    casesNext30:
+                      type: integer
+                      description: Distinct case count
+                    judgesActive:
+                      type: integer
+                      description: Distinct judge count
+                    nextHearingDate:
+                      type: string
+                      format: date
+                      nullable: true
+
+    SystemStatusResponse:
+      type: object
+      properties:
+        health:
+          type: object
+          properties:
+            status:
+              type: string
+              enum: [ok, degraded]
+            database:
+              type: string
+              enum: [connected, disconnected]
+            uptime:
+              type: number
+              description: Server uptime in seconds
+        displays:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              location:
+                type: string
+                nullable: true
+              displayType:
+                type: string
+              status:
+                type: string
+                enum: [online, offline]
+              lastHeartbeat:
+                type: string
+                format: date-time
+                nullable: true
+        calendarSync:
+          type: object
+          properties:
+            lastRunAt:
+              type: string
+              format: date-time
+              nullable: true
+            lastRunStatus:
+              type: string
+              nullable: true
+            autoImportEnabled:
+              type: boolean
+            intervalMinutes:
+              type: integer
 
 paths:
   # ── Auth ──────────────────────────────────────────
@@ -2043,6 +2364,78 @@ paths:
                     type: integer
         '401':
           description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/displays/{id}/idle-content:
+    get:
+      tags: [Displays]
+      summary: Get aggregated idle content for a display client
+      description: |
+        Returns all enabled idle content modules (upcoming hearings, info cards, news,
+        statistics) for a specific display. Cards are filtered by display assignment
+        and expiration. Updates display heartbeat on each call.
+      security:
+        - apiKeyAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Idle content modules for the display
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdleContentResponse'
+        '401':
+          description: Invalid or missing API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Display not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/displays/{id}/system-status:
+    get:
+      tags: [Displays]
+      summary: Get system health, display statuses, and calendar sync info
+      description: |
+        Returns system health (database connectivity, uptime), status of all displays
+        (online/offline based on 2-minute heartbeat threshold), and calendar sync
+        configuration. Used by IT status display type.
+      security:
+        - apiKeyAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: System status information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemStatusResponse'
+        '401':
+          description: Invalid or missing API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Display not found
           content:
             application/json:
               schema:
@@ -3350,6 +3743,641 @@ paths:
                 $ref: '#/components/schemas/Error'
         '403':
           description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ── Idle Content Cards ───────────────────────────
+  /api/idle-content-cards:
+    get:
+      tags: [Idle Content Cards]
+      summary: List all idle content cards
+      description: Returns all idle content cards with their display assignments and creator info.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: enabled
+          in: query
+          schema:
+            type: string
+            enum: ['true']
+          description: When "true", only return enabled cards
+      responses:
+        '200':
+          description: List of idle content cards
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cards:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/IdleContentCard'
+                  total:
+                    type: integer
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      tags: [Idle Content Cards]
+      summary: Create an info card
+      description: |
+        Creates a new idle content card of type "info". System card types
+        (upcoming_hearings, statistics) cannot be created manually.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateIdleContentCardRequest'
+      responses:
+        '201':
+          description: Card created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdleContentCard'
+        '400':
+          description: Missing required fields or attempted to create system card
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Editor or admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/idle-content-cards/reorder:
+    patch:
+      tags: [Idle Content Cards]
+      summary: Bulk reorder idle content cards
+      description: |
+        Updates the sortOrder of multiple cards at once. All updates are
+        applied in a transaction. Emits an idle-content:update WebSocket event.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                order:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      sortOrder:
+                        type: integer
+                    required: [id, sortOrder]
+              required: [order]
+      responses:
+        '200':
+          description: Cards reordered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  updated:
+                    type: integer
+        '400':
+          description: Invalid input (empty array or missing fields)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Editor or admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/idle-content-cards/{id}:
+    put:
+      tags: [Idle Content Cards]
+      summary: Update an idle content card
+      description: |
+        Updates a card. System cards (type != "info") only accept enabled,
+        sortOrder, and displayIds changes. Info cards accept all fields.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateIdleContentCardRequest'
+      responses:
+        '200':
+          description: Card updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdleContentCard'
+        '400':
+          description: Validation error (empty title or body)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Editor or admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Card not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags: [Idle Content Cards]
+      summary: Delete an info card
+      description: Deletes a user-created info card. System cards cannot be deleted.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Card deleted
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Editor or admin access required, or system card cannot be deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Card not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ── News ─────────────────────────────────────────
+  /api/news:
+    get:
+      tags: [News]
+      summary: List cached news articles
+      description: Returns paginated news articles ordered by fetch date (newest first).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        '200':
+          description: Paginated news articles
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  articles:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/NewsArticle'
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  limit:
+                    type: integer
+                  totalPages:
+                    type: integer
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/news/scrape:
+    post:
+      tags: [News]
+      summary: Trigger a manual news scrape
+      description: Runs the news scraper to fetch and cache new articles from the court website.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Scrape completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  articlesAdded:
+                    type: integer
+                  articlesUpdated:
+                    type: integer
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Editor or admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Scrape failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/news/{id}:
+    delete:
+      tags: [News]
+      summary: Delete a cached news article
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Article deleted
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Editor or admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Article not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ── Display Templates ───────────────────────────
+  /api/display-templates:
+    get:
+      tags: [Display Templates]
+      summary: List all display templates with usage counts
+      description: Returns templates ordered by built-in status (built-in first), then by name.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of display templates
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  templates:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DisplayTemplate'
+                  total:
+                    type: integer
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Editor or admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      tags: [Display Templates]
+      summary: Create a custom display template (admin only)
+      description: |
+        Creates a new custom display template. The slug must be globally unique and
+        contain only lowercase letters, numbers, and hyphens. Components are validated
+        against allowed component types.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDisplayTemplateRequest'
+      responses:
+        '201':
+          description: Template created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DisplayTemplate'
+        '400':
+          description: Missing required fields, invalid slug format, or invalid components
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Template with this slug already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/display-templates/{id}:
+    get:
+      tags: [Display Templates]
+      summary: Get a single display template
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Template details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DisplayTemplate'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Editor or admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Template not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      tags: [Display Templates]
+      summary: Update a display template (admin only)
+      description: |
+        Updates an existing template. Built-in templates cannot have their slug changed.
+        Components are validated against allowed component types.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDisplayTemplateRequest'
+      responses:
+        '200':
+          description: Template updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DisplayTemplate'
+        '400':
+          description: Cannot change slug of built-in template, or invalid components
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Template not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Template with this slug already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags: [Display Templates]
+      summary: Delete a custom display template (admin only)
+      description: Deletes a custom template. Built-in templates and templates in use by displays cannot be deleted.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Template deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+        '400':
+          description: Cannot delete built-in template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Template not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Cannot delete template in use by displays
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  displays:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+
+  /api/display-templates/{id}/reset:
+    post:
+      tags: [Display Templates]
+      summary: Reset a built-in template to defaults (admin only)
+      description: Resets a built-in template's name, description, components, and layout to factory defaults. Only works on built-in templates.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Template reset to defaults
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DisplayTemplate'
+        '400':
+          description: Can only reset built-in templates
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Template not found
           content:
             application/json:
               schema:
