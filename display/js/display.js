@@ -2871,20 +2871,19 @@
       console.warn('[EMERGENCY] Level 1: target component "' + targetSlug + '" not found');
       return;
     }
-    // Hide the target cell content and show emergency in its place
+    // Save originals
     targetCell.dataset.emergencyBackup = targetCell.innerHTML;
-    targetCell.dataset.emergencyGridArea = targetCell.style.gridArea || '';
+    targetCell.dataset.emergencyStyles = targetCell.style.cssText;
+
+    // Replace content
     targetCell.innerHTML = '<div class="emergency-section" style="width:100%;height:100%;display:flex;">' + cardHtml + '</div>';
-    // Expand the target cell to fill the entire grid and hide siblings
-    targetCell.style.gridColumn = '1 / -1';
-    targetCell.style.gridRow = '1 / -1';
-    targetCell.style.gridArea = '';
-    cells.forEach(function(cell) {
-      if (cell !== targetCell) {
-        cell.dataset.emergencyHidden = 'true';
-        cell.style.display = 'none';
-      }
-    });
+
+    // Clear inline styles from scaffoldComponent (e.g. camera-grid's inner grid)
+    // but preserve the grid-area placement so the cell stays in its grid position
+    var savedArea = targetCell.style.gridArea;
+    targetCell.style.cssText = '';
+    if (savedArea) targetCell.style.gridArea = savedArea;
+
     console.log('[EMERGENCY] Level 1: section override on "' + targetSlug + '" active');
   }
 
@@ -2911,23 +2910,16 @@
         }
       }
     } else if (emergencyLevel === 1) {
-      // Restore the original cell content, grid area, and hidden siblings
+      // Restore the original cell content and inline styles
       var cells = document.querySelectorAll('.template-cell');
       cells.forEach(function(cell) {
         if (cell.dataset.emergencyBackup !== undefined) {
           cell.innerHTML = cell.dataset.emergencyBackup;
           delete cell.dataset.emergencyBackup;
-          // Restore original grid placement
-          cell.style.gridColumn = '';
-          cell.style.gridRow = '';
-          if (cell.dataset.emergencyGridArea !== undefined) {
-            cell.style.gridArea = cell.dataset.emergencyGridArea;
-            delete cell.dataset.emergencyGridArea;
-          }
         }
-        if (cell.dataset.emergencyHidden) {
-          cell.style.display = '';
-          delete cell.dataset.emergencyHidden;
+        if (cell.dataset.emergencyStyles !== undefined) {
+          cell.style.cssText = cell.dataset.emergencyStyles;
+          delete cell.dataset.emergencyStyles;
         }
       });
     }
