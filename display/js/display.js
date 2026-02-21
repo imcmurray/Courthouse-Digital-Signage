@@ -1441,6 +1441,10 @@
         });
 
         socket.on('display:refresh', () => {
+          if (emergencyActive) {
+            console.log('Refresh command received but emergency active — skipping reload');
+            return;
+          }
           console.log('Refresh command received');
           window.location.reload();
         });
