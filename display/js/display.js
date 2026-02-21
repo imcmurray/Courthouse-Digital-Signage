@@ -1842,8 +1842,9 @@
       var idleOverlay = document.getElementById('idle-content-overlay');
       if (!targetCell || !idleOverlay) return;
 
-      var isIdle = docketData.length === 0;
-      var idleEnabled = displayConfig.showIdleContent && idleContentData && idleContentData.enabled;
+      var showWhen = config.showWhen || 'when-idle';
+      var isIdle = (showWhen === 'always') || (docketData.length === 0);
+      var idleEnabled = idleContentData && idleContentData.enabled;
 
       if (isIdle && idleEnabled) {
         if (!idleContentActive) {
@@ -1879,14 +1880,12 @@
       );
       if (response.ok) {
         idleContentData = await response.json();
-        // If idle content is currently active, re-render with fresh data
-        var hasIdlePages = paginationState.active && paginationState.pages.some(function(p) { return p.type === 'idle'; });
-        if (idleContentActive || hasIdlePages) {
-          if (idleContentActive) {
-            deactivateIdleContentForType('idle-content-overlay', null);
-          }
-          renderAllComponents();
+        // Re-render to pick up idle content (handles both first-load race
+        // condition and periodic refreshes with updated data)
+        if (idleContentActive) {
+          deactivateIdleContentForType('idle-content-overlay', null);
         }
+        renderAllComponents();
       }
     } catch (error) {
       console.error('Failed to fetch idle content:', error);
