@@ -356,7 +356,7 @@ function GridPreview({ orientation, orientationLayout, components, onAssignCompo
 
   // Components not assigned to any area in this orientation (and have gridArea capability — i.e., no behavioral overlays)
   const unassigned = components.filter(comp => {
-    if (comp.type === 'idle-cards' && comp.config.mode === 'replace-panel') return false;
+    if (comp.type === 'content-cards' && comp.config.mode === 'replace-panel') return false;
     const area = comp.gridArea?.[orientation];
     return !area || !areaNames.includes(area);
   });
@@ -634,8 +634,8 @@ function SortableComponent({ component, onRemove, onUpdateConfig, isExpanded, on
   };
 
   const info = DISPLAY_COMPONENTS[component.type];
-  const idleMode = component.type === 'idle-cards' ? (component.config.mode as string) || 'interleave-pagination' : null;
-  const idleBadgeLabel = idleMode === 'replace-panel' ? 'Replace' : idleMode ? 'Interleave' : null;
+  const cardMode = component.type === 'content-cards' ? (component.config.mode as string) || 'interleave-pagination' : null;
+  const cardBadgeLabel = cardMode === 'replace-panel' ? 'Replace' : cardMode ? 'Interleave' : null;
 
   // Placement badges
   const lArea = component.gridArea?.landscape;
@@ -662,8 +662,8 @@ function SortableComponent({ component, onRemove, onUpdateConfig, isExpanded, on
         </button>
         <div className="flex-1 min-w-0 flex items-center gap-2">
           <span className="text-sm font-medium text-gray-900 dark:text-white">{info?.name || component.type}</span>
-          {idleBadgeLabel ? (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400">{idleBadgeLabel}</span>
+          {cardBadgeLabel ? (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400">{cardBadgeLabel}</span>
           ) : (lArea || pArea) ? (
             <span className="text-[10px] font-mono text-gray-400 dark:text-gray-500">
               {lArea && `L:${lArea}`}{lArea && pArea && ' '}{pArea && `P:${pArea}`}
@@ -733,7 +733,7 @@ function ComponentConfigEditor({ type, config, onChange, assignedComponentTypes 
           </div>
         </div>
       );
-    case 'idle-cards':
+    case 'content-cards':
       return (
         <div className="space-y-2">
           <div>
@@ -756,8 +756,8 @@ function ComponentConfigEditor({ type, config, onChange, assignedComponentTypes 
             </select>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
               {(config.mode || 'interleave-pagination') === 'replace-panel'
-                ? 'Replaces the target panel with idle content cards when no hearings are scheduled.'
-                : 'Idle content cards are added as extra pages in the hearing table\u2019s pagination cycle.'}
+                ? 'Replaces the target panel with content cards when no hearings are scheduled.'
+                : 'Content cards are added as extra pages in the hearing table\u2019s pagination cycle.'}
             </p>
           </div>
           {(config.mode || 'interleave-pagination') === 'replace-panel' && (
@@ -770,7 +770,7 @@ function ComponentConfigEditor({ type, config, onChange, assignedComponentTypes 
             >
               <option value="">Select a component...</option>
               {assignedComponentTypes
-                .filter(c => c.type !== 'idle-cards')
+                .filter(c => c.type !== 'content-cards')
                 .map(c => <option key={c.type} value={c.type}>{c.name}</option>)}
             </select>
           </div>
@@ -787,8 +787,8 @@ function ComponentConfigEditor({ type, config, onChange, assignedComponentTypes 
             </select>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
               {(config.showWhen || 'when-idle') === 'always'
-                ? 'Idle cards display regardless of hearing schedule.'
-                : 'Idle cards only appear when the target panel has no hearings to show.'}
+                ? 'Content cards display regardless of hearing schedule.'
+                : 'Content cards only appear when the target panel has no hearings to show.'}
             </p>
           </div>
         </div>

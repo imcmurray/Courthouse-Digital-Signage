@@ -1,7 +1,7 @@
 export const DISPLAY_COMPONENTS = {
   'hearing-table':   { name: 'Hearing Table', description: 'Full docket table with columns' },
   'hearing-pills':   { name: 'Schedule Pills', description: 'Compact judge/room/time pill layout' },
-  'idle-cards':      { name: 'Idle Content Cards', description: 'Info cards, news, statistics slideshow' },
+  'content-cards':   { name: 'Content Cards', description: 'Info cards, news, statistics slideshow' },
   'direction-cards': { name: 'Wayfinding Directions', description: 'Direction card grid' },
   'camera-grid':     { name: 'Camera Grid', description: 'RTSP camera tile grid' },
   'system-status':   { name: 'System Status', description: 'Database, uptime, display status' },

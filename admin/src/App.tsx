@@ -11,7 +11,7 @@ import Dashboard from './pages/Dashboard';
 import Docket from './pages/Docket';
 import Users from './pages/Users';
 import Announcements from './pages/Announcements';
-import IdleContentCards from './pages/IdleContentCards';
+import ContentCards from './pages/ContentCards';
 import Displays from './pages/Displays';
 import ApiKeys from './pages/ApiKeys';
 import AuditLogs from './pages/AuditLogs';
@@ -136,11 +136,11 @@ const router = createBrowserRouter([
         ),
       },
       {
-        path: '/admin/idle-content',
+        path: '/admin/content-cards',
         element: (
           <ProtectedRoute allowedRoles={['admin', 'editor']}>
             <AdminLayout>
-              <IdleContentCards />
+              <ContentCards />
             </AdminLayout>
           </ProtectedRoute>
         ),

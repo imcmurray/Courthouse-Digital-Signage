@@ -56,12 +56,18 @@
   let screensaverManualOverride = null; // null = auto, 'on' = forced, 'off' = forced
   let screensaverAnimationId = null;
 
-  // Idle content state
-  let idleContentData = null;
-  let idleSlides = [];
-  let idleCurrentSlide = 0;
-  let idleRotationTimer = null;
-  let idleContentActive = false;
+  // Content card state
+  let contentCardData = null;
+  let contentCardSlides = [];
+  let contentCardCurrentSlide = 0;
+  let contentCardRotationTimer = null;
+  let contentCardActive = false;
+
+  // Emergency state
+  let emergencyActive = false;
+  let emergencyData = null;
+  let emergencyLevel = 0;
+  let emergencyPollTimer = null;
 
   // Template engine state
   var activeTemplate = null;
@@ -74,7 +80,7 @@
   var DISPLAY_COMPONENTS = {
     'hearing-table':    { name: 'Hearing Table', description: 'Full docket table with columns' },
     'hearing-pills':    { name: 'Schedule Pills', description: 'Compact judge/room/time pill layout' },
-    'idle-cards':       { name: 'Idle Content Cards', description: 'Info cards, news, statistics slideshow' },
+    'content-cards':       { name: 'Content Cards', description: 'Info cards, news, statistics slideshow' },
     'direction-cards':  { name: 'Wayfinding Directions', description: 'Direction card grid' },
     'camera-grid':      { name: 'Camera Grid', description: 'RTSP camera tile grid' },
     'system-status':    { name: 'System Status', description: 'Database, uptime, display status' }
@@ -84,21 +90,21 @@
     courtroom: {
       components: [
         { type: 'hearing-table', config: { viewMode: 'smart' } },
-        { type: 'idle-cards', config: { mode: 'interleave-pagination' } }
+        { type: 'content-cards', config: { mode: 'interleave-pagination' } }
       ],
       layout: null // single flex column
     },
     chambers: {
       components: [
         { type: 'hearing-table', config: { viewMode: 'smart', hideColumns: ['judge'] } },
-        { type: 'idle-cards', config: { mode: 'interleave-pagination' } }
+        { type: 'content-cards', config: { mode: 'interleave-pagination' } }
       ],
       layout: null
     },
     combined: {
       components: [
         { type: 'hearing-table', config: { viewMode: 'all' } },
-        { type: 'idle-cards', config: { mode: 'interleave-pagination' } }
+        { type: 'content-cards', config: { mode: 'interleave-pagination' } }
       ],
       layout: null
     },
@@ -106,7 +112,7 @@
       components: [
         { type: 'hearing-pills', config: {}, gridArea: { landscape: 'left', portrait: 'top' } },
         { type: 'direction-cards', config: {}, gridArea: { landscape: 'right', portrait: 'bottom' } },
-        { type: 'idle-cards', config: { mode: 'replace-panel', target: 'hearing-pills' } }
+        { type: 'content-cards', config: { mode: 'replace-panel', target: 'hearing-pills' } }
       ],
       layout: {
         landscape: { columns: '40% 60%', rows: '1fr', areas: [['left', 'right']] },
@@ -118,7 +124,7 @@
         { type: 'camera-grid', config: {}, gridArea: { landscape: 'cameras', portrait: 'cameras' } },
         { type: 'system-status', config: {}, gridArea: { landscape: 'status', portrait: 'status' } },
         { type: 'hearing-pills', config: {}, gridArea: { landscape: 'pills', portrait: 'pills' } },
-        { type: 'idle-cards', config: { mode: 'replace-panel', target: 'hearing-pills' } }
+        { type: 'content-cards', config: { mode: 'replace-panel', target: 'hearing-pills' } }
       ],
       layout: {
         landscape: { columns: '60% 40%', rows: '1fr auto', areas: [['cameras', 'pills'], ['status', 'pills']] },
@@ -153,13 +159,15 @@
     fetchDocket();
     fetchAnnouncements();
     fetchWeather();
-    fetchIdleContent();
+    fetchContentCards();
+    fetchEmergencyStatus();
 
     // Set up refresh intervals
     setInterval(fetchDocket, CONFIG.refreshInterval);
     setInterval(fetchAnnouncements, CONFIG.refreshInterval);
-    setInterval(fetchIdleContent, 300000); // Refresh idle content every 5 minutes
+    setInterval(fetchContentCards, 300000); // Refresh content cards every 5 minutes
     setInterval(fetchWeather, CONFIG.weatherRefreshInterval);
+    emergencyPollTimer = setInterval(fetchEmergencyStatus, 30000); // Poll emergency status every 30 seconds as fallback
 
     // Set up schedule checker (runs every 30 seconds)
     setInterval(checkSchedule, 30000);
@@ -749,14 +757,14 @@
 
     var tbody = document.getElementById('docket-body');
     var table = document.querySelector('.docket-table');
-    var idleContainer = document.getElementById('idle-content-container');
+    var contentCardContainer = document.getElementById('content-card-container');
 
-    if (page.type === 'idle') {
-      // Hide docket table, show idle container with slide HTML
+    if (page.type === 'content-card') {
+      // Hide docket table, show content card container with slide HTML
       if (table) table.style.display = 'none';
-      if (idleContainer) {
-        idleContainer.style.display = 'flex';
-        idleContainer.innerHTML = page.html;
+      if (contentCardContainer) {
+        contentCardContainer.style.display = 'flex';
+        contentCardContainer.innerHTML = page.html;
       }
       var totalPages = paginationState.pages.length;
       if (totalPages > 1) {
@@ -765,11 +773,11 @@
         updatePaginationInfo(pageIndex, '');
       }
     } else {
-      // Docket page: show table, hide idle container
+      // Docket page: show table, hide content card container
       if (table) table.style.display = '';
-      if (idleContainer) {
-        idleContainer.style.display = 'none';
-        idleContainer.innerHTML = '';
+      if (contentCardContainer) {
+        contentCardContainer.style.display = 'none';
+        contentCardContainer.innerHTML = '';
       }
       if (!tbody) return;
       tbody.innerHTML = page.html;
@@ -802,12 +810,12 @@
     paginationState.currentIndex = (paginationState.currentIndex + 1) % paginationState.rotationOrder.length;
     var nextPageIdx = paginationState.rotationOrder[paginationState.currentIndex];
 
-    var currentIsIdle = currentPage && currentPage.type === 'idle';
+    var currentIsContentCard = currentPage && currentPage.type === 'content-card';
 
     // Fade out the currently visible container
     var fadeTarget;
-    if (currentIsIdle) {
-      fadeTarget = document.getElementById('idle-content-container');
+    if (currentIsContentCard) {
+      fadeTarget = document.getElementById('content-card-container');
     } else {
       fadeTarget = document.getElementById('docket-body');
     }
@@ -851,11 +859,11 @@
     paginationState.currentIndex = 0;
     paginationState.pageSignature = '';
 
-    // Ensure docket table is visible and idle container is hidden
+    // Ensure docket table is visible and content card container is hidden
     var table = document.querySelector('.docket-table');
-    var idleContainer = document.getElementById('idle-content-container');
+    var contentCardContainer = document.getElementById('content-card-container');
     if (table) table.style.display = '';
-    if (idleContainer) { idleContainer.style.display = 'none'; idleContainer.innerHTML = ''; }
+    if (contentCardContainer) { contentCardContainer.style.display = 'none'; contentCardContainer.innerHTML = ''; }
 
     // Clear pagination info from legend bar, but keep stricken notice
     var leftEl = document.getElementById('pagination-info');
@@ -868,17 +876,17 @@
     var tbody = document.getElementById('docket-body');
     if (!tbody) return;
 
-    var idleEnabled = displayConfig.showIdleContent && idleContentData && idleContentData.enabled;
-    console.log('[idle-interleave] renderDocket: showIdleContent=' + displayConfig.showIdleContent + ', data=' + !!idleContentData + ', dataEnabled=' + (idleContentData && idleContentData.enabled) + ', idleEnabled=' + idleEnabled + ', hearings=' + docketData.length);
+    var contentCardsEnabled = displayConfig.showContentCards && contentCardData && contentCardData.enabled;
+    console.log('[content-cards-interleave] renderDocket: showContentCards=' + displayConfig.showContentCards + ', data=' + !!contentCardData + ', dataEnabled=' + (contentCardData && contentCardData.enabled) + ', contentCardsEnabled=' + contentCardsEnabled + ', hearings=' + docketData.length);
 
     // --- Zero hearings ---
     if (docketData.length === 0) {
-      if (idleEnabled) {
-        var slides = buildIdleSlides(true); // with schedule summary
+      if (contentCardsEnabled) {
+        var slides = buildContentCardSlides(true); // with schedule summary
         if (slides.length > 0) {
           renderZoomLegend(null);
           var pages = slides.map(function(s) {
-            return { html: s, type: 'idle', priority: 'low', contLabel: null };
+            return { html: s, type: 'content-card', priority: 'low', contLabel: null };
           });
           softRefreshOrStartPagination(pages);
           adjustDocketPadding();
@@ -901,12 +909,12 @@
       var totalVisible = classified.inProgress.length + classified.upcomingSoon.length +
                          classified.upcomingLater.length + classified.pastRecent.length;
       if (totalVisible === 0) {
-        if (idleEnabled) {
-          var slides2 = buildIdleSlides(true); // with schedule summary (shows faded past pills)
+        if (contentCardsEnabled) {
+          var slides2 = buildContentCardSlides(true); // with schedule summary (shows faded past pills)
           if (slides2.length > 0) {
             renderZoomLegend(null);
             var pages2 = slides2.map(function(s) {
-              return { html: s, type: 'idle', priority: 'low', contLabel: null };
+              return { html: s, type: 'content-card', priority: 'low', contLabel: null };
             });
             softRefreshOrStartPagination(pages2);
             adjustDocketPadding();
@@ -961,15 +969,15 @@
         : buildAllSectionsForPagination(docketData, now, zoomMap);
       var pages = buildPaginatedPages(sections, rowsPerPage);
 
-      // Append idle slides as additional pages
-      if (idleEnabled) {
-        var idleSlideHtmls = buildIdleSlides(false); // no schedule summary (docket IS the schedule)
-        console.log('[idle-interleave] Paginated docket: appending ' + idleSlideHtmls.length + ' idle slides to ' + pages.length + ' docket pages');
-        if (idleSlideHtmls.length === 0) {
-          console.log('[idle-interleave] No idle slides: check that info_cards, news, or statistics modules have content');
+      // Append content card slides as additional pages
+      if (contentCardsEnabled) {
+        var contentCardSlideHtmls = buildContentCardSlides(false); // no schedule summary (docket IS the schedule)
+        console.log('[content-cards-interleave] Paginated docket: appending ' + contentCardSlideHtmls.length + ' content card slides to ' + pages.length + ' docket pages');
+        if (contentCardSlideHtmls.length === 0) {
+          console.log('[content-cards-interleave] No content card slides: check that info_cards, news, or statistics modules have content');
         }
-        idleSlideHtmls.forEach(function(slideHtml) {
-          pages.push({ html: slideHtml, type: 'idle', priority: 'low', contLabel: null });
+        contentCardSlideHtmls.forEach(function(slideHtml) {
+          pages.push({ html: slideHtml, type: 'content-card', priority: 'low', contLabel: null });
         });
       }
 
@@ -999,18 +1007,18 @@
     } else if (container) {
       container.classList.remove('scrolling');
 
-      // Even though docket fits on one page, idle slides may create multi-page rotation
-      if (idleEnabled) {
-        var idleSlideHtmls2 = buildIdleSlides(false);
-        console.log('[idle-interleave] Single-page docket: ' + idleSlideHtmls2.length + ' idle slides');
-        if (idleSlideHtmls2.length === 0) {
-          console.log('[idle-interleave] No idle slides: check that info_cards, news, or statistics modules have content');
+      // Even though docket fits on one page, content card slides may create multi-page rotation
+      if (contentCardsEnabled) {
+        var contentCardSlideHtmls2 = buildContentCardSlides(false);
+        console.log('[content-cards-interleave] Single-page docket: ' + contentCardSlideHtmls2.length + ' content card slides');
+        if (contentCardSlideHtmls2.length === 0) {
+          console.log('[content-cards-interleave] No content card slides: check that info_cards, news, or statistics modules have content');
         }
-        if (idleSlideHtmls2.length > 0) {
+        if (contentCardSlideHtmls2.length > 0) {
           var docketPageHtml = tbody.innerHTML;
           var pages3 = [{ html: docketPageHtml, type: 'docket', priority: 'low', contLabel: null }];
-          idleSlideHtmls2.forEach(function(slideHtml) {
-            pages3.push({ html: slideHtml, type: 'idle', priority: 'low', contLabel: null });
+          contentCardSlideHtmls2.forEach(function(slideHtml) {
+            pages3.push({ html: slideHtml, type: 'content-card', priority: 'low', contLabel: null });
           });
           softRefreshOrStartPagination(pages3);
         } else {
@@ -1442,9 +1450,24 @@
           showOverlayMessage(data.message, data.duration || 5000);
         });
 
-        socket.on('idle-content:update', () => {
-          console.log('Idle content update received');
-          fetchIdleContent();
+        socket.on('content-cards:update', () => {
+          console.log('Content cards update received');
+          fetchContentCards();
+        });
+
+        socket.on('emergency:activate', (data) => {
+          console.log('[EMERGENCY] Activate event received:', data);
+          // Check if this emergency targets our display
+          if (data.displayIds && !data.displayIds.includes(CONFIG.displayId)) {
+            console.log('[EMERGENCY] Not targeted at this display, ignoring');
+            return;
+          }
+          handleEmergencyActivation(data);
+        });
+
+        socket.on('emergency:deactivate', (data) => {
+          console.log('[EMERGENCY] Deactivate event received:', data);
+          deactivateEmergency();
         });
 
         socket.on('display:screensaver', (data) => {
@@ -1583,8 +1606,8 @@
     // Create cells for each component
     var components = template.components || [];
     components.forEach(function(comp) {
-      // Skip idle-cards — it's a behavior, not a visual cell
-      if (comp.type === 'idle-cards') return;
+      // Skip content-cards — it's a behavior, not a visual cell
+      if (comp.type === 'content-cards') return;
 
       var cell = document.createElement('div');
       cell.className = 'template-cell';
@@ -1602,20 +1625,20 @@
       container.appendChild(cell);
     });
 
-    // Create idle content overlay (hidden by default, activated by idle system)
-    var idleCell = document.createElement('div');
-    idleCell.id = 'idle-content-overlay';
-    idleCell.className = 'idle-content-container';
-    idleCell.style.display = 'none';
-    container.appendChild(idleCell);
+    // Create content card overlay (hidden by default, activated by content card system)
+    var contentCardCell = document.createElement('div');
+    contentCardCell.id = 'content-card-overlay';
+    contentCardCell.className = 'content-card-container';
+    contentCardCell.style.display = 'none';
+    container.appendChild(contentCardCell);
 
     // Store active template for renderer access
     activeTemplate = template;
 
-    var idleCompLog = components.find(function(c) { return c.type === 'idle-cards'; });
+    var contentCardCompLog = components.find(function(c) { return c.type === 'content-cards'; });
     console.log('[template] Applied template: ' + (template.slug || displayConfig.displayType || 'fallback') +
       ', components: ' + components.map(function(c) { return c.type; }).join(', ') +
-      ', idle-cards config: ' + JSON.stringify(idleCompLog ? idleCompLog.config : null));
+      ', content-cards config: ' + JSON.stringify(contentCardCompLog ? contentCardCompLog.config : null));
 
     // Apply display-type-specific tweaks (title changes, CSS classes)
     applyTypeSpecificTweaks();
@@ -1641,7 +1664,7 @@
                 '<tr class="placeholder-row"><td colspan="7">Loading docket entries...</td></tr>' +
               '</tbody>' +
             '</table>' +
-            '<div id="idle-content-container" class="idle-content-container" style="display: none;"></div>' +
+            '<div id="content-card-container" class="content-card-container" style="display: none;"></div>' +
           '</div>' +
         '</section>';
     } else if (type === 'hearing-pills') {
@@ -1717,7 +1740,7 @@
     if (!activeTemplate) return;
 
     activeTemplate.components.forEach(function(comp) {
-      if (comp.type === 'idle-cards') return; // handled separately
+      if (comp.type === 'content-cards') return; // handled separately
 
       var renderer = COMPONENT_RENDERERS[comp.type];
       if (renderer) {
@@ -1725,8 +1748,8 @@
       }
     });
 
-    // Handle idle-cards behavior
-    handleIdleCards();
+    // Handle content-cards behavior
+    handleContentCards();
   }
 
   // Component renderers
@@ -1838,17 +1861,17 @@
     }
   }
 
-  // Handle idle-cards component behavior
-  function handleIdleCards() {
-    if (!activeTemplate) { console.log('[idle] No activeTemplate'); return; }
+  // Handle content-cards component behavior
+  function handleContentCards() {
+    if (!activeTemplate) { console.log('[content-cards] No activeTemplate'); return; }
 
-    var idleComp = null;
+    var contentCardComp = null;
     activeTemplate.components.forEach(function(comp) {
-      if (comp.type === 'idle-cards') idleComp = comp;
+      if (comp.type === 'content-cards') contentCardComp = comp;
     });
-    if (!idleComp) { console.log('[idle] No idle-cards component in template'); return; }
+    if (!contentCardComp) { console.log('[content-cards] No content-cards component in template'); return; }
 
-    var config = idleComp.config || {};
+    var config = contentCardComp.config || {};
     var mode = config.mode || 'interleave-pagination';
 
     // Auto-correct: if mode is interleave-pagination but template has no hearing-table,
@@ -1857,46 +1880,46 @@
     if (mode === 'interleave-pagination' && config.target) {
       var hasHearingTable = activeTemplate.components.some(function(c) { return c.type === 'hearing-table'; });
       if (!hasHearingTable) {
-        console.log('[idle] Auto-correcting mode: interleave-pagination → replace-panel (no hearing-table in template, target=' + config.target + ')');
+        console.log('[content-cards] Auto-correcting mode: interleave-pagination → replace-panel (no hearing-table in template, target=' + config.target + ')');
         mode = 'replace-panel';
       }
     }
 
-    console.log('[idle] handleIdleCards: mode=' + mode + ', target=' + (config.target || 'none') + ', showWhen=' + (config.showWhen || 'when-idle'));
+    console.log('[content-cards] handleContentCards: mode=' + mode + ', target=' + (config.target || 'none') + ', showWhen=' + (config.showWhen || 'when-idle'));
 
     if (mode === 'replace-panel' && config.target) {
       var targetCell = document.querySelector('.template-cell[data-component-type="' + config.target + '"]');
-      var idleOverlay = document.getElementById('idle-content-overlay');
-      if (!targetCell || !idleOverlay) {
-        console.log('[idle] replace-panel DOM not found: targetCell=' + !!targetCell + ', overlay=' + !!idleOverlay);
+      var contentCardOverlay = document.getElementById('content-card-overlay');
+      if (!targetCell || !contentCardOverlay) {
+        console.log('[content-cards] replace-panel DOM not found: targetCell=' + !!targetCell + ', overlay=' + !!contentCardOverlay);
         return;
       }
 
       var showWhen = config.showWhen || 'when-idle';
-      var isIdle = (showWhen === 'always') || (docketData.length === 0);
-      var idleEnabled = idleContentData && idleContentData.enabled;
-      console.log('[idle] replace-panel check: isIdle=' + isIdle + ' (showWhen=' + showWhen + ', hearings=' + docketData.length + '), idleEnabled=' + idleEnabled + ' (data=' + !!idleContentData + ', enabled=' + (idleContentData && idleContentData.enabled) + '), idleContentActive=' + idleContentActive);
+      var isContentCardTime =(showWhen === 'always') || (docketData.length === 0);
+      var contentCardsEnabled = contentCardData && contentCardData.enabled;
+      console.log('[content-cards] replace-panel check: isContentCardTime=' + isContentCardTime + ' (showWhen=' + showWhen + ', hearings=' + docketData.length + '), contentCardsEnabled=' + contentCardsEnabled + ' (data=' + !!contentCardData + ', enabled=' + (contentCardData && contentCardData.enabled) + '), contentCardActive=' + contentCardActive);
 
-      if (isIdle && idleEnabled) {
-        if (!idleContentActive) {
+      if (isContentCardTime && contentCardsEnabled) {
+        if (!contentCardActive) {
           targetCell.style.display = 'none';
-          // Position idle overlay in the target's grid area
-          idleOverlay.style.gridArea = targetCell.style.gridArea;
-          idleOverlay.style.backgroundColor = 'var(--navy-dark)';
-          var slides = buildIdleSlides(true);
-          console.log('[idle] Activating replace-panel: ' + slides.length + ' slides');
+          // Position content card overlay in the target's grid area
+          contentCardOverlay.style.gridArea = targetCell.style.gridArea;
+          contentCardOverlay.style.backgroundColor = 'var(--navy-dark)';
+          var slides = buildContentCardSlides(true);
+          console.log('[content-cards] Activating replace-panel: ' + slides.length + ' slides');
           if (slides.length > 0) {
-            activateIdleSlideshow(idleOverlay, slides);
+            activateContentCardSlideshow(contentCardOverlay, slides);
           } else {
-            console.log('[idle] replace-panel: no slides to show');
+            console.log('[content-cards] replace-panel: no slides to show');
           }
         }
       } else {
-        if (idleContentActive) {
-          console.log('[idle] Deactivating replace-panel idle content');
-          deactivateIdleContentForType('idle-content-overlay', null);
+        if (contentCardActive) {
+          console.log('[content-cards] Deactivating replace-panel content cards');
+          deactivateContentCardsForType('content-card-overlay', null);
           targetCell.style.display = '';
-          idleOverlay.style.display = 'none';
+          contentCardOverlay.style.display = 'none';
         }
       }
     }
@@ -1904,91 +1927,91 @@
   }
 
   // =============================================
-  // Idle Content System
+  // Content Card System
   // =============================================
 
-  async function fetchIdleContent() {
-    if (screensaverActive) { console.log('[idle] fetchIdleContent skipped: screensaver active'); return; }
-    console.log('[idle] fetchIdleContent: fetching from /api/displays/' + CONFIG.displayId + '/idle-content');
+  async function fetchContentCards() {
+    if (screensaverActive) { console.log('[content-cards] fetchContentCards skipped: screensaver active'); return; }
+    console.log('[content-cards] fetchContentCards: fetching from /api/displays/' + CONFIG.displayId + '/content-cards');
     try {
       var response = await fetch(
-        CONFIG.apiBaseUrl + '/api/displays/' + encodeURIComponent(CONFIG.displayId) + '/idle-content',
+        CONFIG.apiBaseUrl + '/api/displays/' + encodeURIComponent(CONFIG.displayId) + '/content-cards',
         { headers: { 'X-API-Key': getApiKey() } }
       );
       if (response.ok) {
-        idleContentData = await response.json();
-        console.log('[idle] fetchIdleContent result:', JSON.stringify({
-          enabled: idleContentData.enabled,
-          modules: Object.keys(idleContentData.modules || {}),
-          rotationInterval: idleContentData.rotationInterval
+        contentCardData = await response.json();
+        console.log('[content-cards] fetchContentCards result:', JSON.stringify({
+          enabled: contentCardData.enabled,
+          modules: Object.keys(contentCardData.modules || {}),
+          rotationInterval: contentCardData.rotationInterval
         }));
-        // Re-render to pick up idle content (handles both first-load race
+        // Re-render to pick up content cards (handles both first-load race
         // condition and periodic refreshes with updated data)
-        if (idleContentActive) {
-          deactivateIdleContentForType('idle-content-overlay', null);
+        if (contentCardActive) {
+          deactivateContentCardsForType('content-card-overlay', null);
         }
         renderAllComponents();
       } else {
-        console.log('[idle] fetchIdleContent failed: HTTP ' + response.status);
+        console.log('[content-cards] fetchContentCards failed: HTTP ' + response.status);
       }
     } catch (error) {
-      console.error('[idle] fetchIdleContent error:', error);
+      console.error('[content-cards] fetchContentCards error:', error);
     }
   }
 
-  // buildIdleSlides is defined below after buildStatisticsSlide
+  // buildContentCardSlides is defined below after buildStatisticsSlide
 
-  function showIdleSlide(index, container) {
+  function showContentCardSlide(index, container) {
     // Fade out current
-    var currentSlide = container.querySelector('.idle-slide');
+    var currentSlide = container.querySelector('.content-card-slide');
     if (currentSlide) {
       currentSlide.classList.add('fade-out');
       setTimeout(function() {
         // Replace with new slide
-        var slidesAndDots = container.querySelector('.idle-dots');
-        container.innerHTML = idleSlides[index];
+        var slidesAndDots = container.querySelector('.content-card-dots');
+        container.innerHTML = contentCardSlides[index];
         if (slidesAndDots) {
           // Re-add dots
-          var dotsHtml = '<div class="idle-dots">';
-          for (var i = 0; i < idleSlides.length; i++) {
-            dotsHtml += '<span class="idle-dot' + (i === index ? ' active' : '') + '"></span>';
+          var dotsHtml = '<div class="content-card-dots">';
+          for (var i = 0; i < contentCardSlides.length; i++) {
+            dotsHtml += '<span class="content-card-dot' + (i === index ? ' active' : '') + '"></span>';
           }
           dotsHtml += '</div>';
-          if (idleSlides.length > 1) {
+          if (contentCardSlides.length > 1) {
             container.insertAdjacentHTML('beforeend', dotsHtml);
-            var progressInterval = idleContentData.rotationInterval || 10;
-            container.insertAdjacentHTML('beforeend', '<div class="idle-progress-bar"><div class="idle-progress-bar-fill" style="animation-duration: ' + progressInterval + 's;"></div></div>');
+            var progressInterval = contentCardData.rotationInterval || 10;
+            container.insertAdjacentHTML('beforeend', '<div class="content-card-progress-bar"><div class="content-card-progress-bar-fill" style="animation-duration: ' + progressInterval + 's;"></div></div>');
           }
         }
       }, PAGINATION_FADE);
     } else {
-      container.innerHTML = idleSlides[index];
+      container.innerHTML = contentCardSlides[index];
       // Add dots and progress bar
-      if (idleSlides.length > 1) {
-        var dotsHtml = '<div class="idle-dots">';
-        for (var i = 0; i < idleSlides.length; i++) {
-          dotsHtml += '<span class="idle-dot' + (i === index ? ' active' : '') + '"></span>';
+      if (contentCardSlides.length > 1) {
+        var dotsHtml = '<div class="content-card-dots">';
+        for (var i = 0; i < contentCardSlides.length; i++) {
+          dotsHtml += '<span class="content-card-dot' + (i === index ? ' active' : '') + '"></span>';
         }
         dotsHtml += '</div>';
         container.insertAdjacentHTML('beforeend', dotsHtml);
-        var progressInterval = idleContentData.rotationInterval || 10;
-        container.insertAdjacentHTML('beforeend', '<div class="idle-progress-bar"><div class="idle-progress-bar-fill" style="animation-duration: ' + progressInterval + 's;"></div></div>');
+        var progressInterval = contentCardData.rotationInterval || 10;
+        container.insertAdjacentHTML('beforeend', '<div class="content-card-progress-bar"><div class="content-card-progress-bar-fill" style="animation-duration: ' + progressInterval + 's;"></div></div>');
       }
     }
   }
 
-  function deactivateIdleContent() {
-    deactivateIdleContentForType('idle-content-container', null);
+  function deactivateContentCards() {
+    deactivateContentCardsForType('content-card-container', null);
     var table = document.querySelector('.docket-table');
     if (table) table.style.display = '';
   }
 
-  function deactivateTemplateIdleContent() {
-    deactivateIdleContentForType('idle-content-overlay', null);
+  function deactivateTemplateContentCards() {
+    deactivateContentCardsForType('content-card-overlay', null);
     // Restore the hidden target cell
     if (activeTemplate) {
       activeTemplate.components.forEach(function(comp) {
-        if (comp.type === 'idle-cards' && comp.config && comp.config.target) {
+        if (comp.type === 'content-cards' && comp.config && comp.config.target) {
           var targetCell = document.querySelector('.template-cell[data-component-type="' + comp.config.target + '"]');
           if (targetCell) targetCell.style.display = '';
         }
@@ -2002,8 +2025,8 @@
     var monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
     var dateStr = dayNames[dateObj.getUTCDay()] + ', ' + monthNames[dateObj.getUTCMonth()] + ' ' + dateObj.getUTCDate();
 
-    var html = '<div class="idle-slide idle-upcoming">';
-    html += '<div class="idle-slide-title">NEXT HEARINGS: ' + escapeHtml(dateStr) + '</div>';
+    var html = '<div class="content-card-slide content-card-upcoming">';
+    html += '<div class="content-card-slide-title">NEXT HEARINGS: ' + escapeHtml(dateStr) + '</div>';
 
     // Group by judge
     var judgeGroups = {};
@@ -2070,12 +2093,12 @@
         document: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
       };
       var path = iconMap[card.icon] || iconMap.info;
-      iconHtml = '<div class="idle-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="' + path + '"/></svg></div>';
+      iconHtml = '<div class="content-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="' + path + '"/></svg></div>';
     }
-    return '<div class="idle-slide idle-card">' +
+    return '<div class="content-card-slide content-card-info">' +
       iconHtml +
-      '<div class="idle-card-title">' + escapeHtml(card.title) + '</div>' +
-      '<div class="idle-card-body">' + escapeHtml(card.body) + '</div>' +
+      '<div class="content-card-title">' + escapeHtml(card.title) + '</div>' +
+      '<div class="content-card-body">' + renderMarkdown(card.body) + '</div>' +
       '</div>';
   }
 
@@ -2086,11 +2109,11 @@
     } else if (article.fetchedAt) {
       dateStr = new Date(article.fetchedAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
     }
-    return '<div class="idle-slide idle-news">' +
-      '<div class="idle-news-source">COURT NEWS</div>' +
-      '<div class="idle-news-title">' + escapeHtml(article.title) + '</div>' +
-      '<div class="idle-news-summary">' + escapeHtml(article.summary) + '</div>' +
-      (dateStr ? '<div class="idle-news-date">' + escapeHtml(dateStr) + '</div>' : '') +
+    return '<div class="content-card-slide content-card-news">' +
+      '<div class="content-card-news-source">COURT NEWS</div>' +
+      '<div class="content-card-news-title">' + escapeHtml(article.title) + '</div>' +
+      '<div class="content-card-news-summary">' + escapeHtml(article.summary) + '</div>' +
+      (dateStr ? '<div class="content-card-news-date">' + escapeHtml(dateStr) + '</div>' : '') +
       '</div>';
   }
 
@@ -2100,49 +2123,49 @@
       var nd = new Date(stats.nextHearingDate);
       nextDateStr = nd.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
     }
-    return '<div class="idle-slide idle-stats">' +
-      '<div class="idle-slide-title">COURT STATISTICS</div>' +
-      '<div class="idle-stats-grid">' +
-        '<div class="idle-stats-item">' +
-          '<div class="idle-stats-number">' + (stats.hearingsNext30 || 0) + '</div>' +
-          '<div class="idle-stats-label">Next 30 Days</div>' +
+    return '<div class="content-card-slide content-card-stats">' +
+      '<div class="content-card-slide-title">COURT STATISTICS</div>' +
+      '<div class="content-card-stats-grid">' +
+        '<div class="content-card-stats-item">' +
+          '<div class="content-card-stats-number">' + (stats.hearingsNext30 || 0) + '</div>' +
+          '<div class="content-card-stats-label">Next 30 Days</div>' +
         '</div>' +
-        '<div class="idle-stats-item">' +
-          '<div class="idle-stats-number">' + (stats.hearingsNext7 || 0) + '</div>' +
-          '<div class="idle-stats-label">Next 7 Days</div>' +
+        '<div class="content-card-stats-item">' +
+          '<div class="content-card-stats-number">' + (stats.hearingsNext7 || 0) + '</div>' +
+          '<div class="content-card-stats-label">Next 7 Days</div>' +
         '</div>' +
-        '<div class="idle-stats-item">' +
-          '<div class="idle-stats-number">' + (stats.casesNext30 || 0) + '</div>' +
-          '<div class="idle-stats-label">Cases Next 30 Days</div>' +
+        '<div class="content-card-stats-item">' +
+          '<div class="content-card-stats-number">' + (stats.casesNext30 || 0) + '</div>' +
+          '<div class="content-card-stats-label">Cases Next 30 Days</div>' +
         '</div>' +
-        '<div class="idle-stats-item">' +
-          '<div class="idle-stats-number">' + (stats.judgesActive || 0) + '</div>' +
-          '<div class="idle-stats-label">Active Judges</div>' +
+        '<div class="content-card-stats-item">' +
+          '<div class="content-card-stats-number">' + (stats.judgesActive || 0) + '</div>' +
+          '<div class="content-card-stats-label">Active Judges</div>' +
         '</div>' +
       '</div>' +
-      (nextDateStr ? '<div class="idle-stats-next">Next Hearing Day: ' + escapeHtml(nextDateStr) + '</div>' : '') +
+      (nextDateStr ? '<div class="content-card-stats-next">Next Hearing Day: ' + escapeHtml(nextDateStr) + '</div>' : '') +
       '</div>';
   }
 
   // Build a "Today's Schedule" slide using the judge-grouped pill layout
   function buildTodayScheduleSummarySlide(entries, now) {
     if (!entries || entries.length === 0) {
-      return '<div class="idle-slide idle-schedule-summary">' +
-        '<div class="idle-slide-title">TODAY\'S SCHEDULE</div>' +
-        '<div class="idle-schedule-empty">No hearings scheduled</div>' +
+      return '<div class="content-card-slide content-card-schedule-summary">' +
+        '<div class="content-card-slide-title">TODAY\'S SCHEDULE</div>' +
+        '<div class="content-card-schedule-empty">No hearings scheduled</div>' +
         '</div>';
     }
     var result = buildJudgeScheduleHtml(entries, now);
-    // Strip the <h4> title since the slide has its own idle-slide-title
+    // Strip the <h4> title since the slide has its own content-card-slide-title
     var body = result.html.replace(/<h4>[\s\S]*?<\/h4>/, '');
-    return '<div class="idle-slide idle-schedule-summary">' +
-      '<div class="idle-slide-title">TODAY\'S SCHEDULE</div>' +
-      '<div class="idle-schedule-body">' + body + '</div>' +
+    return '<div class="content-card-slide content-card-schedule-summary">' +
+      '<div class="content-card-slide-title">TODAY\'S SCHEDULE</div>' +
+      '<div class="content-card-schedule-body">' + body + '</div>' +
       '</div>';
   }
 
-  // Build array of idle slide HTML strings from enabled modules
-  function buildIdleSlides(includeScheduleSummary) {
+  // Build array of content card slide HTML strings from enabled modules
+  function buildContentCardSlides(includeScheduleSummary) {
     var slides = [];
 
     // Schedule summary slide (pill view of today's schedule)
@@ -2150,12 +2173,12 @@
       slides.push(buildTodayScheduleSummarySlide(docketData, new Date()));
     }
 
-    if (!idleContentData || !idleContentData.enabled) {
-      console.log('[idle] buildIdleSlides(summary=' + includeScheduleSummary + '): data=' + !!idleContentData + ', enabled=' + (idleContentData && idleContentData.enabled) + ' → returning ' + slides.length + ' slides (schedule only)');
+    if (!contentCardData || !contentCardData.enabled) {
+      console.log('[content-cards] buildContentCardSlides(summary=' + includeScheduleSummary + '): data=' + !!contentCardData + ', enabled=' + (contentCardData && contentCardData.enabled) + ' → returning ' + slides.length + ' slides (schedule only)');
       return slides;
     }
 
-    var modules = idleContentData.modules || {};
+    var modules = contentCardData.modules || {};
 
     // Upcoming hearings slide (next scheduled date)
     if (modules.upcoming_hearings && modules.upcoming_hearings.date && modules.upcoming_hearings.entries && modules.upcoming_hearings.entries.length > 0) {
@@ -2181,7 +2204,7 @@
       slides.push(buildStatisticsSlide(modules.statistics.stats));
     }
 
-    console.log('[idle] buildIdleSlides(summary=' + includeScheduleSummary + '): ' + slides.length + ' total slides (' +
+    console.log('[content-cards] buildContentCardSlides(summary=' + includeScheduleSummary + '): ' + slides.length + ' total slides (' +
       'upcoming=' + (modules.upcoming_hearings && modules.upcoming_hearings.entries ? modules.upcoming_hearings.entries.length + ' entries' : 'none') +
       ', info_cards=' + ((modules.info_cards && modules.info_cards.cards) || []).length +
       ', news=' + ((modules.news && modules.news.articles) || []).length +
@@ -2189,42 +2212,42 @@
     return slides;
   }
 
-  // Activate an idle content slideshow in a container (used by wayfinding and IT status)
-  function activateIdleSlideshow(container, slides) {
-    console.log('[idle] activateIdleSlideshow: container=' + (container ? container.id : 'null') + ', slides=' + slides.length);
+  // Activate a content card slideshow in a container (used by wayfinding and IT status)
+  function activateContentCardSlideshow(container, slides) {
+    console.log('[content-cards] activateContentCardSlideshow: container=' + (container ? container.id : 'null') + ', slides=' + slides.length);
     if (!container || slides.length === 0) return;
 
-    idleSlides = slides;
-    idleContentActive = true;
-    idleCurrentSlide = 0;
+    contentCardSlides = slides;
+    contentCardActive = true;
+    contentCardCurrentSlide = 0;
 
     container.style.display = 'flex';
-    showIdleSlide(0, container);
+    showContentCardSlide(0, container);
 
     if (slides.length > 1) {
-      var dotsHtml = '<div class="idle-dots">';
+      var dotsHtml = '<div class="content-card-dots">';
       for (var i = 0; i < slides.length; i++) {
-        dotsHtml += '<span class="idle-dot' + (i === 0 ? ' active' : '') + '"></span>';
+        dotsHtml += '<span class="content-card-dot' + (i === 0 ? ' active' : '') + '"></span>';
       }
       dotsHtml += '</div>';
       container.insertAdjacentHTML('beforeend', dotsHtml);
 
-      var progressInterval = idleContentData ? (idleContentData.rotationInterval || 10) : 10;
-      container.insertAdjacentHTML('beforeend', '<div class="idle-progress-bar"><div class="idle-progress-bar-fill" style="animation-duration: ' + progressInterval + 's;"></div></div>');
+      var progressInterval = contentCardData ? (contentCardData.rotationInterval || 10) : 10;
+      container.insertAdjacentHTML('beforeend', '<div class="content-card-progress-bar"><div class="content-card-progress-bar-fill" style="animation-duration: ' + progressInterval + 's;"></div></div>');
 
-      if (idleRotationTimer) clearInterval(idleRotationTimer);
-      idleRotationTimer = setInterval(function() {
-        idleCurrentSlide = (idleCurrentSlide + 1) % idleSlides.length;
-        showIdleSlide(idleCurrentSlide, container);
+      if (contentCardRotationTimer) clearInterval(contentCardRotationTimer);
+      contentCardRotationTimer = setInterval(function() {
+        contentCardCurrentSlide = (contentCardCurrentSlide + 1) % contentCardSlides.length;
+        showContentCardSlide(contentCardCurrentSlide, container);
       }, progressInterval * 1000);
     }
   }
 
-  // Shared deactivation for idle content slideshows (wayfinding, IT status)
-  function deactivateIdleContentForType(containerId, restoreElId) {
-    if (idleRotationTimer) {
-      clearInterval(idleRotationTimer);
-      idleRotationTimer = null;
+  // Shared deactivation for content card slideshows (wayfinding, IT status)
+  function deactivateContentCardsForType(containerId, restoreElId) {
+    if (contentCardRotationTimer) {
+      clearInterval(contentCardRotationTimer);
+      contentCardRotationTimer = null;
     }
     var container = document.getElementById(containerId);
     if (container) {
@@ -2235,9 +2258,9 @@
       var restoreEl = document.getElementById(restoreElId);
       if (restoreEl) restoreEl.style.display = '';
     }
-    idleContentActive = false;
-    idleSlides = [];
-    idleCurrentSlide = 0;
+    contentCardActive = false;
+    contentCardSlides = [];
+    contentCardCurrentSlide = 0;
   }
 
   // =============================================
@@ -2732,6 +2755,191 @@
     element.style.top = y + 'px';
 
     screensaverAnimationId = requestAnimationFrame(animate);
+  }
+
+  // =============================================
+  // Markdown Renderer (lightweight, for card bodies)
+  // =============================================
+
+  function renderMarkdown(text) {
+    if (!text) return '';
+    // Sanitize: strip script tags, event handlers
+    var s = text.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+    s = s.replace(/\bon\w+\s*=\s*["'][^"']*["']/gi, '');
+    // Bold: **text**
+    s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    // Italic: *text*
+    s = s.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
+    // Line breaks
+    s = s.replace(/\n/g, '<br>');
+    // Bullet lists: lines starting with - (after <br> conversion)
+    s = s.replace(/(?:^|<br>)\s*-\s+(.+?)(?=<br>|$)/g, function(match, item) {
+      return '<br>&bull; ' + item;
+    });
+    // Links: [text](url)
+    s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" style="color: #87CEEB; text-decoration: underline;">$1</a>');
+    // Clean up leading <br>
+    s = s.replace(/^<br>/, '');
+    return s;
+  }
+
+  // =============================================
+  // Emergency Content System
+  // =============================================
+
+  async function fetchEmergencyStatus() {
+    try {
+      var response = await fetch(
+        CONFIG.apiBaseUrl + '/api/displays/' + encodeURIComponent(CONFIG.displayId) + '/emergency',
+        { headers: { 'x-api-key': CONFIG.apiKey } }
+      );
+      if (response.ok) {
+        var data = await response.json();
+        if (data.active && !emergencyActive) {
+          handleEmergencyActivation(data);
+        } else if (!data.active && emergencyActive) {
+          deactivateEmergency();
+        }
+      }
+    } catch (error) {
+      console.error('[EMERGENCY] fetchEmergencyStatus error:', error);
+    }
+  }
+
+  function handleEmergencyActivation(data) {
+    console.log('[EMERGENCY] Activating level ' + data.level + ' emergency');
+    emergencyActive = true;
+    emergencyData = data;
+    emergencyLevel = data.level;
+
+    var cardHtml = buildEmergencyCardHtml(data);
+
+    if (data.level === 3) {
+      activateEmergencyLevel3(cardHtml);
+    } else if (data.level === 2) {
+      activateEmergencyLevel2(cardHtml);
+    } else if (data.level === 1) {
+      activateEmergencyLevel1(data, cardHtml);
+    }
+  }
+
+  function activateEmergencyLevel3(cardHtml) {
+    // Full screen takeover - above everything including screensaver
+    var overlay = document.getElementById('emergency-overlay');
+    if (!overlay) return;
+    overlay.className = 'emergency-overlay emergency-level-3';
+    overlay.innerHTML = cardHtml;
+    overlay.style.display = 'flex';
+    console.log('[EMERGENCY] Level 3: full screen takeover active');
+  }
+
+  function activateEmergencyLevel2(cardHtml) {
+    // Content area override - replaces template content but keeps header & bottom bar
+    var contentArea = document.getElementById('template-content');
+    if (!contentArea) return;
+    // Create level-2 overlay inside the content area
+    var overlay = document.getElementById('emergency-overlay');
+    if (!overlay) return;
+    overlay.className = 'emergency-overlay emergency-level-2';
+    overlay.innerHTML = cardHtml;
+    overlay.style.display = 'flex';
+    // Move overlay into content area for proper positioning
+    contentArea.appendChild(overlay);
+    console.log('[EMERGENCY] Level 2: content area override active');
+  }
+
+  function activateEmergencyLevel1(data, cardHtml) {
+    // Section override - replace a single template component
+    var targetSlug = data.target;
+    if (!targetSlug) {
+      console.warn('[EMERGENCY] Level 1 requires a target component slug');
+      return;
+    }
+    // Find the template cell for this component
+    var cells = document.querySelectorAll('.template-cell');
+    var targetCell = null;
+    cells.forEach(function(cell) {
+      if (cell.dataset.componentType === targetSlug) {
+        targetCell = cell;
+      }
+    });
+    if (!targetCell) {
+      console.warn('[EMERGENCY] Level 1: target component "' + targetSlug + '" not found');
+      return;
+    }
+    // Hide the target cell content and show emergency in its place
+    targetCell.dataset.emergencyBackup = targetCell.innerHTML;
+    targetCell.innerHTML = '<div class="emergency-section" style="width:100%;height:100%;display:flex;">' + cardHtml + '</div>';
+    console.log('[EMERGENCY] Level 1: section override on "' + targetSlug + '" active');
+  }
+
+  function deactivateEmergency() {
+    if (!emergencyActive) return;
+    console.log('[EMERGENCY] Deactivating emergency level ' + emergencyLevel);
+
+    if (emergencyLevel === 3 || emergencyLevel === 2) {
+      var overlay = document.getElementById('emergency-overlay');
+      if (overlay) {
+        overlay.style.display = 'none';
+        overlay.innerHTML = '';
+        overlay.className = 'emergency-overlay';
+        // If it was moved into template-content for level 2, move it back
+        var body = document.body;
+        var screensaver = document.getElementById('screensaver-overlay');
+        if (overlay.parentElement && overlay.parentElement.id === 'template-content') {
+          // Move back before screensaver
+          if (screensaver) {
+            body.insertBefore(overlay, screensaver);
+          } else {
+            body.appendChild(overlay);
+          }
+        }
+      }
+    } else if (emergencyLevel === 1) {
+      // Restore the original cell content
+      var cells = document.querySelectorAll('.template-cell');
+      cells.forEach(function(cell) {
+        if (cell.dataset.emergencyBackup !== undefined) {
+          cell.innerHTML = cell.dataset.emergencyBackup;
+          delete cell.dataset.emergencyBackup;
+        }
+      });
+    }
+
+    emergencyActive = false;
+    emergencyData = null;
+    emergencyLevel = 0;
+
+    // Re-render normal content
+    renderDocket();
+    console.log('[EMERGENCY] Emergency deactivated, normal content restored');
+  }
+
+  function buildEmergencyCardHtml(data) {
+    var iconHtml = '';
+    if (data.icon) {
+      var iconMap = {
+        phone: 'M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z',
+        clock: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z',
+        gavel: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10',
+        info: 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+        location: 'M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z M15 11a3 3 0 11-6 0 3 3 0 016 0z',
+        calendar: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
+        shield: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z',
+        document: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
+        warning: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z',
+      };
+      var path = iconMap[data.icon] || iconMap.warning;
+      iconHtml = '<div class="emergency-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="' + path + '"/></svg></div>';
+    } else {
+      // Default: warning icon for emergencies
+      iconHtml = '<div class="emergency-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg></div>';
+    }
+    return '<div class="emergency-card">' +
+      iconHtml +
+      '<div class="emergency-title">' + escapeHtml(data.title) + '</div>' +
+      '<div class="emergency-body">' + renderMarkdown(data.body) + '</div>' +
+      '</div>';
   }
 
   // Send heartbeat

@@ -1429,7 +1429,7 @@ app.get('/api/displays/:id/config', displayLimiter, authenticateApiKey, async (r
         }
         return cameras.length > 0 ? { cameras } : null;
       })(),
-      showIdleContent: display.showIdleContent,
+      showContentCards: display.showContentCards,
       template: template ? {
         slug: template.slug,
         components: JSON.parse(template.components),
@@ -1460,8 +1460,8 @@ app.get('/api/displays/:id/config', displayLimiter, authenticateApiKey, async (r
   }
 });
 
-// GET /api/displays/:id/idle-content - Aggregate idle content for a display (requires API key)
-app.get('/api/displays/:id/idle-content', displayLimiter, authenticateApiKey, async (req: ApiKeyRequest, res: Response) => {
+// GET /api/displays/:id/content-cards - Aggregate content cards for a display (requires API key)
+app.get('/api/displays/:id/content-cards', displayLimiter, authenticateApiKey, async (req: ApiKeyRequest, res: Response) => {
   try {
     const display = await prisma.display.findUnique({
       where: { id: req.params.id }
@@ -1471,12 +1471,12 @@ app.get('/api/displays/:id/idle-content', displayLimiter, authenticateApiKey, as
       return res.status(404).json({ error: 'Display not found' });
     }
 
-    if (!display.showIdleContent) {
+    if (!display.showContentCards) {
       return res.json({ enabled: false });
     }
 
-    // Fetch idle settings
-    const settingKeys = ['idle_modules', 'idle_rotation_interval'];
+    // Fetch content card settings
+    const settingKeys = ['content_card_modules', 'content_card_rotation_interval'];
     const settings = await prisma.setting.findMany({
       where: { key: { in: settingKeys } }
     });
@@ -1485,15 +1485,17 @@ app.get('/api/displays/:id/idle-content', displayLimiter, authenticateApiKey, as
       try { settingsMap[s.key] = JSON.parse(s.value); } catch { settingsMap[s.key] = s.value; }
     }
 
-    const enabledModules: string[] = Array.isArray(settingsMap.idle_modules)
-      ? settingsMap.idle_modules
+    const enabledModules: string[] = Array.isArray(settingsMap.content_card_modules)
+      ? settingsMap.content_card_modules
       : ['info_cards', 'news'];
-    const rotationInterval = parseInt(settingsMap.idle_rotation_interval as string) || 10;
+    const rotationInterval = parseInt(settingsMap.content_card_rotation_interval as string) || 10;
 
-    // Query ALL enabled idle content cards (info + system) for display targeting
-    const allCards = await prisma.idleContentCard.findMany({
+    // Query ALL enabled content cards (info + system) for display targeting
+    // Exclude emergency cards from normal content cards rotation
+    const allCards = await prisma.contentCard.findMany({
       where: {
         enabled: true,
+        isEmergency: false,
         OR: [{ expiresAt: null }, { expiresAt: { gte: new Date() } }],
       },
       include: { displays: true },
@@ -1609,7 +1611,7 @@ app.get('/api/displays/:id/idle-content', displayLimiter, authenticateApiKey, as
       };
     }
 
-    console.log(`[API] Idle content fetched for display: ${req.display?.name || req.params.id}`);
+    console.log(`[API] Content cards fetched for display: ${req.display?.name || req.params.id}`);
 
     res.json({
       enabled: true,
@@ -1617,8 +1619,8 @@ app.get('/api/displays/:id/idle-content', displayLimiter, authenticateApiKey, as
       modules,
     });
   } catch (error) {
-    console.error('Failed to fetch idle content:', error);
-    res.status(500).json({ error: 'Failed to fetch idle content' });
+    console.error('Failed to fetch content cards:', error);
+    res.status(500).json({ error: 'Failed to fetch content cards' });
   }
 });
 
@@ -1996,11 +1998,11 @@ app.patch('/api/announcements/reorder', authenticateToken, requireEditor, async 
 });
 
 // =============================================
-// Idle Content Cards CRUD (admin auth)
+// Content Cards CRUD (admin auth)
 // =============================================
 
-// GET /api/idle-content-cards - List all idle content cards
-app.get('/api/idle-content-cards', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+// GET /api/content-cards - List all content cards
+app.get('/api/content-cards', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const enabledOnly = req.query.enabled === 'true';
     const where: Record<string, unknown> = {};
@@ -2012,25 +2014,33 @@ app.get('/api/idle-content-cards', authenticateToken, async (req: AuthenticatedR
       ];
     }
 
-    const cards = await prisma.idleContentCard.findMany({
+    // Filter by isEmergency if specified
+    if (req.query.isEmergency === 'true') {
+      where.isEmergency = true;
+    } else if (req.query.isEmergency === 'false') {
+      where.isEmergency = false;
+    }
+
+    const cards = await prisma.contentCard.findMany({
       where: Object.keys(where).length > 0 ? where : undefined,
       include: {
         createdBy: { select: { id: true, name: true, email: true } },
+        activatedBy: { select: { id: true, name: true, email: true } },
         displays: { include: { display: { select: { id: true, name: true } } } },
       },
       orderBy: { sortOrder: 'asc' },
     });
 
-    console.log(`[DB] SELECT from idle_content_cards - found ${cards.length} records`);
+    console.log(`[DB] SELECT from content_cards - found ${cards.length} records`);
     res.json({ cards, total: cards.length });
   } catch (error) {
-    console.error('Failed to fetch idle content cards:', error);
-    res.status(500).json({ error: 'Failed to fetch idle content cards' });
+    console.error('Failed to fetch content cards:', error);
+    res.status(500).json({ error: 'Failed to fetch content cards' });
   }
 });
 
-// POST /api/idle-content-cards - Create an idle content card
-app.post('/api/idle-content-cards', authenticateToken, requireEditor, async (req: AuthenticatedRequest, res: Response) => {
+// POST /api/content-cards - Create an content card
+app.post('/api/content-cards', authenticateToken, requireEditor, async (req: AuthenticatedRequest, res: Response) => {
   try {
     if (req.body.type && req.body.type !== 'info') {
       return res.status(400).json({ error: 'Cannot create system cards manually' });
@@ -2045,7 +2055,7 @@ app.post('/api/idle-content-cards', authenticateToken, requireEditor, async (req
       return res.status(400).json({ error: 'Body is required' });
     }
 
-    const card = await prisma.idleContentCard.create({
+    const card = await prisma.contentCard.create({
       data: {
         title,
         body,
@@ -2064,31 +2074,31 @@ app.post('/api/idle-content-cards', authenticateToken, requireEditor, async (req
       },
     });
 
-    console.log(`[DB] INSERT into idle_content_cards - created id: ${card.id}`);
+    console.log(`[DB] INSERT into content_cards - created id: ${card.id}`);
 
-    await createAuditLog('create', 'idle_content_card', card.id, req.user?.userId || null, {
+    await createAuditLog('create', 'content_card', card.id, req.user?.userId || null, {
       title: title.length > 80 ? title.slice(0, 80) + '…' : title,
       enabled,
     });
 
-    io.emit('idle-content:update', {});
+    io.emit('content-cards:update', {});
 
     res.status(201).json(card);
   } catch (error) {
-    console.error('Failed to create idle content card:', error);
-    res.status(500).json({ error: 'Failed to create idle content card' });
+    console.error('Failed to create content card:', error);
+    res.status(500).json({ error: 'Failed to create content card' });
   }
 });
 
-// PUT /api/idle-content-cards/:id - Update an idle content card
-app.put('/api/idle-content-cards/:id', authenticateToken, requireEditor, async (req: AuthenticatedRequest, res: Response) => {
+// PUT /api/content-cards/:id - Update an content card
+app.put('/api/content-cards/:id', authenticateToken, requireEditor, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { title, body, icon, sortOrder, enabled, expiresAt, displayIds } = req.body;
     const id = req.params.id;
 
-    const existing = await prisma.idleContentCard.findUnique({ where: { id } });
+    const existing = await prisma.contentCard.findUnique({ where: { id } });
     if (!existing) {
-      return res.status(404).json({ error: 'Idle content card not found' });
+      return res.status(404).json({ error: 'Content card not found' });
     }
 
     // System cards: only allow toggling enabled, reordering, and display assignment
@@ -2099,19 +2109,19 @@ app.put('/api/idle-content-cards/:id', authenticateToken, requireEditor, async (
 
       if (displayIds !== undefined) {
         await prisma.$transaction([
-          prisma.displayIdleContentCard.deleteMany({ where: { idleContentCardId: id } }),
-          prisma.idleContentCard.update({ where: { id }, data: updateData }),
+          prisma.displayContentCard.deleteMany({ where: { contentCardId: id } }),
+          prisma.contentCard.update({ where: { id }, data: updateData }),
           ...(Array.isArray(displayIds) && displayIds.length > 0
-            ? [prisma.displayIdleContentCard.createMany({
-                data: displayIds.map((did: string) => ({ displayId: did, idleContentCardId: id })),
+            ? [prisma.displayContentCard.createMany({
+                data: displayIds.map((did: string) => ({ displayId: did, contentCardId: id })),
               })]
             : []),
         ]);
       } else if (Object.keys(updateData).length > 0) {
-        await prisma.idleContentCard.update({ where: { id }, data: updateData });
+        await prisma.contentCard.update({ where: { id }, data: updateData });
       }
 
-      const card = await prisma.idleContentCard.findUnique({
+      const card = await prisma.contentCard.findUnique({
         where: { id },
         include: {
           createdBy: { select: { id: true, name: true, email: true } },
@@ -2119,9 +2129,9 @@ app.put('/api/idle-content-cards/:id', authenticateToken, requireEditor, async (
         },
       });
 
-      console.log(`[DB] UPDATE idle_content_cards (system) WHERE id = ${id}`);
-      await createAuditLog('update', 'idle_content_card', id, req.user?.userId || null, updateData);
-      io.emit('idle-content:update', {});
+      console.log(`[DB] UPDATE content_cards (system) WHERE id = ${id}`);
+      await createAuditLog('update', 'content_card', id, req.user?.userId || null, updateData);
+      io.emit('content-cards:update', {});
       return res.json(card);
     }
 
@@ -2146,23 +2156,23 @@ app.put('/api/idle-content-cards/:id', authenticateToken, requireEditor, async (
     // If displayIds explicitly provided, replace display assignments in a transaction
     if (displayIds !== undefined) {
       await prisma.$transaction([
-        prisma.displayIdleContentCard.deleteMany({ where: { idleContentCardId: id } }),
-        prisma.idleContentCard.update({ where: { id }, data: updateData }),
+        prisma.displayContentCard.deleteMany({ where: { contentCardId: id } }),
+        prisma.contentCard.update({ where: { id }, data: updateData }),
         ...(Array.isArray(displayIds) && displayIds.length > 0
-          ? [prisma.displayIdleContentCard.createMany({
-              data: displayIds.map((did: string) => ({ displayId: did, idleContentCardId: id })),
+          ? [prisma.displayContentCard.createMany({
+              data: displayIds.map((did: string) => ({ displayId: did, contentCardId: id })),
             })]
           : []),
       ]);
     } else {
-      await prisma.idleContentCard.update({
+      await prisma.contentCard.update({
         where: { id },
         data: updateData,
       });
     }
 
     // Re-fetch with displays included
-    const card = await prisma.idleContentCard.findUnique({
+    const card = await prisma.contentCard.findUnique({
       where: { id },
       include: {
         createdBy: { select: { id: true, name: true, email: true } },
@@ -2170,7 +2180,7 @@ app.put('/api/idle-content-cards/:id', authenticateToken, requireEditor, async (
       },
     });
 
-    console.log(`[DB] UPDATE idle_content_cards WHERE id = ${id}`);
+    console.log(`[DB] UPDATE content_cards WHERE id = ${id}`);
 
     const cardChanges: Record<string, { from: unknown; to: unknown }> = {};
     for (const [key, newValue] of Object.entries(updateData)) {
@@ -2179,49 +2189,49 @@ app.put('/api/idle-content-cards/:id', authenticateToken, requireEditor, async (
         cardChanges[key] = { from: oldValue, to: newValue };
       }
     }
-    await createAuditLog('update', 'idle_content_card', id, req.user?.userId || null,
+    await createAuditLog('update', 'content_card', id, req.user?.userId || null,
       Object.keys(cardChanges).length > 0 ? cardChanges : updateData);
 
-    io.emit('idle-content:update', {});
+    io.emit('content-cards:update', {});
 
     res.json(card);
   } catch (error) {
-    console.error('Failed to update idle content card:', error);
-    res.status(500).json({ error: 'Failed to update idle content card' });
+    console.error('Failed to update content card:', error);
+    res.status(500).json({ error: 'Failed to update content card' });
   }
 });
 
-// DELETE /api/idle-content-cards/:id - Delete an idle content card
-app.delete('/api/idle-content-cards/:id', authenticateToken, requireEditor, async (req: AuthenticatedRequest, res: Response) => {
+// DELETE /api/content-cards/:id - Delete an content card
+app.delete('/api/content-cards/:id', authenticateToken, requireEditor, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const existing = await prisma.idleContentCard.findUnique({ where: { id: req.params.id } });
+    const existing = await prisma.contentCard.findUnique({ where: { id: req.params.id } });
     if (!existing) {
-      return res.status(404).json({ error: 'Idle content card not found' });
+      return res.status(404).json({ error: 'Content card not found' });
     }
 
     if (existing.type !== 'info') {
       return res.status(403).json({ error: 'System cards cannot be deleted' });
     }
 
-    await prisma.idleContentCard.delete({ where: { id: req.params.id } });
+    await prisma.contentCard.delete({ where: { id: req.params.id } });
 
-    console.log(`[DB] DELETE from idle_content_cards WHERE id = ${req.params.id}`);
+    console.log(`[DB] DELETE from content_cards WHERE id = ${req.params.id}`);
 
-    await createAuditLog('delete', 'idle_content_card', req.params.id, req.user?.userId || null, {
+    await createAuditLog('delete', 'content_card', req.params.id, req.user?.userId || null, {
       title: existing.title.length > 80 ? existing.title.slice(0, 80) + '…' : existing.title,
     });
 
-    io.emit('idle-content:update', {});
+    io.emit('content-cards:update', {});
 
     res.status(204).send();
   } catch (error) {
-    console.error('Failed to delete idle content card:', error);
-    res.status(500).json({ error: 'Failed to delete idle content card' });
+    console.error('Failed to delete content card:', error);
+    res.status(500).json({ error: 'Failed to delete content card' });
   }
 });
 
-// PATCH /api/idle-content-cards/reorder - Bulk update card sort orders
-app.patch('/api/idle-content-cards/reorder', authenticateToken, requireEditor, async (req: AuthenticatedRequest, res: Response) => {
+// PATCH /api/content-cards/reorder - Bulk update card sort orders
+app.patch('/api/content-cards/reorder', authenticateToken, requireEditor, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { order } = req.body;
 
@@ -2237,22 +2247,254 @@ app.patch('/api/idle-content-cards/reorder', authenticateToken, requireEditor, a
 
     const updates = await prisma.$transaction(
       order.map((item: { id: string; sortOrder: number }) =>
-        prisma.idleContentCard.update({
+        prisma.contentCard.update({
           where: { id: item.id },
           data: { sortOrder: item.sortOrder },
         })
       )
     );
 
-    console.log(`[DB] Reordered ${updates.length} idle content cards`);
+    console.log(`[DB] Reordered ${updates.length} content cards`);
 
-    io.emit('idle-content:update', {});
+    io.emit('content-cards:update', {});
 
     res.json({ success: true, updated: updates.length });
   } catch (error) {
-    console.error('Failed to reorder idle content cards:', error);
-    res.status(500).json({ error: 'Failed to reorder idle content cards' });
+    console.error('Failed to reorder content cards:', error);
+    res.status(500).json({ error: 'Failed to reorder content cards' });
   }
+});
+
+// =============================================
+// Emergency Cards (admin auth)
+// =============================================
+
+// POST /api/content-cards/emergency - Create an emergency card
+app.post('/api/content-cards/emergency', authenticateToken, requireEditor, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { title, body, icon, emergencyLevel, emergencyTarget, sortOrder = 0, enabled = false, expiresAt, displayIds } = req.body;
+
+    if (!title || typeof title !== 'string' || title.length === 0) {
+      return res.status(400).json({ error: 'Title is required' });
+    }
+    if (!body || typeof body !== 'string' || body.length === 0) {
+      return res.status(400).json({ error: 'Body is required' });
+    }
+    if (!emergencyLevel || ![1, 2, 3].includes(emergencyLevel)) {
+      return res.status(400).json({ error: 'emergencyLevel must be 1, 2, or 3' });
+    }
+    if (emergencyLevel === 1 && !emergencyTarget) {
+      return res.status(400).json({ error: 'emergencyTarget is required for level 1 (section override)' });
+    }
+
+    const card = await prisma.contentCard.create({
+      data: {
+        title,
+        body,
+        icon: icon || null,
+        type: 'info',
+        isEmergency: true,
+        emergencyLevel,
+        emergencyTarget: emergencyTarget || null,
+        sortOrder: typeof sortOrder === 'number' ? sortOrder : 0,
+        enabled: typeof enabled === 'boolean' ? enabled : false,
+        expiresAt: expiresAt ? new Date(expiresAt) : null,
+        createdById: req.user?.userId || null,
+        ...(Array.isArray(displayIds) && displayIds.length > 0
+          ? { displays: { create: displayIds.map((id: string) => ({ displayId: id })) } }
+          : {}),
+      },
+      include: {
+        createdBy: { select: { id: true, name: true, email: true } },
+        activatedBy: { select: { id: true, name: true, email: true } },
+        displays: { include: { display: { select: { id: true, name: true } } } },
+      },
+    });
+
+    console.log(`[DB] INSERT into content_cards (emergency) - created id: ${card.id}, level: ${emergencyLevel}`);
+
+    await createAuditLog('create', 'content_card', card.id, req.user?.userId || null, {
+      title: title.length > 80 ? title.slice(0, 80) + '…' : title,
+      isEmergency: true,
+      emergencyLevel,
+    });
+
+    io.emit('content-cards:update', {});
+
+    res.status(201).json(card);
+  } catch (error) {
+    console.error('Failed to create emergency card:', error);
+    res.status(500).json({ error: 'Failed to create emergency card' });
+  }
+});
+
+// POST /api/content-cards/:id/activate - Activate an emergency card
+app.post('/api/content-cards/:id/activate', authenticateToken, requireEditor, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const card = await prisma.contentCard.findUnique({
+      where: { id },
+      include: {
+        displays: { include: { display: { select: { id: true, name: true } } } },
+      },
+    });
+
+    if (!card) {
+      return res.status(404).json({ error: 'Card not found' });
+    }
+    if (!card.isEmergency) {
+      return res.status(400).json({ error: 'Only emergency cards can be activated' });
+    }
+
+    const updated = await prisma.contentCard.update({
+      where: { id },
+      data: {
+        enabled: true,
+        activatedAt: new Date(),
+        activatedById: req.user?.userId || null,
+      },
+      include: {
+        createdBy: { select: { id: true, name: true, email: true } },
+        activatedBy: { select: { id: true, name: true, email: true } },
+        displays: { include: { display: { select: { id: true, name: true } } } },
+      },
+    });
+
+    const displayIds = updated.displays.length > 0
+      ? updated.displays.map(d => d.displayId)
+      : null; // null = all displays
+
+    // Emit emergency activation with full card content (instant render, no extra API call)
+    io.emit('emergency:activate', {
+      cardId: updated.id,
+      level: updated.emergencyLevel,
+      target: updated.emergencyTarget,
+      title: updated.title,
+      body: updated.body,
+      icon: updated.icon,
+      displayIds,
+    });
+
+    console.log(`[EMERGENCY] Activated card ${id}, level ${updated.emergencyLevel}, displays: ${displayIds ? displayIds.join(',') : 'ALL'}`);
+
+    await createAuditLog('emergency_activate', 'content_card', id, req.user?.userId || null, {
+      emergencyLevel: updated.emergencyLevel,
+      title: updated.title.length > 80 ? updated.title.slice(0, 80) + '…' : updated.title,
+    });
+
+    res.json(updated);
+  } catch (error) {
+    console.error('Failed to activate emergency card:', error);
+    res.status(500).json({ error: 'Failed to activate emergency card' });
+  }
+});
+
+// POST /api/content-cards/:id/deactivate - Deactivate an emergency card
+app.post('/api/content-cards/:id/deactivate', authenticateToken, requireEditor, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const card = await prisma.contentCard.findUnique({ where: { id } });
+    if (!card) {
+      return res.status(404).json({ error: 'Card not found' });
+    }
+    if (!card.isEmergency) {
+      return res.status(400).json({ error: 'Only emergency cards can be deactivated' });
+    }
+
+    const updated = await prisma.contentCard.update({
+      where: { id },
+      data: {
+        enabled: false,
+        activatedAt: null,
+      },
+      include: {
+        createdBy: { select: { id: true, name: true, email: true } },
+        activatedBy: { select: { id: true, name: true, email: true } },
+        displays: { include: { display: { select: { id: true, name: true } } } },
+      },
+    });
+
+    io.emit('emergency:deactivate', { cardId: id });
+
+    console.log(`[EMERGENCY] Deactivated card ${id}`);
+
+    await createAuditLog('emergency_deactivate', 'content_card', id, req.user?.userId || null, {
+      emergencyLevel: card.emergencyLevel,
+      title: card.title.length > 80 ? card.title.slice(0, 80) + '…' : card.title,
+    });
+
+    res.json(updated);
+  } catch (error) {
+    console.error('Failed to deactivate emergency card:', error);
+    res.status(500).json({ error: 'Failed to deactivate emergency card' });
+  }
+});
+
+// GET /api/displays/:id/emergency - Get active emergency for a display (requires API key)
+app.get('/api/displays/:id/emergency', displayLimiter, authenticateApiKey, async (req: ApiKeyRequest, res: Response) => {
+  try {
+    const displayId = req.params.id;
+
+    const display = await prisma.display.findUnique({ where: { id: displayId } });
+    if (!display) {
+      return res.status(404).json({ error: 'Display not found' });
+    }
+
+    // Find all active emergency cards targeted at this display (or all displays)
+    const emergencyCards = await prisma.contentCard.findMany({
+      where: {
+        isEmergency: true,
+        enabled: true,
+        activatedAt: { not: null },
+        OR: [{ expiresAt: null }, { expiresAt: { gte: new Date() } }],
+      },
+      include: { displays: true },
+      orderBy: [{ emergencyLevel: 'desc' }, { sortOrder: 'asc' }],
+    });
+
+    // Filter to cards targeting this display (or all displays)
+    const matching = emergencyCards.filter(c =>
+      c.displays.length === 0 || c.displays.some(d => d.displayId === displayId)
+    );
+
+    if (matching.length === 0) {
+      return res.json({ active: false });
+    }
+
+    const top = matching[0];
+    res.json({
+      active: true,
+      cardId: top.id,
+      level: top.emergencyLevel,
+      target: top.emergencyTarget,
+      title: top.title,
+      body: top.body,
+      icon: top.icon,
+    });
+  } catch (error) {
+    console.error('Failed to fetch emergency status:', error);
+    res.status(500).json({ error: 'Failed to fetch emergency status' });
+  }
+});
+
+// =============================================
+// Backward Compatibility: Old /api/idle-content-cards routes
+// Redirect to new /api/content-cards routes (temporary)
+// =============================================
+app.use('/api/idle-content-cards', (req: Request, res: Response, next: NextFunction) => {
+  // Rewrite the URL to the new route and pass through
+  req.url = req.url; // URL is already stripped of the base path by Express
+  const newPath = req.originalUrl.replace('/api/idle-content-cards', '/api/content-cards');
+  console.log(`[compat] Redirecting ${req.originalUrl} -> ${newPath}`);
+  res.redirect(307, newPath);
+});
+
+app.get('/api/displays/:id/idle-content', displayLimiter, authenticateApiKey, (req: ApiKeyRequest, res: Response) => {
+  const newPath = `/api/displays/${req.params.id}/content-cards`;
+  console.log(`[compat] Redirecting ${req.originalUrl} -> ${newPath}`);
+  res.redirect(307, newPath);
 });
 
 // =============================================
@@ -2331,7 +2573,7 @@ const BUILT_IN_TEMPLATES = [
     description: 'Standard courtroom display showing docket table with smart time filtering',
     components: JSON.stringify([
       { type: 'hearing-table', config: { viewMode: 'smart' }, gridArea: { landscape: 'main', portrait: 'main' } },
-      { type: 'idle-cards', config: { mode: 'interleave-pagination' } }
+      { type: 'content-cards', config: { mode: 'interleave-pagination' } }
     ]),
     layout: JSON.stringify({
       landscape: { areas: [['main']] },
@@ -2344,7 +2586,7 @@ const BUILT_IN_TEMPLATES = [
     description: "Shows a single judge's full calendar across all courtrooms",
     components: JSON.stringify([
       { type: 'hearing-table', config: { viewMode: 'smart', hideColumns: ['judge'] }, gridArea: { landscape: 'main', portrait: 'main' } },
-      { type: 'idle-cards', config: { mode: 'interleave-pagination' } }
+      { type: 'content-cards', config: { mode: 'interleave-pagination' } }
     ]),
     layout: JSON.stringify({
       landscape: { areas: [['main']] },
@@ -2357,7 +2599,7 @@ const BUILT_IN_TEMPLATES = [
     description: 'Shows all hearings across all judges and courtrooms',
     components: JSON.stringify([
       { type: 'hearing-table', config: { viewMode: 'all' }, gridArea: { landscape: 'main', portrait: 'main' } },
-      { type: 'idle-cards', config: { mode: 'interleave-pagination' } }
+      { type: 'content-cards', config: { mode: 'interleave-pagination' } }
     ]),
     layout: JSON.stringify({
       landscape: { areas: [['main']] },
@@ -2371,7 +2613,7 @@ const BUILT_IN_TEMPLATES = [
     components: JSON.stringify([
       { type: 'hearing-pills', config: {}, gridArea: { landscape: 'left', portrait: 'top' } },
       { type: 'direction-cards', config: {}, gridArea: { landscape: 'right', portrait: 'bottom' } },
-      { type: 'idle-cards', config: { mode: 'replace-panel', target: 'hearing-pills' } }
+      { type: 'content-cards', config: { mode: 'replace-panel', target: 'hearing-pills' } }
     ]),
     layout: JSON.stringify({
       landscape: { columns: '40% 60%', areas: [['left', 'right']] },
@@ -2386,7 +2628,7 @@ const BUILT_IN_TEMPLATES = [
       { type: 'camera-grid', config: {}, gridArea: { landscape: 'left-top', portrait: 'top' } },
       { type: 'system-status', config: {}, gridArea: { landscape: 'left-bottom', portrait: 'mid' } },
       { type: 'hearing-pills', config: {}, gridArea: { landscape: 'right', portrait: 'bottom' } },
-      { type: 'idle-cards', config: { mode: 'replace-panel', target: 'hearing-pills' } }
+      { type: 'content-cards', config: { mode: 'replace-panel', target: 'hearing-pills' } }
     ]),
     layout: JSON.stringify({
       landscape: { columns: '60% 40%', rows: '1fr auto', areas: [['left-top', 'right'], ['left-bottom', 'right']] },
@@ -2409,18 +2651,18 @@ async function seedBuiltInTemplates() {
 }
 
 // Valid component types
-const VALID_COMPONENT_TYPES = ['hearing-table', 'hearing-pills', 'idle-cards', 'direction-cards', 'camera-grid', 'system-status'];
+const VALID_COMPONENT_TYPES = ['hearing-table', 'hearing-pills', 'content-cards', 'direction-cards', 'camera-grid', 'system-status'];
 
 function validateComponents(components: unknown): string | null {
   if (!Array.isArray(components)) return 'components must be an array';
   for (const comp of components) {
     if (!comp || typeof comp !== 'object') return 'Each component must be an object';
     if (!VALID_COMPONENT_TYPES.includes(comp.type)) return `Invalid component type: ${comp.type}`;
-    // Validate idle-cards config
-    if (comp.type === 'idle-cards' && comp.config) {
+    // Validate content-cards config
+    if (comp.type === 'content-cards' && comp.config) {
       const mode = comp.config.mode || 'interleave-pagination';
       if (mode === 'replace-panel' && !comp.config.target) {
-        return 'idle-cards in replace-panel mode requires a target component';
+        return 'content-cards in replace-panel mode requires a target component';
       }
     }
     // Validate gridArea if present
@@ -2714,7 +2956,7 @@ app.post('/api/displays', authenticateToken, requireEditor, async (req: Authenti
       cameraLabel2,
       cameraRotateInterval,
       cameraConfig,
-      showIdleContent
+      showContentCards
     } = req.body;
 
     if (!id || !name || !location) {
@@ -2773,7 +3015,7 @@ app.post('/api/displays', authenticateToken, requireEditor, async (req: Authenti
         cameraConfig: cameraConfig
           ? (typeof cameraConfig === 'string' ? cameraConfig : JSON.stringify(cameraConfig))
           : null,
-        showIdleContent: showIdleContent ?? false,
+        showContentCards: showContentCards ?? false,
         apiKeyHash
       }
     });
@@ -2832,7 +3074,7 @@ app.put('/api/displays/:id', authenticateToken, requireEditor, async (req: Authe
       cameraLabel2,
       cameraRotateInterval,
       cameraConfig,
-      showIdleContent
+      showContentCards
     } = req.body;
 
     if (screensaverType !== undefined && !['black', 'clock', 'logo'].includes(screensaverType)) {
@@ -2892,7 +3134,7 @@ app.put('/api/displays/:id', authenticateToken, requireEditor, async (req: Authe
         ...(cameraConfig !== undefined && { cameraConfig: cameraConfig
           ? (typeof cameraConfig === 'string' ? cameraConfig : JSON.stringify(cameraConfig))
           : null }),
-        ...(showIdleContent !== undefined && { showIdleContent }),
+        ...(showContentCards !== undefined && { showContentCards }),
       }
     });
 
@@ -2903,7 +3145,7 @@ app.put('/api/displays/:id', authenticateToken, requireEditor, async (req: Authe
     const trackFields = ['name', 'location', 'judgeFilter', 'courtroomFilter',
       'showStricken', 'showZoomInfo', 'highlightCurrent', 'orientation', 'theme',
       'displayType', 'docketViewMode', 'screensaverType', 'tickerEnabled',
-      'tickerSpeed', 'showWeather', 'noticeText', 'scheduleEnabled', 'showIdleContent'] as const;
+      'tickerSpeed', 'showWeather', 'noticeText', 'scheduleEnabled', 'showContentCards'] as const;
     for (const field of trackFields) {
       if (req.body[field] !== undefined && String((existingDisplay as Record<string, unknown>)[field]) !== String((display as Record<string, unknown>)[field])) {
         changedFields[field] = { from: (existingDisplay as Record<string, unknown>)[field], to: (display as Record<string, unknown>)[field] };
@@ -3839,7 +4081,7 @@ app.put('/api/settings', authenticateToken, requireAdmin, async (req: Authentica
     }
 
     // Valid settings keys that can be updated
-    const validKeys = ['court_name', 'court_subtitle', 'courthouse_name', 'chief_judge', 'clerk_of_court', 'timezone', 'default_theme', 'court_website_url', 'idle_modules', 'idle_rotation_interval', 'news_scrape_enabled', 'news_scrape_interval'];
+    const validKeys = ['court_name', 'court_subtitle', 'courthouse_name', 'chief_judge', 'clerk_of_court', 'timezone', 'default_theme', 'court_website_url', 'content_card_modules', 'content_card_rotation_interval', 'news_scrape_enabled', 'news_scrape_interval'];
 
     // Update each setting
     const updatedSettings: Record<string, unknown> = {};
@@ -3871,10 +4113,10 @@ app.put('/api/settings', authenticateToken, requireAdmin, async (req: Authentica
     // Emit WebSocket event for real-time updates (displays may need to refresh)
     io.emit('settings:update', { settings: updatedSettings });
 
-    // Emit idle content update if any idle-related settings changed
-    const idleKeys = ['idle_modules', 'idle_rotation_interval', 'court_website_url', 'news_scrape_enabled', 'news_scrape_interval'];
-    if (Object.keys(updatedSettings).some(k => idleKeys.includes(k))) {
-      io.emit('idle-content:update', {});
+    // Emit content cards update if any content-card-related settings changed
+    const contentCardKeys = ['content_card_modules', 'content_card_rotation_interval', 'court_website_url', 'news_scrape_enabled', 'news_scrape_interval'];
+    if (Object.keys(updatedSettings).some(k => contentCardKeys.includes(k))) {
+      io.emit('content-cards:update', {});
 
       // Sync news polling timer if scraping settings changed
       if (updatedSettings.news_scrape_enabled !== undefined || updatedSettings.news_scrape_interval !== undefined) {
@@ -4475,21 +4717,21 @@ httpServer.listen(PORT, async () => {
     console.error('Failed to seed built-in templates:', err);
   }
 
-  // Seed system idle content cards (upcoming hearings, statistics)
+  // Seed system content cards (upcoming hearings, statistics)
   try {
     const systemTypes = [
       { type: 'upcoming_hearings', title: 'Upcoming Hearings', body: 'Next scheduled hearing date with judge-grouped time pills.', icon: 'calendar', sortOrder: -2 },
       { type: 'statistics', title: 'Court Statistics', body: 'Hearing counts, case counts, and active judges for the next 30 days.', icon: 'gavel', sortOrder: -1 },
     ];
     for (const sys of systemTypes) {
-      const existing = await prisma.idleContentCard.findFirst({ where: { type: sys.type } });
+      const existing = await prisma.contentCard.findFirst({ where: { type: sys.type } });
       if (!existing) {
-        await prisma.idleContentCard.create({ data: sys });
-        console.log(`[seed] Created system idle card: ${sys.type}`);
+        await prisma.contentCard.create({ data: sys });
+        console.log(`[seed] Created system content card: ${sys.type}`);
       }
     }
   } catch (err) {
-    console.error('Failed to seed system idle cards:', err);
+    console.error('Failed to seed system content cards:', err);
   }
 
   // Start auto-import polling if enabled in settings

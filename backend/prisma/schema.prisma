@@ -25,7 +25,8 @@ model User {
   announcements        Announcement[]
   auditLogs            AuditLog[]
   settings             Setting[]
-  idleContentCards     IdleContentCard[]
+  contentCards         ContentCard[]
+  emergencyActivations ContentCard[] @relation("EmergencyActivator")
   displayTypeTemplates DisplayTypeTemplate[]
 
   @@map("users")
@@ -99,7 +100,7 @@ model Display {
   cameraLabel2         String?   @map("camera_label_2")
   cameraRotateInterval Int?      @map("camera_rotate_interval")
   cameraConfig         String?   @map("camera_config")
-  showIdleContent      Boolean   @default(false) @map("show_idle_content")
+  showContentCards     Boolean   @default(false) @map("show_content_cards")
   displayTemplate      String?   @map("display_template")  // JSON: future template config
   apiKeyHash       String    @map("api_key_hash")
   createdAt        DateTime  @default(now()) @map("created_at")
@@ -108,7 +109,7 @@ model Display {
   // Relations
   docketEntries    DisplayDocketEntry[]
   announcements    DisplayAnnouncement[]
-  idleContentCards DisplayIdleContentCard[]
+  contentCards     DisplayContentCard[]
   apiKeys          ApiKey[]
 
   @@map("displays")
@@ -137,15 +138,15 @@ model DisplayAnnouncement {
   @@map("display_announcements")
 }
 
-model DisplayIdleContentCard {
-  displayId         String @map("display_id")
-  idleContentCardId String @map("idle_content_card_id")
+model DisplayContentCard {
+  displayId     String @map("display_id")
+  contentCardId String @map("content_card_id")
 
-  display         Display         @relation(fields: [displayId], references: [id], onDelete: Cascade)
-  idleContentCard IdleContentCard @relation(fields: [idleContentCardId], references: [id], onDelete: Cascade)
+  display     Display     @relation(fields: [displayId], references: [id], onDelete: Cascade)
+  contentCard ContentCard @relation(fields: [contentCardId], references: [id], onDelete: Cascade)
 
-  @@id([displayId, idleContentCardId])
-  @@map("display_idle_content_cards")
+  @@id([displayId, contentCardId])
+  @@map("display_content_cards")
 }
 
 model Announcement {
@@ -252,23 +253,29 @@ model ImportLog {
   @@map("import_logs")
 }
 
-model IdleContentCard {
-  id          String    @id @default(uuid())
-  title       String
-  body        String
-  type        String    @default("info") // "info" | "upcoming_hearings" | "statistics"
-  icon        String?   // e.g. "phone", "clock", "gavel", "info"
-  sortOrder   Int       @default(100) @map("sort_order")
-  enabled     Boolean   @default(true)
-  expiresAt   DateTime? @map("expires_at")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
-  createdById String?   @map("created_by")
+model ContentCard {
+  id              String    @id @default(uuid())
+  title           String
+  body            String
+  type            String    @default("info") // "info" | "upcoming_hearings" | "statistics"
+  icon            String?   // e.g. "phone", "clock", "gavel", "info"
+  sortOrder       Int       @default(100) @map("sort_order")
+  enabled         Boolean   @default(true)
+  expiresAt       DateTime? @map("expires_at")
+  isEmergency     Boolean   @default(false) @map("is_emergency")
+  emergencyLevel  Int?      @map("emergency_level")   // 1=section, 2=content area, 3=full screen
+  emergencyTarget String?   @map("emergency_target")  // component slug for level 1 (e.g. "hearing-table")
+  activatedAt     DateTime? @map("activated_at")       // when emergency was last activated
+  activatedById   String?   @map("activated_by_id")    // user who activated it
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  createdById     String?   @map("created_by")
 
-  createdBy User?                    @relation(fields: [createdById], references: [id])
-  displays  DisplayIdleContentCard[]
+  createdBy   User?                @relation(fields: [createdById], references: [id])
+  activatedBy User?                @relation("EmergencyActivator", fields: [activatedById], references: [id])
+  displays    DisplayContentCard[]
 
-  @@map("idle_content_cards")
+  @@map("content_cards")
 }
 
 model CachedNewsArticle {

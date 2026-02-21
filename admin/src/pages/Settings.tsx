@@ -14,8 +14,8 @@ interface SettingsData {
   default_theme: string;
   court_logo?: string;
   court_website_url?: string;
-  idle_modules?: string[];
-  idle_rotation_interval?: number;
+  content_card_modules?: string[];
+  content_card_rotation_interval?: number;
   news_scrape_enabled?: boolean;
   news_scrape_interval?: number;
 }
@@ -56,8 +56,8 @@ export default function Settings() {
     timezone: 'America/Denver',
     default_theme: 'default',
     court_website_url: '',
-    idle_modules: ['info_cards', 'news'],
-    idle_rotation_interval: 10,
+    content_card_modules: ['info_cards', 'news'],
+    content_card_rotation_interval: 10,
     news_scrape_enabled: false,
     news_scrape_interval: 60,
   });
@@ -107,8 +107,8 @@ export default function Settings() {
         default_theme: data.settings.default_theme || 'default',
         court_logo: data.settings.court_logo,
         court_website_url: data.settings.court_website_url || '',
-        idle_modules: data.settings.idle_modules || ['info_cards', 'news'],
-        idle_rotation_interval: data.settings.idle_rotation_interval || 10,
+        content_card_modules: data.settings.content_card_modules || ['info_cards', 'news'],
+        content_card_rotation_interval: data.settings.content_card_rotation_interval || 10,
         news_scrape_enabled: data.settings.news_scrape_enabled || false,
         news_scrape_interval: data.settings.news_scrape_interval || 60,
       });
@@ -228,8 +228,8 @@ export default function Settings() {
         default_theme: data.settings.default_theme || 'default',
         court_logo: data.settings.court_logo,
         court_website_url: data.settings.court_website_url || '',
-        idle_modules: data.settings.idle_modules || ['info_cards', 'news'],
-        idle_rotation_interval: data.settings.idle_rotation_interval || 10,
+        content_card_modules: data.settings.content_card_modules || ['info_cards', 'news'],
+        content_card_rotation_interval: data.settings.content_card_rotation_interval || 10,
         news_scrape_enabled: data.settings.news_scrape_enabled || false,
         news_scrape_interval: data.settings.news_scrape_interval || 60,
       });
@@ -639,11 +639,11 @@ export default function Settings() {
             </div>
           </div>
 
-          {/* Idle Content / No Hearings Display */}
+          {/* Content Cards */}
           <div className="space-y-4">
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white border-b dark:border-gray-700 pb-2">Idle Content / No Hearings Display</h3>
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white border-b dark:border-gray-700 pb-2">Content Cards</h3>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              Configure what displays show when no hearings are scheduled. Enable idle content per-display on the Displays page.
+              Configure content card rotation settings. Enable content cards per-display on the Displays page.
             </p>
 
             <div>
@@ -664,20 +664,20 @@ export default function Settings() {
             </div>
 
             <div>
-              <label htmlFor="idle_rotation_interval" className="block text-sm font-medium text-gray-700 dark:text-gray-200">
+              <label htmlFor="content_card_rotation_interval" className="block text-sm font-medium text-gray-700 dark:text-gray-200">
                 Rotation Interval (seconds)
               </label>
               <input
                 type="number"
-                id="idle_rotation_interval"
+                id="content_card_rotation_interval"
                 min="3"
                 max="120"
-                value={formData.idle_rotation_interval || 10}
-                onChange={(e) => handleInputChange('idle_rotation_interval', e.target.value)}
+                value={formData.content_card_rotation_interval || 10}
+                onChange={(e) => handleInputChange('content_card_rotation_interval', e.target.value)}
                 className="mt-1 w-32 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
               />
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Seconds each idle content slide is displayed before rotating.
+                Seconds each content card slide is displayed before rotating.
               </p>
             </div>
 
@@ -693,13 +693,13 @@ export default function Settings() {
                   <label key={mod.key} className="flex items-center space-x-2 cursor-pointer">
                     <input
                       type="checkbox"
-                      checked={(formData.idle_modules || []).includes(mod.key)}
+                      checked={(formData.content_card_modules || []).includes(mod.key)}
                       onChange={(e) => {
-                        const current = formData.idle_modules || [];
+                        const current = formData.content_card_modules || [];
                         const updated = e.target.checked
                           ? [...current, mod.key]
                           : current.filter(m => m !== mod.key);
-                        setFormData(prev => ({ ...prev, idle_modules: updated }));
+                        setFormData(prev => ({ ...prev, content_card_modules: updated }));
                         setHasChanges(true);
                       }}
                       className="rounded border-gray-300 dark:border-gray-600 text-primary focus:ring-primary dark:bg-gray-700"
@@ -710,7 +710,7 @@ export default function Settings() {
               </div>
             </div>
 
-            {(formData.idle_modules || []).includes('news') && (
+            {(formData.content_card_modules || []).includes('news') && (
               <div className="ml-4 p-3 border border-gray-200 dark:border-gray-700 rounded-lg space-y-3">
                 <div className="flex items-center">
                   <input

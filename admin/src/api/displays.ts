@@ -39,7 +39,7 @@ export interface Display {
   cameraLabel2: string | null;
   cameraRotateInterval: number | null;
   cameraConfig: string | object | null;
-  showIdleContent: boolean;
+  showContentCards: boolean;
   displayTemplate: DisplayTemplate | null;
   status: string;
   lastHeartbeat: string | null;
@@ -63,7 +63,7 @@ export interface LayoutConfig {
 }
 
 export interface DisplayTemplateComponent {
-  type: 'hearing-table' | 'hearing-pills' | 'idle-cards' | 'direction-cards' | 'camera-grid' | 'system-status';
+  type: 'hearing-table' | 'hearing-pills' | 'content-cards' | 'direction-cards' | 'camera-grid' | 'system-status';
   config: Record<string, any>;
   gridArea?: {
     landscape?: string;
@@ -106,7 +106,7 @@ export interface CreateDisplayInput {
   cameraLabel2?: string | null;
   cameraRotateInterval?: number | null;
   cameraConfig?: object | string | null;
-  showIdleContent?: boolean;
+  showContentCards?: boolean;
 }
 
 export interface UpdateDisplayInput extends Partial<Omit<CreateDisplayInput, 'id'>> {}

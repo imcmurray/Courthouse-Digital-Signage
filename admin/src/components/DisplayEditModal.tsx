@@ -120,7 +120,7 @@ export default function DisplayEditModal({ display, onClose, onSaved }: DisplayE
     showStricken: display.showStricken,
     showZoomInfo: display.showZoomInfo,
     highlightCurrent: display.highlightCurrent,
-    showIdleContent: display.showIdleContent,
+    showContentCards: display.showContentCards,
     orientation: display.orientation || 'landscape',
     showWeather: display.showWeather,
     weatherLocation: display.weatherLocation,
@@ -610,13 +610,13 @@ export default function DisplayEditModal({ display, onClose, onSaved }: DisplayE
               <div className="flex items-center mt-4">
                 <input
                   type="checkbox"
-                  id="edit-showIdleContent"
-                  checked={formData.showIdleContent ?? false}
-                  onChange={(e) => setFormData({ ...formData, showIdleContent: e.target.checked })}
+                  id="edit-showContentCards"
+                  checked={formData.showContentCards ?? false}
+                  onChange={(e) => setFormData({ ...formData, showContentCards: e.target.checked })}
                   className="h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600 rounded"
                 />
-                <label htmlFor="edit-showIdleContent" className="ml-2 text-sm text-gray-700 dark:text-gray-200">
-                  Show Idle Content
+                <label htmlFor="edit-showContentCards" className="ml-2 text-sm text-gray-700 dark:text-gray-200">
+                  Show Content Cards
                 </label>
               </div>
             </div>
