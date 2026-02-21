@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
@@ -21,6 +21,8 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { contentCardsApi, ContentCard, CreateContentCardInput, UpdateContentCardInput, CreateEmergencyCardInput, ContentCardsResponse } from '../api/contentCards';
 import { displaysApi } from '../api/displays';
+import { DISPLAY_COMPONENTS } from '../constants/displayComponents';
+import { useDisplayTemplates } from '../hooks/useDisplayTemplates';
 
 const ICON_OPTIONS = [
   { value: '', label: 'None' },
@@ -39,14 +41,6 @@ const EMERGENCY_LEVELS = [
   { value: 1, label: 'Section Override', description: 'Replaces a single component' },
   { value: 2, label: 'Content Area', description: 'Replaces entire content area' },
   { value: 3, label: 'Full Screen', description: 'Full screen takeover' },
-];
-
-const EMERGENCY_TARGETS = [
-  { value: 'hearing-table', label: 'Hearing Table' },
-  { value: 'hearing-pills', label: 'Schedule Pills' },
-  { value: 'direction-cards', label: 'Wayfinding Directions' },
-  { value: 'camera-grid', label: 'Camera Grid' },
-  { value: 'system-status', label: 'System Status' },
 ];
 
 const isExpired = (expiresAt: string | null): boolean => {
@@ -229,6 +223,52 @@ function EmergencyCardsTab() {
   });
   const displays = displaysData?.displays || [];
 
+  const { data: templatesData } = useDisplayTemplates();
+  const templates = templatesData?.templates || [];
+
+  const availableTargets = useMemo(() => {
+    const templateComponents = new Map<string, Set<string>>();
+    for (const t of templates) {
+      try {
+        const comps = JSON.parse(t.components) as { type: string }[];
+        templateComponents.set(t.slug, new Set(comps.map(c => c.type)));
+      } catch { /* skip malformed */ }
+    }
+
+    let relevantTypes: Set<string>;
+
+    if (showOnAllDisplays || !formData.displayIds?.length) {
+      relevantTypes = new Set<string>();
+      for (const types of templateComponents.values()) {
+        for (const t of types) relevantTypes.add(t);
+      }
+    } else {
+      const selectedTemplates = formData.displayIds
+        .map(id => displays.find(d => d.id === id))
+        .filter(Boolean)
+        .map(d => templateComponents.get(d!.displayType))
+        .filter(Boolean) as Set<string>[];
+
+      if (selectedTemplates.length === 0) {
+        relevantTypes = new Set<string>();
+      } else {
+        relevantTypes = new Set(selectedTemplates[0]);
+        for (let i = 1; i < selectedTemplates.length; i++) {
+          for (const t of relevantTypes) {
+            if (!selectedTemplates[i].has(t)) relevantTypes.delete(t);
+          }
+        }
+      }
+    }
+
+    return Array.from(relevantTypes)
+      .filter(t => t !== 'content-cards')
+      .map(t => ({
+        value: t,
+        label: DISPLAY_COMPONENTS[t as keyof typeof DISPLAY_COMPONENTS]?.name || t,
+      }));
+  }, [templates, displays, showOnAllDisplays, formData.displayIds]);
+
   const createMutation = useMutation({
     mutationFn: contentCardsApi.createEmergency,
     onSuccess: () => {
@@ -324,6 +364,7 @@ function EmergencyCardsTab() {
           body: formData.body,
           icon: formData.icon,
           expiresAt: formData.expiresAt,
+          emergencyTarget: formData.emergencyTarget,
           displayIds: showOnAllDisplays ? [] : formData.displayIds,
         },
       });
@@ -579,39 +620,47 @@ function EmergencyCardsTab() {
               </div>
 
               {!editingCard && (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Emergency Level *</label>
-                    <select
-                      value={formData.emergencyLevel}
-                      onChange={(e) => setFormData({ ...formData, emergencyLevel: parseInt(e.target.value) as 1 | 2 | 3 })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 dark:bg-gray-700 dark:text-white"
-                    >
-                      {EMERGENCY_LEVELS.map(level => (
-                        <option key={level.value} value={level.value}>
-                          Level {level.value}: {level.label} - {level.description}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Emergency Level *</label>
+                  <select
+                    value={formData.emergencyLevel}
+                    onChange={(e) => setFormData({ ...formData, emergencyLevel: parseInt(e.target.value) as 1 | 2 | 3 })}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 dark:bg-gray-700 dark:text-white"
+                  >
+                    {EMERGENCY_LEVELS.map(level => (
+                      <option key={level.value} value={level.value}>
+                        Level {level.value}: {level.label} - {level.description}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
-                  {formData.emergencyLevel === 1 && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Target Component *</label>
-                      <select
-                        value={formData.emergencyTarget || ''}
-                        onChange={(e) => setFormData({ ...formData, emergencyTarget: e.target.value || null })}
-                        required
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 dark:bg-gray-700 dark:text-white"
-                      >
-                        <option value="">Select component to replace...</option>
-                        {EMERGENCY_TARGETS.map(t => (
-                          <option key={t.value} value={t.value}>{t.label}</option>
-                        ))}
-                      </select>
-                    </div>
+              {(editingCard ? editingCard.emergencyLevel === 1 : formData.emergencyLevel === 1) && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Target Component *</label>
+                  <select
+                    value={formData.emergencyTarget || ''}
+                    onChange={(e) => setFormData({ ...formData, emergencyTarget: e.target.value || null })}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 dark:bg-gray-700 dark:text-white"
+                  >
+                    <option value="">Select component to replace...</option>
+                    {availableTargets.map(t => (
+                      <option key={t.value} value={t.value}>{t.label}</option>
+                    ))}
+                  </select>
+                  {formData.emergencyTarget && !availableTargets.some(t => t.value === formData.emergencyTarget) && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                      This component is not present in the selected display template(s)
+                    </p>
                   )}
-                </>
+                  {formData.emergencyTarget && availableTargets.some(t => t.value === formData.emergencyTarget) && (
+                    <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                      This component exists in {showOnAllDisplays ? 'all display templates' : 'the selected display template(s)'}
+                    </p>
+                  )}
+                </div>
               )}
 
               <div>

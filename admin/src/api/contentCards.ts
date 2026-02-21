@@ -44,7 +44,9 @@ export interface CreateContentCardInput {
   displayIds?: string[];
 }
 
-export interface UpdateContentCardInput extends Partial<CreateContentCardInput> {}
+export interface UpdateContentCardInput extends Partial<CreateContentCardInput> {
+  emergencyTarget?: string | null;
+}
 
 export interface CreateEmergencyCardInput {
   title: string;

@@ -2093,7 +2093,7 @@ app.post('/api/content-cards', authenticateToken, requireEditor, async (req: Aut
 // PUT /api/content-cards/:id - Update an content card
 app.put('/api/content-cards/:id', authenticateToken, requireEditor, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { title, body, icon, sortOrder, enabled, expiresAt, displayIds } = req.body;
+    const { title, body, icon, sortOrder, enabled, expiresAt, displayIds, emergencyTarget } = req.body;
     const id = req.params.id;
 
     const existing = await prisma.contentCard.findUnique({ where: { id } });
@@ -2152,6 +2152,12 @@ app.put('/api/content-cards/:id', authenticateToken, requireEditor, async (req: 
     if (sortOrder !== undefined) updateData.sortOrder = sortOrder;
     if (enabled !== undefined) updateData.enabled = enabled;
     if (expiresAt !== undefined) updateData.expiresAt = expiresAt ? new Date(expiresAt) : null;
+    if (emergencyTarget !== undefined && existing.isEmergency) {
+      if (existing.emergencyLevel === 1 && !emergencyTarget) {
+        return res.status(400).json({ error: 'emergencyTarget is required for level 1' });
+      }
+      updateData.emergencyTarget = emergencyTarget || null;
+    }
 
     // If displayIds explicitly provided, replace display assignments in a transaction
     if (displayIds !== undefined) {
