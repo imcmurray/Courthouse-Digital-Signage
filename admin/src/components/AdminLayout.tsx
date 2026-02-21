@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import toast from 'react-hot-toast';
 import { API_BASE_URL } from '../api/client';
+import { contentCardsApi, ContentCardsResponse } from '../api/contentCards';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -72,6 +74,13 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const [isSidebarOpen, setSidebarOpen] = useState(!isMobile);
   const [isMobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [branding, setBranding] = useState<PublicBranding | null>(null);
+
+  const { data: activeEmergencies } = useQuery<ContentCardsResponse>({
+    queryKey: ['layoutActiveEmergencies'],
+    queryFn: () => contentCardsApi.getAll(true, true),
+    refetchInterval: 10000,
+  });
+  const emergencyCount = activeEmergencies?.cards?.filter(c => c.activatedAt).length ?? 0;
 
   useEffect(() => {
     fetch(`${API_BASE_URL}/api/settings/public`)
@@ -359,6 +368,20 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
             </div>
           </div>
         </header>
+
+        {/* Emergency notification bar */}
+        {emergencyCount > 0 && (
+          <button
+            onClick={() => navigate('/admin/content-cards?tab=emergency')}
+            className="w-full bg-red-600 dark:bg-red-700 text-white px-4 py-2 flex items-center justify-center gap-2 text-sm font-medium hover:bg-red-700 dark:hover:bg-red-800 transition-colors cursor-pointer"
+          >
+            <svg className="h-4 w-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            {emergencyCount === 1 ? '1 emergency card active' : `${emergencyCount} emergency cards active`}
+            <span className="text-red-200">— Click to view</span>
+          </button>
+        )}
 
         {/* Page content */}
         <main className="flex-1 p-6 overflow-auto">{children}</main>

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import ModalPortal from '../components/ModalPortal';
@@ -377,40 +378,6 @@ function EmergencyCardsTab() {
 
   return (
     <div className="space-y-6">
-      {/* Active Emergency Banner */}
-      {activeCards.length > 0 && (
-        <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <svg className="h-5 w-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-            <h3 className="text-sm font-bold text-red-800 dark:text-red-300 uppercase tracking-wide">
-              Active Emergencies ({activeCards.length})
-            </h3>
-          </div>
-          {activeCards.map((card) => (
-            <div key={card.id} className="flex items-center justify-between bg-white dark:bg-gray-800 rounded-lg p-3 mb-2 last:mb-0 border border-red-200 dark:border-red-800">
-              <div className="flex items-center gap-3">
-                {getLevelBadge(card.emergencyLevel)}
-                <div>
-                  <span className="text-sm font-semibold text-gray-900 dark:text-white">{card.title}</span>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">
-                    Activated {card.activatedAt ? new Date(card.activatedAt).toLocaleString() : ''}
-                    {card.activatedBy ? ` by ${card.activatedBy.name}` : ''}
-                  </div>
-                </div>
-              </div>
-              <button
-                onClick={() => setDeactivateConfirmCard(card)}
-                className="px-3 py-1.5 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
-              >
-                Deactivate
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -429,7 +396,7 @@ function EmergencyCardsTab() {
         </button>
       </div>
 
-      {/* Standby Cards */}
+      {/* Emergency Cards */}
       <div className="bg-white dark:bg-gray-800 shadow-sm dark:shadow-gray-900/50 rounded-lg overflow-hidden">
         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
           <thead className="bg-gray-50 dark:bg-gray-700">
@@ -442,6 +409,58 @@ function EmergencyCardsTab() {
             </tr>
           </thead>
           <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+            {activeCards.map((card) => (
+              <tr key={card.id} className="bg-red-50/50 dark:bg-red-900/10 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                <td className="px-6 py-4">
+                  <button onClick={() => openEditModal(card)} className="text-sm font-medium text-gray-900 dark:text-white text-left hover:text-primary dark:hover:text-primary-light transition-colors">
+                    {card.title}
+                  </button>
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 max-w-sm truncate">
+                    {card.body}
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  {getLevelBadge(card.emergencyLevel)}
+                  {card.emergencyLevel === 1 && card.emergencyTarget && (
+                    <div className="text-xs text-gray-400 mt-1">{card.emergencyTarget}</div>
+                  )}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300 animate-pulse">
+                    Active
+                  </span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="flex flex-wrap gap-1">
+                    {!card.displays || card.displays.length === 0 ? (
+                      <span className="inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300">
+                        All Displays
+                      </span>
+                    ) : (
+                      card.displays.map((d) => (
+                        <span key={d.displayId} className="inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">
+                          {d.display.name}
+                        </span>
+                      ))
+                    )}
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
+                  <button
+                    onClick={() => setDeactivateConfirmCard(card)}
+                    className="px-3 py-1 text-xs font-semibold text-white bg-red-600 rounded hover:bg-red-700 transition-colors"
+                  >
+                    Deactivate
+                  </button>
+                  <button
+                    onClick={() => openEditModal(card)}
+                    className="text-primary dark:text-primary-light hover:text-primary/80 dark:hover:text-primary-light/80"
+                  >
+                    Edit
+                  </button>
+                </td>
+              </tr>
+            ))}
             {standbyCards.map((card) => (
               <tr key={card.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                 <td className="px-6 py-4">
@@ -790,7 +809,10 @@ function EmergencyCardsTab() {
 // =============================================
 
 export default function ContentCards() {
-  const [activeTab, setActiveTab] = useState<'content' | 'emergency'>('content');
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState<'content' | 'emergency'>(
+    searchParams.get('tab') === 'emergency' ? 'emergency' : 'content'
+  );
   const queryClient = useQueryClient();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingCard, setEditingCard] = useState<ContentCard | null>(null);
@@ -954,6 +976,28 @@ export default function ContentCards() {
   const cards = data?.cards || [];
   const isSystemEdit = editingCard != null && editingCard.type !== 'info';
 
+  // Active emergencies (polled every 10s)
+  const { data: activeEmergencies } = useQuery<ContentCardsResponse>({
+    queryKey: ['contentCardsActiveEmergencies'],
+    queryFn: () => contentCardsApi.getAll(true, true),
+    refetchInterval: 10000,
+  });
+
+  const [deactivatingCard, setDeactivatingCard] = useState<ContentCard | null>(null);
+  const bannerDeactivateMutation = useMutation({
+    mutationFn: contentCardsApi.deactivate,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['content-cards'] });
+      queryClient.invalidateQueries({ queryKey: ['contentCardsActiveEmergencies'] });
+      queryClient.invalidateQueries({ queryKey: ['layoutActiveEmergencies'] });
+      toast.success('Emergency deactivated. Normal content restored.');
+      setDeactivatingCard(null);
+    },
+    onError: (error: { response?: { data?: { error?: string } } }) => {
+      toast.error(error.response?.data?.error || 'Failed to deactivate emergency');
+    },
+  });
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -963,6 +1007,63 @@ export default function ContentCards() {
           Manage content slides and emergency messages for displays.
         </p>
       </div>
+
+      {/* Emergency Alert Banner */}
+      {activeEmergencies?.cards && activeEmergencies.cards.filter(c => c.activatedAt).length > 0 && (
+        <div className="space-y-3">
+          {activeEmergencies.cards.filter(c => c.activatedAt).map((card) => {
+            const levelName = card.emergencyLevel === 3 ? 'Full Screen' : card.emergencyLevel === 2 ? 'Content Area' : 'Section Override';
+            return (
+              <div key={card.id} className="bg-red-50 dark:bg-red-900/20 border-2 border-red-500 rounded-lg p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-3 min-w-0">
+                    <svg className="h-6 w-6 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                    </svg>
+                    <div className="min-w-0">
+                      <h3 className="text-base font-semibold text-red-800 dark:text-red-200 truncate">
+                        Emergency Active: {card.title}
+                      </h3>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-sm text-red-700 dark:text-red-300">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-200 dark:bg-red-800 text-red-800 dark:text-red-200">
+                          Level {card.emergencyLevel} — {levelName}
+                        </span>
+                        {card.displays && card.displays.length > 0 ? (
+                          <span className="text-xs">
+                            Displays: {card.displays.map(d => d.display.name).join(', ')}
+                          </span>
+                        ) : (
+                          <span className="text-xs">All displays</span>
+                        )}
+                      </div>
+                      <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+                        Activated {new Date(card.activatedAt!).toLocaleString()}
+                        {card.activatedBy && ` by ${card.activatedBy.name}`}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-shrink-0 gap-2">
+                    <button
+                      onClick={() => setDeactivatingCard(card)}
+                      className="px-3 py-1.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
+                    >
+                      Deactivate
+                    </button>
+                    {activeTab !== 'emergency' && (
+                      <button
+                        onClick={() => setActiveTab('emergency')}
+                        className="px-3 py-1.5 text-sm font-medium text-red-700 dark:text-red-300 bg-red-100 dark:bg-red-900/40 hover:bg-red-200 dark:hover:bg-red-900/60 rounded-lg transition-colors"
+                      >
+                        View Details
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="border-b border-gray-200 dark:border-gray-700">
@@ -1266,6 +1367,38 @@ export default function ContentCards() {
             </ModalPortal>
           )}
         </>
+      )}
+
+      {/* Banner Deactivate Confirmation Modal */}
+      {deactivatingCard && (
+        <ModalPortal>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Deactivate Emergency</h3>
+            <p className="mt-2 text-gray-600 dark:text-gray-300">
+              Normal display content will be restored immediately.
+            </p>
+            <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-200">
+              {deactivatingCard.title}
+            </div>
+            <div className="mt-4 flex justify-end space-x-3">
+              <button
+                onClick={() => setDeactivatingCard(null)}
+                className="px-4 py-2 text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => bannerDeactivateMutation.mutate(deactivatingCard.id)}
+                disabled={bannerDeactivateMutation.isPending}
+                className="px-4 py-2 text-white bg-primary rounded-lg hover:bg-primary/90 disabled:opacity-50"
+              >
+                {bannerDeactivateMutation.isPending ? 'Deactivating...' : 'Deactivate'}
+              </button>
+            </div>
+          </div>
+        </div>
+        </ModalPortal>
       )}
     </div>
   );
