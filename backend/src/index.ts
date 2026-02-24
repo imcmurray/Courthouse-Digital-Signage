@@ -1460,6 +1460,26 @@ app.get('/api/displays/:id/config', displayLimiter, authenticateApiKey, async (r
   }
 });
 
+/** Get date boundaries as UTC midnight Dates based on the courthouse timezone. */
+function getCourtDateBounds(timezone: string) {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  const parts = formatter.formatToParts(new Date());
+  const year = parseInt(parts.find(p => p.type === 'year')!.value);
+  const month = parseInt(parts.find(p => p.type === 'month')!.value) - 1;
+  const day = parseInt(parts.find(p => p.type === 'day')!.value);
+
+  const today = new Date(Date.UTC(year, month, day));
+  const tomorrow = new Date(Date.UTC(year, month, day + 1));
+  const next7 = new Date(Date.UTC(year, month, day + 7));
+  const next30 = new Date(Date.UTC(year, month, day + 30));
+  return { today, tomorrow, next7, next30 };
+}
+
 // GET /api/displays/:id/content-cards - Aggregate content cards for a display (requires API key)
 app.get('/api/displays/:id/content-cards', displayLimiter, authenticateApiKey, async (req: ApiKeyRequest, res: Response) => {
   try {
@@ -1476,7 +1496,7 @@ app.get('/api/displays/:id/content-cards', displayLimiter, authenticateApiKey, a
     }
 
     // Fetch content card settings
-    const settingKeys = ['content_card_modules', 'content_card_rotation_interval'];
+    const settingKeys = ['content_card_modules', 'content_card_rotation_interval', 'timezone'];
     const settings = await prisma.setting.findMany({
       where: { key: { in: settingKeys } }
     });
@@ -1489,6 +1509,8 @@ app.get('/api/displays/:id/content-cards', displayLimiter, authenticateApiKey, a
       ? settingsMap.content_card_modules
       : ['info_cards', 'news'];
     const rotationInterval = parseInt(settingsMap.content_card_rotation_interval as string) || 10;
+    const courtTimezone = (settingsMap.timezone as string) || 'America/Denver';
+    const { today, tomorrow, next7, next30 } = getCourtDateBounds(courtTimezone);
 
     // Query ALL enabled content cards (info + system) for display targeting
     // Exclude emergency cards from normal content cards rotation
@@ -1512,15 +1534,11 @@ app.get('/api/displays/:id/content-cards', displayLimiter, authenticateApiKey, a
 
     const modules: Record<string, unknown> = {};
 
-    // Upcoming hearings — find the next date with hearings (earliest hearingDate > today)
+    // Upcoming hearings — find the next date with hearings (earliest hearingDate >= tomorrow)
     if (upcomingEnabled) {
-      const now = new Date();
-      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      todayStart.setDate(todayStart.getDate() + 1); // Start from tomorrow
-
       const nextEntry = await prisma.docketEntry.findFirst({
         where: {
-          hearingDate: { gte: todayStart },
+          hearingDate: { gte: tomorrow },
           status: { notIn: ['cancelled', 'stricken'] },
         },
         orderBy: { hearingDate: 'asc' },
@@ -1530,11 +1548,11 @@ app.get('/api/displays/:id/content-cards', displayLimiter, authenticateApiKey, a
       if (nextEntry) {
         const nextDate = nextEntry.hearingDate;
         const nextDateEnd = new Date(nextDate);
-        nextDateEnd.setHours(23, 59, 59, 999);
+        nextDateEnd.setUTCDate(nextDateEnd.getUTCDate() + 1);
 
         const entries = await prisma.docketEntry.findMany({
           where: {
-            hearingDate: { gte: nextDate, lte: nextDateEnd },
+            hearingDate: { gte: nextDate, lt: nextDateEnd },
             status: { notIn: ['cancelled', 'stricken'] },
           },
           orderBy: [{ hearingJudge: 'asc' }, { hearingTime: 'asc' }],
@@ -1566,13 +1584,6 @@ app.get('/api/displays/:id/content-cards', displayLimiter, authenticateApiKey, a
 
     // Statistics
     if (statisticsEnabled) {
-      const now = new Date();
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const next7 = new Date(today);
-      next7.setDate(next7.getDate() + 7);
-      const next30 = new Date(today);
-      next30.setDate(next30.getDate() + 30);
-
       const [hearingsNext30, hearingsNext7, casesNext30, nextHearingEntry] = await Promise.all([
         prisma.docketEntry.count({
           where: { hearingDate: { gte: today, lt: next30 }, status: { notIn: ['cancelled', 'stricken'] } },
@@ -1586,7 +1597,7 @@ app.get('/api/displays/:id/content-cards', displayLimiter, authenticateApiKey, a
         }),
         prisma.docketEntry.findFirst({
           where: {
-            hearingDate: { gt: new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1) },
+            hearingDate: { gte: tomorrow },
             status: { notIn: ['cancelled', 'stricken'] },
           },
           orderBy: { hearingDate: 'asc' },
@@ -1616,6 +1627,7 @@ app.get('/api/displays/:id/content-cards', displayLimiter, authenticateApiKey, a
     res.json({
       enabled: true,
       rotationInterval,
+      timezone: courtTimezone,
       modules,
     });
   } catch (error) {

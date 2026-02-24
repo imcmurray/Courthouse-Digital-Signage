@@ -2025,9 +2025,9 @@
 
   function buildUpcomingHearingsSlide(data) {
     var dateObj = new Date(data.date);
-    var dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    var monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-    var dateStr = dayNames[dateObj.getUTCDay()] + ', ' + monthNames[dateObj.getUTCMonth()] + ' ' + dateObj.getUTCDate();
+    dateObj.setUTCHours(12);
+    var tz = (contentCardData && contentCardData.timezone) || 'America/Denver';
+    var dateStr = dateObj.toLocaleDateString('en-US', { timeZone: tz, weekday: 'long', month: 'long', day: 'numeric' });
 
     var html = '<div class="content-card-slide content-card-upcoming">';
     html += '<div class="content-card-slide-title">NEXT HEARINGS: ' + escapeHtml(dateStr) + '</div>';
@@ -2125,7 +2125,9 @@
     var nextDateStr = '';
     if (stats.nextHearingDate) {
       var nd = new Date(stats.nextHearingDate);
-      nextDateStr = nd.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+      nd.setUTCHours(12);
+      var tz = (contentCardData && contentCardData.timezone) || 'America/Denver';
+      nextDateStr = nd.toLocaleDateString('en-US', { timeZone: tz, weekday: 'long', month: 'long', day: 'numeric' });
     }
     return '<div class="content-card-slide content-card-stats">' +
       '<div class="content-card-slide-title">COURT STATISTICS</div>' +
