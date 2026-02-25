@@ -2030,7 +2030,8 @@
     var dateStr = dateObj.toLocaleDateString('en-US', { timeZone: tz, weekday: 'long', month: 'long', day: 'numeric' });
 
     var html = '<div class="content-card-slide content-card-upcoming">';
-    html += '<div class="content-card-slide-title">NEXT HEARINGS: ' + escapeHtml(dateStr) + '</div>';
+    html += '<div class="content-card-slide-title">HEARINGS COMING UP</div>';
+    html += '<div class="content-card-slide-date">' + escapeHtml(dateStr) + '</div>';
 
     // Group by judge
     var judgeGroups = {};

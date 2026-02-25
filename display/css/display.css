@@ -1335,6 +1335,15 @@ body.portrait .it-status-display-pill {
   letter-spacing: 2px;
 }
 
+.content-card-slide-date {
+  font-size: 32px;
+  font-weight: bold;
+  color: #ffffff;
+  margin-top: -20px;
+  margin-bottom: 30px;
+  letter-spacing: 1px;
+}
+
 /* Upcoming Hearings slide */
 .content-card-upcoming {
   align-items: flex-start;
@@ -1508,6 +1517,12 @@ body.portrait .content-card-container {
 
 body.portrait .content-card-slide-title {
   font-size: 28px;
+  margin-bottom: 20px;
+}
+
+body.portrait .content-card-slide-date {
+  font-size: 24px;
+  margin-top: -12px;
   margin-bottom: 20px;
 }
 
