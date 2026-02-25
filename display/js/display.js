@@ -17,6 +17,94 @@
     tickerSpeed: 50, // pixels per second
   };
 
+  // Time-of-day header gradient phases
+  // Each phase: [startHour, [gradStop1 RGB], [gradStop2 RGB], [infoWidget RGB]]
+  const TIME_PHASES = [
+    { hour: 5,  grad1: [255, 236, 140], grad2: [230, 180, 30],  info1: [175, 215, 240], info2: [120, 175, 210] }, // Dawn
+    { hour: 8,  grad1: [255, 225, 80],  grad2: [220, 170, 0],   info1: [155, 215, 245], info2: [95, 170, 215] },  // Morning
+    { hour: 11, grad1: [255, 215, 0],   grad2: [200, 150, 0],   info1: [135, 200, 235], info2: [80, 150, 200] },  // Midday
+    { hour: 14, grad1: [255, 220, 50],  grad2: [210, 145, 0],   info1: [160, 205, 230], info2: [100, 160, 195] }, // Afternoon
+    { hour: 17, grad1: [245, 195, 30],  grad2: [190, 120, 0],   info1: [150, 185, 210], info2: [90, 135, 170] },  // Evening
+    { hour: 20, grad1: [230, 200, 80],  grad2: [175, 140, 30],  info1: [120, 150, 185], info2: [70, 105, 145] },  // Night
+  ];
+
+  let lastGradientMinute = -1;
+
+  function getCourthouseHour() {
+    var tz = (contentCardData && contentCardData.timezone) || 'America/Denver';
+    try {
+      var parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: tz, hour: 'numeric', minute: 'numeric', hour12: false
+      }).formatToParts(new Date());
+      var h = 0, m = 0;
+      for (var i = 0; i < parts.length; i++) {
+        if (parts[i].type === 'hour') h = parseInt(parts[i].value, 10);
+        if (parts[i].type === 'minute') m = parseInt(parts[i].value, 10);
+      }
+      // Intl may return 24 for midnight in hour12:false
+      if (h === 24) h = 0;
+      return { hour: h, minute: m };
+    } catch (e) {
+      var now = new Date();
+      return { hour: now.getHours(), minute: now.getMinutes() };
+    }
+  }
+
+  function lerpColor(c1, c2, t) {
+    return [
+      Math.round(c1[0] + (c2[0] - c1[0]) * t),
+      Math.round(c1[1] + (c2[1] - c1[1]) * t),
+      Math.round(c1[2] + (c2[2] - c1[2]) * t),
+    ];
+  }
+
+  function rgbStr(c) {
+    return 'rgb(' + c[0] + ',' + c[1] + ',' + c[2] + ')';
+  }
+
+  function getPhaseInterpolation(hour, minute) {
+    var totalMin = hour * 60 + minute;
+    var curIdx = 0;
+    for (var i = TIME_PHASES.length - 1; i >= 0; i--) {
+      if (totalMin >= TIME_PHASES[i].hour * 60) { curIdx = i; break; }
+    }
+    var nextIdx = (curIdx + 1) % TIME_PHASES.length;
+    var curStart = TIME_PHASES[curIdx].hour * 60;
+    var nextStart = TIME_PHASES[nextIdx].hour * 60;
+    // Handle midnight wraparound
+    if (nextStart <= curStart) nextStart += 1440;
+    var adjusted = totalMin < curStart ? totalMin + 1440 : totalMin;
+    var span = nextStart - curStart;
+    var progress = span > 0 ? (adjusted - curStart) / span : 0;
+    return { cur: curIdx, next: nextIdx, t: Math.min(Math.max(progress, 0), 1) };
+  }
+
+  function updateHeaderGradient() {
+    var time = getCourthouseHour();
+    var minuteKey = time.hour * 60 + time.minute;
+    if (minuteKey === lastGradientMinute) return;
+    lastGradientMinute = minuteKey;
+
+    var phase = getPhaseInterpolation(time.hour, time.minute);
+    var curP = TIME_PHASES[phase.cur];
+    var nextP = TIME_PHASES[phase.next];
+
+    var g1 = lerpColor(curP.grad1, nextP.grad1, phase.t);
+    var g2 = lerpColor(curP.grad2, nextP.grad2, phase.t);
+    var i1 = lerpColor(curP.info1, nextP.info1, phase.t);
+    var i2 = lerpColor(curP.info2, nextP.info2, phase.t);
+
+    var headerEl = document.querySelector('.header');
+    if (headerEl) {
+      headerEl.style.background = 'linear-gradient(135deg, ' + rgbStr(g1) + ', ' + rgbStr(g2) + ')';
+    }
+
+    var infoEl = document.getElementById('info-widget');
+    if (infoEl) {
+      infoEl.style.background = 'linear-gradient(135deg, ' + rgbStr(i1) + ', ' + rgbStr(i2) + ')';
+    }
+  }
+
   // Derive API base URL: ?apiBase= param, same origin (behind proxy/nginx), or port 3000 fallback
   function getApiBaseUrl() {
     const params = new URLSearchParams(window.location.search);
@@ -209,6 +297,8 @@
         year: 'numeric',
       });
     }
+
+    updateHeaderGradient();
   }
 
   // Show or hide the separator between subtitle and courthouse name
@@ -366,6 +456,10 @@
 
     // Check schedule after config loads
     checkSchedule();
+
+    // Apply time-of-day gradient immediately
+    lastGradientMinute = -1;
+    updateHeaderGradient();
   }
 
   // Fetch docket entries
