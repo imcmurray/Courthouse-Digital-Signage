@@ -52,6 +52,7 @@ export default function Dashboard() {
   const [editingDisplay, setEditingDisplay] = useState<Display | null>(null);
   const [editingDocketEntry, setEditingDocketEntry] = useState<DocketEntry | null>(null);
   const [selectedJudge, setSelectedJudge] = useState<string | null>(null);
+  const [selectedAnnouncementDisplay, setSelectedAnnouncementDisplay] = useState<string | null>(null);
   const [hideStricken, setHideStricken] = useState(false);
   const [deactivatingEmergencyId, setDeactivatingEmergencyId] = useState<string | null>(null);
 
@@ -463,6 +464,26 @@ export default function Dashboard() {
     acc[judge] = (acc[judge] || 0) + 1;
     return acc;
   }, {});
+
+  const displayAnnouncementCounts = useMemo(() => {
+    if (!announcementsData?.announcements || !displaysData?.displays) return {};
+    const counts: Record<string, { name: string; count: number }> = {};
+    for (const display of displaysData.displays) {
+      counts[display.id] = { name: display.name, count: 0 };
+    }
+    for (const ann of announcementsData.announcements) {
+      if (!ann.displays || ann.displays.length === 0) {
+        for (const id of Object.keys(counts)) {
+          counts[id].count++;
+        }
+      } else {
+        for (const d of ann.displays) {
+          if (counts[d.displayId]) counts[d.displayId].count++;
+        }
+      }
+    }
+    return counts;
+  }, [announcementsData, displaysData]);
 
   const getLastName = (fullName: string) => {
     const parts = fullName.trim().split(/\s+/);
@@ -906,15 +927,39 @@ export default function Dashboard() {
 
         {/* Active Announcements */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm dark:shadow-gray-900/50 p-4 flex flex-col">
-          <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
-            Announcements
-            {announcementsData && announcementsData.total > 0 && (
-              <span className="ml-2 text-gray-400">({announcementsData.total})</span>
-            )}
-          </h3>
+          <div className="flex items-center justify-between mb-3 gap-2">
+            <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider flex-shrink-0">
+              Announcements
+              {announcementsData && announcementsData.total > 0 && (
+                <span className="ml-2 text-gray-400">({announcementsData.total})</span>
+              )}
+            </h3>
+            <div className="flex flex-wrap justify-end gap-1">
+              {Object.keys(displayAnnouncementCounts).length > 1 &&
+                Object.entries(displayAnnouncementCounts).map(([displayId, { name, count }]) => (
+                  <button
+                    key={displayId}
+                    onClick={() => setSelectedAnnouncementDisplay(prev => prev === displayId ? null : displayId)}
+                    className={`inline-flex items-center px-2 py-0.5 rounded text-xs transition-colors ${
+                      selectedAnnouncementDisplay === displayId
+                        ? 'bg-primary text-white'
+                        : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                    }`}
+                  >
+                    {name} ({count})
+                  </button>
+                ))}
+            </div>
+          </div>
           {announcementsData?.announcements && announcementsData.announcements.length > 0 ? (
             <div className="flex-1 overflow-y-auto -mx-2 px-2 space-y-2">
-              {announcementsData.announcements.map((ann) => {
+              {announcementsData.announcements
+              .filter(ann =>
+                !selectedAnnouncementDisplay ||
+                !ann.displays || ann.displays.length === 0 ||
+                ann.displays.some(d => d.displayId === selectedAnnouncementDisplay)
+              )
+              .map((ann) => {
                 const isExpired = ann.expiresAt && new Date(ann.expiresAt).getTime() < Date.now();
                 const isActive = ann.enabled && !isExpired;
                 return (
