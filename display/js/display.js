@@ -34,6 +34,7 @@
   let isOnline = true;
   let lastUpdate = null;
   let docketData = [];
+  let docketLoaded = false;
   let announcements = [];
   let displayConfig = {};
   let socket = null;
@@ -384,6 +385,7 @@
       if (response.ok) {
         const data = await response.json();
         docketData = data.entries || [];
+        docketLoaded = true;
         renderAllComponents();
         handleConnectionChange(true);
         lastUpdate = new Date();
@@ -879,8 +881,8 @@
     var contentCardsEnabled = displayConfig.showContentCards && contentCardData && contentCardData.enabled;
     console.log('[content-cards-interleave] renderDocket: showContentCards=' + displayConfig.showContentCards + ', data=' + !!contentCardData + ', dataEnabled=' + (contentCardData && contentCardData.enabled) + ', contentCardsEnabled=' + contentCardsEnabled + ', hearings=' + docketData.length);
 
-    // --- Zero hearings ---
-    if (docketData.length === 0) {
+    // --- Zero hearings (only after first fetch) ---
+    if (docketLoaded && docketData.length === 0) {
       if (contentCardsEnabled) {
         var slides = buildContentCardSlides(true); // with schedule summary
         if (slides.length > 0) {
@@ -1900,7 +1902,7 @@
       }
 
       var showWhen = config.showWhen || 'when-idle';
-      var isContentCardTime =(showWhen === 'always') || (docketData.length === 0);
+      var isContentCardTime = (showWhen === 'always') || (docketLoaded && docketData.length === 0);
       var contentCardsEnabled = contentCardData && contentCardData.enabled;
       console.log('[content-cards] replace-panel check: isContentCardTime=' + isContentCardTime + ' (showWhen=' + showWhen + ', hearings=' + docketData.length + '), contentCardsEnabled=' + contentCardsEnabled + ' (data=' + !!contentCardData + ', enabled=' + (contentCardData && contentCardData.enabled) + '), contentCardActive=' + contentCardActive);
 
