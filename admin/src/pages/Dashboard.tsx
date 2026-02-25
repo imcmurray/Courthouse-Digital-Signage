@@ -195,6 +195,32 @@ export default function Dashboard() {
     refetchInterval: 60000,
   });
 
+  // Fetch all hearing dates to find next upcoming date
+  const { data: allHearingDates } = useQuery({
+    queryKey: ['dashboardHearingDates'],
+    queryFn: docketApi.getHearingDates,
+    staleTime: 5 * 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,
+  });
+
+  const nextHearingDateStr = useMemo(() => {
+    if (!allHearingDates) return null;
+    return allHearingDates.find(d => d > todayStr) ?? null;
+  }, [allHearingDates, todayStr]);
+
+  const { data: nextDateHearings } = useQuery({
+    queryKey: ['dashboardHearingsNext', nextHearingDateStr],
+    queryFn: () => docketApi.getAll({
+      date: nextHearingDateStr!,
+      limit: 500,
+      sortBy: 'hearingTime',
+      sortOrder: 'asc',
+    }),
+    enabled: !!nextHearingDateStr,
+    staleTime: 5 * 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,
+  });
+
   // Widget 2: Display health
   const { data: displaysData } = useQuery({
     queryKey: ['dashboardDisplays'],
@@ -368,6 +394,12 @@ export default function Dashboard() {
     return `${hour12}:${m} ${ampm}`;
   };
 
+  const formatDateLabel = (dateStr: string): string => {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const d = new Date(year, month - 1, day);
+    return d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+  };
+
   const getActivityIcon = (action: string) => {
     switch (action) {
       case 'create':
@@ -464,6 +496,14 @@ export default function Dashboard() {
     acc[judge] = (acc[judge] || 0) + 1;
     return acc;
   }, {});
+
+  const hearingsByJudgeNext = (nextDateHearings?.entries || [])
+    .reduce<Record<string, DocketEntry[]>>((acc, entry) => {
+      const key = entry.hearingJudge || 'Unassigned';
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(entry);
+      return acc;
+    }, {});
 
   const displayAnnouncementCounts = useMemo(() => {
     if (!announcementsData?.announcements || !displaysData?.displays) return {};
@@ -1021,62 +1061,118 @@ export default function Dashboard() {
 
       {/* Widget 5: Today's Schedule by Courtroom/Judge + Recent Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Schedule by Judge */}
+        {/* Schedule by Judge — Today + Next Date side by side */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm dark:shadow-gray-900/50 p-4">
           <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
-            Today's Schedule by Judge
+            Schedule by Judge
           </h3>
-          {Object.keys(hearingsByJudge).length > 0 ? (
-            <div className="max-h-48 overflow-y-auto -mx-2 px-2 space-y-3">
-              {Object.entries(hearingsByJudge).map(([judge, entries]) => {
-                const judgeActive = entries.filter(e => e.status !== 'stricken').length;
-                const judgeStricken = entries.length - judgeActive;
-                return (
-                <div key={judge}>
-                  <div className="mb-1">
-                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                      {judge} <span className="text-xs font-normal text-gray-400 dark:text-gray-500">({judgeActive}/{judgeStricken}/{entries.length})</span>
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-1">
-                    {Object.entries(
-                      entries.reduce((acc, entry) => {
-                        const time = formatTime12h(entry.hearingTime);
-                        if (!acc[time]) acc[time] = [];
-                        acc[time].push(entry);
-                        return acc;
-                      }, {} as Record<string, typeof entries>)
-                    ).map(([time, groupEntries]) => {
-                      const isGroupPast = groupEntries.every(e => isHearingPast(e));
-                      const hasImminent = groupEntries.some(e => isHearingImminent(e));
-                      const groupActive = groupEntries.filter(e => e.status !== 'stricken').length;
-                      const groupStricken = groupEntries.length - groupActive;
+          {Object.keys(hearingsByJudge).length > 0 || Object.keys(hearingsByJudgeNext).length > 0 ? (
+            <div className={`grid gap-4 ${Object.keys(hearingsByJudgeNext).length > 0 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+              {/* Today column */}
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Today</p>
+                {Object.keys(hearingsByJudge).length > 0 ? (
+                  <div className="max-h-48 overflow-y-auto space-y-3 -mx-1 px-1">
+                    {Object.entries(hearingsByJudge).map(([judge, entries]) => {
+                      const judgeActive = entries.filter(e => e.status !== 'stricken').length;
+                      const judgeStricken = entries.length - judgeActive;
                       return (
-                        <span
-                          key={time}
-                          className={`inline-flex items-center bg-accent text-primary font-bold rounded-full px-2.5 py-0.5 text-xs ${
-                            isGroupPast
-                              ? 'opacity-35'
-                              : hasImminent
-                                ? 'schedule-pill-imminent'
-                                : ''
-                          }`}
-                          title={groupEntries.map(e => `${e.caseNumber} - ${e.status} - ${e.courtroom || 'No room'}`).join('\n')}
-                        >
-                          {time}
-                          {groupEntries.length > 1 && (
-                            <span className="ml-1 opacity-70">{groupActive}/{groupStricken}/{groupEntries.length}</span>
-                          )}
-                        </span>
-                      );
+                      <div key={judge}>
+                        <div className="mb-1">
+                          <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                            {judge} <span className="text-xs font-normal text-gray-400 dark:text-gray-500">({judgeActive}/{judgeStricken}/{entries.length})</span>
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {Object.entries(
+                            entries.reduce((acc, entry) => {
+                              const time = formatTime12h(entry.hearingTime);
+                              if (!acc[time]) acc[time] = [];
+                              acc[time].push(entry);
+                              return acc;
+                            }, {} as Record<string, typeof entries>)
+                          ).map(([time, groupEntries]) => {
+                            const isGroupPast = groupEntries.every(e => isHearingPast(e));
+                            const hasImminent = groupEntries.some(e => isHearingImminent(e));
+                            const groupActive = groupEntries.filter(e => e.status !== 'stricken').length;
+                            const groupStricken = groupEntries.length - groupActive;
+                            return (
+                              <span
+                                key={time}
+                                className={`inline-flex items-center bg-accent text-primary font-bold rounded-full px-2.5 py-0.5 text-xs ${
+                                  isGroupPast
+                                    ? 'opacity-35'
+                                    : hasImminent
+                                      ? 'schedule-pill-imminent'
+                                      : ''
+                                }`}
+                                title={groupEntries.map(e => `${e.caseNumber} - ${e.status} - ${e.courtroom || 'No room'}`).join('\n')}
+                              >
+                                {time}
+                                {groupEntries.length > 1 && (
+                                  <span className="ml-1 opacity-70">{groupActive}/{groupStricken}/{groupEntries.length}</span>
+                                )}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500 dark:text-gray-400">No hearings today</p>
+                )}
+              </div>
+              {/* Next date column */}
+              {Object.keys(hearingsByJudgeNext).length > 0 && nextHearingDateStr && (
+                <div className="min-w-0 border-l border-gray-200 dark:border-gray-700 pl-4">
+                  <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{formatDateLabel(nextHearingDateStr)}</p>
+                  <div className="max-h-48 overflow-y-auto space-y-3 -mx-1 px-1">
+                    {Object.entries(hearingsByJudgeNext).map(([judge, entries]) => {
+                      const judgeActive = entries.filter(e => e.status !== 'stricken').length;
+                      const judgeStricken = entries.length - judgeActive;
+                      return (
+                      <div key={`next-${judge}`}>
+                        <div className="mb-1">
+                          <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                            {judge} <span className="text-xs font-normal text-gray-400 dark:text-gray-500">({judgeActive}/{judgeStricken}/{entries.length})</span>
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {Object.entries(
+                            entries.reduce((acc, entry) => {
+                              const time = formatTime12h(entry.hearingTime);
+                              if (!acc[time]) acc[time] = [];
+                              acc[time].push(entry);
+                              return acc;
+                            }, {} as Record<string, typeof entries>)
+                          ).map(([time, groupEntries]) => {
+                            const groupActive = groupEntries.filter(e => e.status !== 'stricken').length;
+                            const groupStricken = groupEntries.length - groupActive;
+                            return (
+                              <span
+                                key={`next-${time}`}
+                                className="inline-flex items-center bg-accent/60 text-primary font-bold rounded-full px-2.5 py-0.5 text-xs"
+                                title={groupEntries.map(e => `${e.caseNumber} - ${e.status} - ${e.courtroom || 'No room'}`).join('\n')}
+                              >
+                                {time}
+                                {groupEntries.length > 1 && (
+                                  <span className="ml-1 opacity-70">{groupActive}/{groupStricken}/{groupEntries.length}</span>
+                                )}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
                     })}
                   </div>
                 </div>
-              );
-              })}
+              )}
             </div>
           ) : (
-            <p className="text-sm text-gray-500 dark:text-gray-400">No hearings scheduled for today</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">No hearings scheduled</p>
           )}
         </div>
 
