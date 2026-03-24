@@ -19,6 +19,9 @@ RUN npx tsc --esModuleInterop --skipLibCheck --module commonjs --target ES2022 \
 FROM node:22-alpine AS runtime
 WORKDIR /app
 
+# Prisma requires OpenSSL for its query/schema engines
+RUN apk add --no-cache openssl
+
 # Install production dependencies only
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
