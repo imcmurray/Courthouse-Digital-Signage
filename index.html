@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Courthouse Digital Signage</title>
+  <style>
+    :root {
+      --navy-dark: #1a2744;
+      --navy-mid: #2a4a6a;
+      --navy-light: #3a5a8a;
+      --gold: #FFD700;
+      --blue: #87CEEB;
+      --white: #FFFFFF;
+      --gray: #94a3b8;
+      --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: var(--font);
+      background: linear-gradient(160deg, #0f1a2e 0%, var(--navy-dark) 40%, #162038 100%);
+      color: var(--white);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    /* ── Hero ── */
+    .hero {
+      text-align: center;
+      padding: 4rem 1.5rem 3rem;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .seal {
+      width: 96px;
+      height: 96px;
+      margin-bottom: 1.5rem;
+      filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5));
+    }
+
+    .hero h1 {
+      font-size: 2.2rem;
+      font-weight: 700;
+      color: var(--gold);
+      letter-spacing: 0.3px;
+      margin-bottom: 0.5rem;
+    }
+
+    .hero .subtitle {
+      font-size: 1.1rem;
+      color: var(--blue);
+      margin-bottom: 2rem;
+    }
+
+    .hero p {
+      font-size: 1.05rem;
+      color: var(--gray);
+      max-width: 640px;
+      margin: 0 auto 1.5rem;
+    }
+
+    /* ── Cards ── */
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.25rem;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 0 1.5rem 2rem;
+    }
+
+    .card {
+      background: linear-gradient(160deg, var(--navy-mid), var(--navy-dark));
+      border: 1px solid rgba(255, 215, 0, 0.12);
+      border-radius: 12px;
+      padding: 1.75rem;
+      transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+    }
+    .card:hover {
+      transform: translateY(-2px);
+      border-color: rgba(255, 215, 0, 0.3);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    }
+
+    .card h3 {
+      font-size: 1.1rem;
+      color: var(--gold);
+      margin-bottom: 0.6rem;
+    }
+
+    .card p {
+      font-size: 0.92rem;
+      color: var(--gray);
+      margin-bottom: 0;
+    }
+
+    .card ul {
+      list-style: none;
+      margin-top: 0.75rem;
+    }
+
+    .card ul li {
+      font-size: 0.88rem;
+      color: var(--gray);
+      padding: 0.25rem 0;
+      padding-left: 1.2rem;
+      position: relative;
+    }
+    .card ul li::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0.6rem;
+      width: 6px;
+      height: 6px;
+      background: var(--gold);
+      border-radius: 50%;
+    }
+
+    /* ── CTA section ── */
+    .cta-section {
+      max-width: 700px;
+      margin: 1rem auto 0;
+      padding: 0 1.5rem 2.5rem;
+      text-align: center;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.85rem 1.75rem;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: background 0.2s, transform 0.15s;
+      margin: 0.4rem;
+    }
+    .btn:active { transform: scale(0.97); }
+
+    .btn-primary {
+      background: var(--gold);
+      color: var(--navy-dark);
+    }
+    .btn-primary:hover { background: #e6c200; }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--white);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+    .btn-secondary:hover { background: rgba(255, 255, 255, 0.14); }
+
+    .btn svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    /* ── Access notice ── */
+    .access-notice {
+      max-width: 640px;
+      margin: 0 auto 3rem;
+      padding: 1.25rem 1.5rem;
+      background: rgba(255, 215, 0, 0.06);
+      border: 1px solid rgba(255, 215, 0, 0.18);
+      border-radius: 10px;
+      text-align: center;
+    }
+
+    .access-notice h4 {
+      color: var(--gold);
+      font-size: 0.95rem;
+      margin-bottom: 0.4rem;
+    }
+
+    .access-notice p {
+      font-size: 0.88rem;
+      color: var(--gray);
+    }
+
+    .access-notice a {
+      color: var(--blue);
+      text-decoration: none;
+    }
+    .access-notice a:hover { text-decoration: underline; }
+
+    /* ── Footer ── */
+    footer {
+      text-align: center;
+      padding: 2rem 1rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      color: rgba(255, 255, 255, 0.3);
+      font-size: 0.8rem;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 600px) {
+      .hero { padding: 2.5rem 1rem 2rem; }
+      .hero h1 { font-size: 1.6rem; }
+      .cards { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <section class="hero">
+    <img class="seal" src="https://raw.githubusercontent.com/imcmurray/Courthouse-Digital-Signage/main/display/assets/court-seal.svg" alt="U.S. Courts Seal">
+    <h1>Courthouse Digital Signage</h1>
+    <p class="subtitle">Frank E. Moss U.S. Courthouse &mdash; District of Utah</p>
+    <p>
+      A real-time digital signage system for displaying court hearing calendars,
+      announcements, and emergency notifications on HDMI-connected displays
+      throughout the courthouse. Hearing data is automatically imported by scraping
+      PDF calendars published by the U.S. Bankruptcy Court.
+    </p>
+  </section>
+
+  <div class="cards">
+    <div class="card">
+      <h3>Automated Calendar Import</h3>
+      <p>PDFs from utb.uscourts.gov are scraped, parsed, and pushed to displays in real time.</p>
+      <ul>
+        <li>Six judges supported</li>
+        <li>Configurable import schedule</li>
+        <li>Stale entry auto-cleanup</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Display Management</h3>
+      <p>Each display is independently configured with its own filters, layout, and theme.</p>
+      <ul>
+        <li>Courtroom, lobby, wayfinding, and IT status templates</li>
+        <li>Portrait and landscape orientation</li>
+        <li>Live preview from the admin portal</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Emergency Overrides</h3>
+      <p>Three severity levels for instant emergency notifications across all displays.</p>
+      <ul>
+        <li>Section, content area, or full screen takeover</li>
+        <li>WebSocket push in under 1 second</li>
+        <li>Activation audit logging</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="cta-section">
+    <a class="btn btn-primary" href="https://dsdemo.themcmurrays.us/display/gallery.html" target="_blank" rel="noopener">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+      Live Demo
+    </a>
+    <a class="btn btn-secondary" href="https://github.com/imcmurray/Courthouse-Digital-Signage" target="_blank" rel="noopener">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+      View Source
+    </a>
+  </div>
+
+  <div class="access-notice">
+    <h4>Requesting Access to the Live Demo</h4>
+    <p>
+      The live demo is protected by Cloudflare Access with email verification.
+      To get access, contact <a href="https://github.com/imcmurray">Ian McMurray</a>
+      with your email address so it can be added to the authorized access list.
+      Once approved, you'll receive a one-time code via email to sign in.
+    </p>
+  </div>
+
+  <footer>
+    Courthouse Digital Signage &mdash; Internal use, U.S. Courts
+  </footer>
+
+</body>
+</html>
