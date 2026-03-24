@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Display Gallery — Courthouse Digital Signage</title>
+  <style>
+    :root {
+      --navy-dark: #1a2744;
+      --navy-mid: #2a4a6a;
+      --navy-light: #3a5a8a;
+      --primary-yellow: #FFD700;
+      --info-blue: #87CEEB;
+      --white: #FFFFFF;
+      --gray-light: #F0F0F0;
+      --gray-dark: #666666;
+      --font-family: Arial, Helvetica, sans-serif;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: var(--font-family);
+      background: linear-gradient(135deg, var(--navy-dark) 0%, #0f1a2e 100%);
+      color: var(--white);
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    .gallery-header {
+      text-align: center;
+      padding: 2.5rem 1rem 1.5rem;
+      border-bottom: 2px solid rgba(255, 215, 0, 0.25);
+    }
+    .gallery-header img {
+      width: 64px;
+      height: 64px;
+      margin-bottom: 0.75rem;
+      filter: drop-shadow(0 2px 6px rgba(0,0,0,0.4));
+    }
+    .gallery-header h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: var(--primary-yellow);
+      letter-spacing: 0.5px;
+    }
+    .gallery-header p {
+      color: var(--info-blue);
+      font-size: 0.95rem;
+      margin-top: 0.4rem;
+    }
+
+    /* ── Card grid ── */
+    .gallery-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 1.25rem;
+      padding: 2rem;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .display-card {
+      background: linear-gradient(160deg, var(--navy-mid) 0%, var(--navy-dark) 100%);
+      border: 1px solid rgba(255, 215, 0, 0.15);
+      border-radius: 12px;
+      padding: 1.5rem;
+      cursor: pointer;
+      transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .display-card:hover {
+      transform: translateY(-3px);
+      border-color: var(--primary-yellow);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    }
+    .display-card:active { transform: translateY(0); }
+
+    .card-name {
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: var(--white);
+    }
+    .card-location {
+      font-size: 0.9rem;
+      color: var(--info-blue);
+    }
+
+    .card-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      margin-top: auto;
+    }
+    .tag {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 0.2rem 0.55rem;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.08);
+      color: rgba(255, 255, 255, 0.7);
+    }
+    .tag.type { background: rgba(255, 215, 0, 0.15); color: var(--primary-yellow); }
+    .tag.judge { background: rgba(135, 206, 235, 0.15); color: var(--info-blue); }
+
+    /* ── Loading / empty ── */
+    .gallery-status {
+      text-align: center;
+      padding: 4rem 1rem;
+      color: var(--gray-dark);
+      font-size: 1.1rem;
+    }
+    .gallery-status.error { color: #ff6b6b; }
+
+    /* ── Viewer overlay ── */
+    .viewer-overlay {
+      position: fixed;
+      inset: 0;
+      background: #000;
+      z-index: 1000;
+      display: none;
+      flex-direction: column;
+    }
+    .viewer-overlay.active { display: flex; }
+
+    .viewer-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.5rem 1rem;
+      background: var(--navy-dark);
+      border-bottom: 1px solid rgba(255, 215, 0, 0.2);
+      flex-shrink: 0;
+    }
+    .btn-back {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.45rem 1rem;
+      background: rgba(255, 215, 0, 0.12);
+      color: var(--primary-yellow);
+      border: 1px solid rgba(255, 215, 0, 0.3);
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-back:hover { background: rgba(255, 215, 0, 0.22); }
+    .btn-back svg { width: 16px; height: 16px; }
+
+    .viewer-title {
+      font-size: 0.95rem;
+      color: var(--white);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .viewer-timer {
+      margin-left: auto;
+      font-size: 0.75rem;
+      color: var(--gray-dark);
+      white-space: nowrap;
+    }
+
+    .viewer-frame {
+      flex: 1;
+      border: none;
+      width: 100%;
+      height: 100%;
+      background: #000;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 720px) {
+      .gallery-grid {
+        grid-template-columns: 1fr;
+        padding: 1rem;
+      }
+      .gallery-header h1 { font-size: 1.3rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="gallery-header">
+    <img src="assets/court-seal.svg" alt="Court Seal">
+    <h1>Courthouse Display Gallery</h1>
+    <p>Select a display to preview</p>
+  </header>
+
+  <div id="gallery-content">
+    <div class="gallery-status" id="loading-msg">Loading displays…</div>
+  </div>
+
+  <!-- Viewer overlay (display iframe) -->
+  <div class="viewer-overlay" id="viewer">
+    <div class="viewer-toolbar">
+      <button class="btn-back" id="btn-back" title="Back to gallery">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        Gallery
+      </button>
+      <span class="viewer-title" id="viewer-title"></span>
+      <span class="viewer-timer" id="viewer-timer"></span>
+    </div>
+    <iframe class="viewer-frame" id="viewer-frame" sandbox="allow-scripts allow-same-origin" loading="lazy"></iframe>
+  </div>
+
+  <script>
+    (function () {
+      const API_BASE = getApiBase();
+      const galleryContent = document.getElementById('gallery-content');
+      const viewer = document.getElementById('viewer');
+      const viewerFrame = document.getElementById('viewer-frame');
+      const viewerTitle = document.getElementById('viewer-title');
+      const viewerTimer = document.getElementById('viewer-timer');
+      let tokenExpiresAt = 0;
+      let timerInterval = null;
+
+      function getApiBase() {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('apiBase')) return params.get('apiBase');
+        // Behind nginx proxy — same origin
+        if (window.location.port === '' || window.location.port === '80' || window.location.port === '443') {
+          return window.location.origin;
+        }
+        // Dev: display served on 8080, backend on 3000
+        return window.location.protocol + '//' + window.location.hostname + ':3000';
+      }
+
+      async function loadGallery() {
+        try {
+          const resp = await fetch(API_BASE + '/api/displays/gallery');
+          if (!resp.ok) throw new Error('HTTP ' + resp.status);
+          const data = await resp.json();
+
+          if (!data.displays || data.displays.length === 0) {
+            galleryContent.innerHTML = '<div class="gallery-status">No displays configured yet.</div>';
+            return;
+          }
+
+          const grid = document.createElement('div');
+          grid.className = 'gallery-grid';
+
+          data.displays.forEach(function (d) {
+            const card = document.createElement('div');
+            card.className = 'display-card';
+            card.setAttribute('role', 'button');
+            card.setAttribute('tabindex', '0');
+
+            let tags = '<span class="tag type">' + esc(d.displayType || 'courtroom') + '</span>';
+            tags += '<span class="tag">' + esc(d.orientation || 'landscape') + '</span>';
+            tags += '<span class="tag">' + esc(d.theme || 'default') + '</span>';
+            if (d.judgeFilter) tags += '<span class="tag judge">Judge: ' + esc(d.judgeFilter) + '</span>';
+            if (d.courtroomFilter) tags += '<span class="tag judge">Room ' + esc(d.courtroomFilter) + '</span>';
+
+            card.innerHTML =
+              '<div class="card-name">' + esc(d.name) + '</div>' +
+              '<div class="card-location">' + esc(d.location) + '</div>' +
+              '<div class="card-tags">' + tags + '</div>';
+
+            card.addEventListener('click', function () { openDisplay(d); });
+            card.addEventListener('keydown', function (e) {
+              if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDisplay(d); }
+            });
+
+            grid.appendChild(card);
+          });
+
+          galleryContent.innerHTML = '';
+          galleryContent.appendChild(grid);
+        } catch (err) {
+          galleryContent.innerHTML = '<div class="gallery-status error">Failed to load displays. Make sure the backend is running.</div>';
+          console.error('Gallery load error:', err);
+        }
+      }
+
+      async function openDisplay(display) {
+        try {
+          const resp = await fetch(API_BASE + '/api/displays/' + encodeURIComponent(display.id) + '/gallery-token');
+          if (!resp.ok) throw new Error('HTTP ' + resp.status);
+          const data = await resp.json();
+
+          const displayUrl = getDisplayUrl(display.id, data.previewToken);
+          viewerFrame.src = displayUrl;
+          viewerTitle.textContent = display.name + ' — ' + display.location;
+          tokenExpiresAt = Date.now() + (data.expiresIn * 1000);
+          startTimer();
+          viewer.classList.add('active');
+        } catch (err) {
+          alert('Unable to open display preview. Please try again.');
+          console.error('Gallery token error:', err);
+        }
+      }
+
+      function getDisplayUrl(displayId, apiKey) {
+        // Build URL to the display page
+        // Use origin + /display/ for production (nginx), or origin root for dev (serve)
+        var base = window.location.origin;
+        var path = window.location.pathname;
+        // If served under /display/ (nginx), point to /display/
+        if (path.indexOf('/display/') === 0) {
+          base += '/display/';
+        } else {
+          // Dev mode (serve on 8080) — use root path to avoid .html redirect stripping query params
+          base += '/';
+        }
+        return base + '?displayId=' + encodeURIComponent(displayId) +
+               '&apiKey=' + encodeURIComponent(apiKey) +
+               '&apiBase=' + encodeURIComponent(API_BASE);
+      }
+
+      function closeViewer() {
+        viewer.classList.remove('active');
+        viewerFrame.src = 'about:blank';
+        clearInterval(timerInterval);
+        viewerTimer.textContent = '';
+      }
+
+      function startTimer() {
+        clearInterval(timerInterval);
+        updateTimer();
+        timerInterval = setInterval(updateTimer, 1000);
+      }
+
+      function updateTimer() {
+        const remaining = Math.max(0, Math.floor((tokenExpiresAt - Date.now()) / 1000));
+        const min = Math.floor(remaining / 60);
+        const sec = remaining % 60;
+        viewerTimer.textContent = 'Preview expires in ' + min + ':' + (sec < 10 ? '0' : '') + sec;
+        if (remaining <= 0) {
+          clearInterval(timerInterval);
+          viewerTimer.textContent = 'Preview expired — click a display to reload';
+          viewerFrame.src = 'about:blank';
+        }
+      }
+
+      function esc(s) {
+        const d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+      }
+
+      document.getElementById('btn-back').addEventListener('click', closeViewer);
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && viewer.classList.contains('active')) closeViewer();
+      });
+
+      loadGallery();
+    })();
+  </script>
+</body>
+</html>

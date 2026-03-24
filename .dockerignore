@@ -7,3 +7,11 @@ dist
 .env
 .claude
 .autocoder
+.github
+docker-compose*.yml
+Dockerfile.*
+*.md
+dev_screenshots
+docs
+scripts
+uploads

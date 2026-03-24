@@ -62,6 +62,7 @@ moss-dig-sig-2026/
 │       └── api/                  # API client modules
 ├── display/
 │   ├── index.html                # Display layout
+│   ├── gallery.html              # Public display gallery (remote preview)
 │   ├── css/display.css           # Display styles (1920x1080 optimized)
 │   ├── js/display.js             # Data fetching, rendering, WebSocket
 │   └── assets/                   # Court seal, weather icons
@@ -180,6 +181,15 @@ cd display && npx serve -l 8080 .
 - Custom template creation with validated component types
 - Component types: hearing table, hearing pills, content cards, direction cards, camera grid, system status
 
+### Display Gallery (Remote Access)
+- Public gallery page at `/display/gallery.html` — no login or install required
+- Browse all configured displays with name, location, type, and filter info
+- Click any display to preview it live in an embedded viewer
+- Auto-issued 15-minute preview tokens (read-only, no API keys exposed)
+- Countdown timer shows remaining preview time; re-click to renew
+- Responsive design works on desktop, tablet, and mobile browsers
+- Accessible from any device on the network — just share the gallery URL
+
 ### Real-Time Updates
 - Socket.IO WebSocket connections between backend and all displays
 - Docket changes, announcement updates, and settings changes push instantly
@@ -205,6 +215,8 @@ Interactive API documentation (Swagger UI) is available at `/api-docs` — e.g. 
 ### Public (No Auth)
 - `GET /api/settings/public` - Court branding
 - `GET /api/health` - Health check
+- `GET /api/displays/gallery` - Display list for gallery (safe subset, no secrets)
+- `GET /api/displays/:id/gallery-token` - Issue 15-min read-only preview token
 
 ### Display Client (API Key)
 - `GET /api/displays/:id/config` - Display configuration + global settings
@@ -321,6 +333,22 @@ http://<host>/display/?displayId=<id>&apiKey=<key>
 ```
 
 For development or non-Docker setups where the backend runs on a different origin, add `&apiBase=http://<backend>:3000`.
+
+### Remote Access / Display Gallery
+
+The display gallery lets anyone on the network browse and preview displays from any browser — no login, no install.
+
+**Production (Docker):**
+```
+http://<host>/display/gallery.html
+```
+
+**Development:**
+```
+http://localhost:8080/gallery.html?apiBase=http://localhost:3000
+```
+
+Share this URL with staff, judges, or IT to let them test-drive any display. Each preview session lasts 15 minutes (read-only). No API keys or credentials are exposed.
 
 ## License
 

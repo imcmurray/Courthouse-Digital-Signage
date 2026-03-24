@@ -2931,6 +2931,56 @@ app.post('/api/display-templates/:id/reset', authenticateToken, requireAdmin, as
   }
 });
 
+// GET /api/displays/gallery - Public display gallery listing (no auth)
+app.get('/api/displays/gallery', async (_req: Request, res: Response) => {
+  try {
+    const displays = await prisma.display.findMany({
+      select: {
+        id: true,
+        name: true,
+        location: true,
+        orientation: true,
+        theme: true,
+        displayType: true,
+        judgeFilter: true,
+        courtroomFilter: true,
+      },
+      orderBy: { name: 'asc' }
+    });
+    res.json({ displays });
+  } catch (error) {
+    console.error('Failed to fetch gallery displays:', error);
+    res.status(500).json({ error: 'Failed to fetch gallery displays' });
+  }
+});
+
+// GET /api/displays/:id/gallery-token - Public preview token for gallery visitors (no auth)
+app.get('/api/displays/:id/gallery-token', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const display = await prisma.display.findUnique({ where: { id } });
+    if (!display) {
+      return res.status(404).json({ error: 'Display not found' });
+    }
+
+    const GALLERY_TOKEN_TTL_MS = 15 * 60 * 1000; // 15 minutes
+    const galleryToken = crypto.randomBytes(32).toString('hex');
+    previewTokens.set(galleryToken, {
+      displayId: id,
+      expiresAt: Date.now() + GALLERY_TOKEN_TTL_MS,
+    });
+
+    res.json({
+      previewToken: galleryToken,
+      displayId: id,
+      expiresIn: 900,
+    });
+  } catch (error) {
+    console.error('Failed to generate gallery token:', error);
+    res.status(500).json({ error: 'Failed to generate gallery token' });
+  }
+});
+
 // GET /api/displays - List all displays
 app.get('/api/displays', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
