@@ -30,7 +30,7 @@ RUN npx prisma generate
 # Copy built application
 COPY --from=build /app/dist ./dist
 # Copy compiled seed script
-COPY --from=build /app/dist-seed/prisma/seed.js ./dist/seed.js
+COPY --from=build /app/dist-seed/seed.js ./dist/seed.js
 
 # Copy entrypoint
 COPY docker-entrypoint.sh /docker-entrypoint.sh
