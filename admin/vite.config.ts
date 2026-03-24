@@ -2,7 +2,12 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { execSync } from 'child_process';
 
-const commitHash = execSync('git rev-parse --short HEAD').toString().trim();
+let commitHash = process.env.COMMIT_HASH || 'unknown';
+try {
+  commitHash = execSync('git rev-parse --short HEAD').toString().trim();
+} catch {
+  // git not available (Docker build) — use COMMIT_HASH env var or fallback
+}
 const pkg = JSON.parse(
   execSync('cat package.json').toString()
 );

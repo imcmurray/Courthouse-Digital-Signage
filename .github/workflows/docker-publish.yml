@@ -57,6 +57,8 @@ jobs:
           file: ./Dockerfile.nginx
           push: true
           platforms: linux/amd64,linux/arm64
+          build-args: |
+            COMMIT_HASH=${{ steps.meta.outputs.sha_short }}
           tags: |
             ${{ env.NGINX_IMAGE }}:latest
             ${{ env.NGINX_IMAGE }}:${{ steps.meta.outputs.sha_short }}

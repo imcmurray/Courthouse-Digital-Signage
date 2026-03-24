@@ -1,9 +1,11 @@
 # ---- Build admin SPA ----
 FROM node:22-alpine AS build
+ARG COMMIT_HASH=unknown
 WORKDIR /app/admin
 COPY admin/package.json admin/package-lock.json ./
 RUN npm ci
 COPY admin/ .
+ENV COMMIT_HASH=${COMMIT_HASH}
 RUN npm run build
 
 # ---- Nginx ----
