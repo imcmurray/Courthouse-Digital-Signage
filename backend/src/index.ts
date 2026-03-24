@@ -4546,19 +4546,7 @@ app.post('/api/import', authenticateToken, requireAdmin, async (req: Authenticat
     const cats = data.categories;
 
     await prisma.$transaction(async (tx) => {
-      if (cats.settings && Array.isArray(cats.settings)) {
-        let count = 0;
-        for (const s of cats.settings) {
-          await tx.setting.upsert({
-            where: { key: s.key },
-            update: { value: s.value, updatedById: s.updatedById || null },
-            create: { key: s.key, value: s.value, updatedById: s.updatedById || null },
-          });
-          count++;
-        }
-        imported.settings = count;
-      }
-
+      // Import users FIRST — other tables have FK references to users (e.g. settings.updatedById)
       if (cats.users && Array.isArray(cats.users)) {
         const placeholderHash = await bcrypt.hash('RESET_REQUIRED', 10);
         const usersToCreate = cats.users.map((u: Record<string, unknown>) => ({
@@ -4572,6 +4560,28 @@ app.post('/api/import', authenticateToken, requireAdmin, async (req: Authenticat
         const r = await tx.user.createMany({ data: usersToCreate, // @ts-expect-error -- skipDuplicates works with SQLite at runtime (Prisma uses INSERT OR IGNORE)
           skipDuplicates: true });
         imported.users = r.count;
+      }
+
+      // Collect imported user IDs for FK validation
+      const importedUserIds = new Set(
+        (cats.users && Array.isArray(cats.users)) ? cats.users.map((u: Record<string, unknown>) => u.id as string) : []
+      );
+      // Also include users already in the database
+      const existingUsers = await tx.user.findMany({ select: { id: true } });
+      for (const u of existingUsers) importedUserIds.add(u.id);
+
+      if (cats.settings && Array.isArray(cats.settings)) {
+        let count = 0;
+        for (const s of cats.settings) {
+          const updatedById = (s.updatedById && importedUserIds.has(s.updatedById)) ? s.updatedById : null;
+          await tx.setting.upsert({
+            where: { key: s.key },
+            update: { value: s.value, updatedById },
+            create: { key: s.key, value: s.value, updatedById },
+          });
+          count++;
+        }
+        imported.settings = count;
       }
 
       if (cats.displays && Array.isArray(cats.displays)) {
@@ -4624,7 +4634,7 @@ app.post('/api/import', authenticateToken, requireAdmin, async (req: Authenticat
           status: (e.status as string) || 'scheduled',
           statusNote: (e.statusNote as string) || null,
           comment: (e.comment as string) || null,
-          createdById: (e.createdById as string) || null,
+          createdById: (e.createdById && importedUserIds.has(e.createdById as string)) ? (e.createdById as string) : null,
         }));
         const r = await tx.docketEntry.createMany({ data: entriesToCreate, // @ts-expect-error -- skipDuplicates works with SQLite at runtime (Prisma uses INSERT OR IGNORE)
           skipDuplicates: true });
@@ -4648,7 +4658,7 @@ app.post('/api/import', authenticateToken, requireAdmin, async (req: Authenticat
           priority: (a.priority as number) || 100,
           enabled: a.enabled !== false,
           expiresAt: a.expiresAt ? new Date(a.expiresAt as string) : null,
-          createdById: (a.createdById as string) || null,
+          createdById: (a.createdById && importedUserIds.has(a.createdById as string)) ? (a.createdById as string) : null,
         }));
         const r = await tx.announcement.createMany({ data: announcementsToCreate, // @ts-expect-error -- skipDuplicates works with SQLite at runtime (Prisma uses INSERT OR IGNORE)
           skipDuplicates: true });
