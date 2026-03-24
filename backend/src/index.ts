@@ -4549,31 +4549,34 @@ app.post('/api/import', authenticateToken, requireAdmin, async (req: Authenticat
       // Import users FIRST — other tables have FK references to users (e.g. settings.updatedById)
       if (cats.users && Array.isArray(cats.users)) {
         const placeholderHash = await bcrypt.hash('RESET_REQUIRED', 10);
-        const usersToCreate = cats.users.map((u: Record<string, unknown>) => ({
-          id: u.id as string,
-          email: u.email as string,
-          passwordHash: placeholderHash,
-          name: u.name as string,
-          role: (u.role as string) || 'viewer',
-          isActive: u.isActive !== false,
-        }));
-        const r = await tx.user.createMany({ data: usersToCreate, // @ts-expect-error -- skipDuplicates works with SQLite at runtime (Prisma uses INSERT OR IGNORE)
-          skipDuplicates: true });
-        imported.users = r.count;
+        let count = 0;
+        for (const u of cats.users) {
+          const userData = {
+            email: u.email as string,
+            passwordHash: placeholderHash,
+            name: u.name as string,
+            role: (u.role as string) || 'viewer',
+            isActive: u.isActive !== false,
+          };
+          await tx.user.upsert({
+            where: { id: u.id as string },
+            update: userData,
+            create: { id: u.id as string, ...userData },
+          });
+          count++;
+        }
+        imported.users = count;
       }
 
-      // Collect imported user IDs for FK validation
-      const importedUserIds = new Set(
-        (cats.users && Array.isArray(cats.users)) ? cats.users.map((u: Record<string, unknown>) => u.id as string) : []
-      );
-      // Also include users already in the database
-      const existingUsers = await tx.user.findMany({ select: { id: true } });
-      for (const u of existingUsers) importedUserIds.add(u.id);
+      // Collect all known user IDs for FK validation
+      const knownUserIds = new Set<string>();
+      const allUsers = await tx.user.findMany({ select: { id: true } });
+      for (const u of allUsers) knownUserIds.add(u.id);
 
       if (cats.settings && Array.isArray(cats.settings)) {
         let count = 0;
         for (const s of cats.settings) {
-          const updatedById = (s.updatedById && importedUserIds.has(s.updatedById)) ? s.updatedById : null;
+          const updatedById = (s.updatedById && knownUserIds.has(s.updatedById)) ? s.updatedById : null;
           await tx.setting.upsert({
             where: { key: s.key },
             update: { value: s.value, updatedById },
@@ -4586,93 +4589,118 @@ app.post('/api/import', authenticateToken, requireAdmin, async (req: Authenticat
 
       if (cats.displays && Array.isArray(cats.displays)) {
         const placeholderKeyHash = crypto.createHash('sha256').update('REGENERATE_REQUIRED').digest('hex');
-        const displaysToCreate = cats.displays.map((d: Record<string, unknown>) => ({
-          id: d.id as string,
-          name: d.name as string,
-          location: d.location as string,
-          judgeFilter: (d.judgeFilter as string) || null,
-          courtroomFilter: (d.courtroomFilter as string) || null,
-          chapterFilter: (d.chapterFilter as string) || null,
-          showStricken: d.showStricken === true,
-          showZoomInfo: d.showZoomInfo !== false,
-          highlightCurrent: d.highlightCurrent !== false,
-          theme: (d.theme as string) || 'default',
-          columns: (d.columns as string) || '["NAME","CH","TIME","CASE","MATTER","ROOM"]',
-          showWeather: d.showWeather !== false,
-          weatherLocation: (d.weatherLocation as string) || null,
-          noticeText: (d.noticeText as string) || 'Please turn your phones OFF in the Courthouse',
-          tickerEnabled: d.tickerEnabled !== false,
-          tickerSpeed: (d.tickerSpeed as string) || 'medium',
-          status: (d.status as string) || 'unknown',
-          apiKeyHash: placeholderKeyHash,
-        }));
-        const r = await tx.display.createMany({ data: displaysToCreate, // @ts-expect-error -- skipDuplicates works with SQLite at runtime (Prisma uses INSERT OR IGNORE)
-          skipDuplicates: true });
-        imported.displays = r.count;
+        let count = 0;
+        for (const d of cats.displays) {
+          const displayData = {
+            name: d.name as string,
+            location: d.location as string,
+            judgeFilter: (d.judgeFilter as string) || null,
+            courtroomFilter: (d.courtroomFilter as string) || null,
+            chapterFilter: (d.chapterFilter as string) || null,
+            showStricken: d.showStricken === true,
+            showZoomInfo: d.showZoomInfo !== false,
+            highlightCurrent: d.highlightCurrent !== false,
+            theme: (d.theme as string) || 'default',
+            columns: (d.columns as string) || '["NAME","CH","TIME","CASE","MATTER","ROOM"]',
+            showWeather: d.showWeather !== false,
+            weatherLocation: (d.weatherLocation as string) || null,
+            noticeText: (d.noticeText as string) || 'Please turn your phones OFF in the Courthouse',
+            tickerEnabled: d.tickerEnabled !== false,
+            tickerSpeed: (d.tickerSpeed as string) || 'medium',
+            status: (d.status as string) || 'unknown',
+          };
+          await tx.display.upsert({
+            where: { id: d.id as string },
+            update: displayData,
+            create: { id: d.id as string, ...displayData, apiKeyHash: placeholderKeyHash },
+          });
+          count++;
+        }
+        imported.displays = count;
       }
 
       if (cats.docketEntries && Array.isArray(cats.docketEntries)) {
-        const entriesToCreate = cats.docketEntries.map((e: Record<string, unknown>) => ({
-          id: e.id as string,
-          caseNumber: e.caseNumber as string,
-          caseTitle: e.caseTitle as string,
-          caseChapter: e.caseChapter as string,
-          adversaryNumber: (e.adversaryNumber as string) || null,
-          adversaryTitle: (e.adversaryTitle as string) || null,
-          hearingDate: new Date(e.hearingDate as string),
-          hearingTime: e.hearingTime as string,
-          hearingMatter: e.hearingMatter as string,
-          hearingJudge: e.hearingJudge as string,
-          courtroom: (e.courtroom as string) || null,
-          movingParty: (e.movingParty as string) || null,
-          opposingParty: (e.opposingParty as string) || null,
-          trustee: (e.trustee as string) || null,
-          isZoom: e.isZoom === true,
-          zoomMeetingId: (e.zoomMeetingId as string) || null,
-          zoomPasscode: (e.zoomPasscode as string) || null,
-          zoomPhone: (e.zoomPhone as string) || null,
-          status: (e.status as string) || 'scheduled',
-          statusNote: (e.statusNote as string) || null,
-          comment: (e.comment as string) || null,
-          createdById: (e.createdById && importedUserIds.has(e.createdById as string)) ? (e.createdById as string) : null,
-        }));
-        const r = await tx.docketEntry.createMany({ data: entriesToCreate, // @ts-expect-error -- skipDuplicates works with SQLite at runtime (Prisma uses INSERT OR IGNORE)
-          skipDuplicates: true });
-        imported.docketEntries = r.count;
+        let count = 0;
+        for (const e of cats.docketEntries) {
+          const entryData = {
+            caseNumber: e.caseNumber as string,
+            caseTitle: e.caseTitle as string,
+            caseChapter: e.caseChapter as string,
+            adversaryNumber: (e.adversaryNumber as string) || null,
+            adversaryTitle: (e.adversaryTitle as string) || null,
+            hearingDate: new Date(e.hearingDate as string),
+            hearingTime: e.hearingTime as string,
+            hearingMatter: e.hearingMatter as string,
+            hearingJudge: e.hearingJudge as string,
+            courtroom: (e.courtroom as string) || null,
+            movingParty: (e.movingParty as string) || null,
+            opposingParty: (e.opposingParty as string) || null,
+            trustee: (e.trustee as string) || null,
+            isZoom: e.isZoom === true,
+            zoomMeetingId: (e.zoomMeetingId as string) || null,
+            zoomPasscode: (e.zoomPasscode as string) || null,
+            zoomPhone: (e.zoomPhone as string) || null,
+            status: (e.status as string) || 'scheduled',
+            statusNote: (e.statusNote as string) || null,
+            comment: (e.comment as string) || null,
+            createdById: (e.createdById && knownUserIds.has(e.createdById as string)) ? (e.createdById as string) : null,
+          };
+          await tx.docketEntry.upsert({
+            where: { id: e.id as string },
+            update: entryData,
+            create: { id: e.id as string, ...entryData },
+          });
+          count++;
+        }
+        imported.docketEntries = count;
       }
 
       if (cats.displayDocketEntries && Array.isArray(cats.displayDocketEntries)) {
-        const ddesToCreate = cats.displayDocketEntries.map((d: Record<string, unknown>) => ({
-          displayId: d.displayId as string,
-          docketEntryId: d.docketEntryId as string,
-        }));
-        const r = await tx.displayDocketEntry.createMany({ data: ddesToCreate, // @ts-expect-error -- skipDuplicates works with SQLite at runtime (Prisma uses INSERT OR IGNORE)
-          skipDuplicates: true });
-        imported.displayDocketEntries = r.count;
+        let count = 0;
+        for (const d of cats.displayDocketEntries) {
+          const key = { displayId: d.displayId as string, docketEntryId: d.docketEntryId as string };
+          await tx.displayDocketEntry.upsert({
+            where: { displayId_docketEntryId: key },
+            update: {},
+            create: key,
+          });
+          count++;
+        }
+        imported.displayDocketEntries = count;
       }
 
       if (cats.announcements && Array.isArray(cats.announcements)) {
-        const announcementsToCreate = cats.announcements.map((a: Record<string, unknown>) => ({
-          id: a.id as string,
-          text: a.text as string,
-          priority: (a.priority as number) || 100,
-          enabled: a.enabled !== false,
-          expiresAt: a.expiresAt ? new Date(a.expiresAt as string) : null,
-          createdById: (a.createdById && importedUserIds.has(a.createdById as string)) ? (a.createdById as string) : null,
-        }));
-        const r = await tx.announcement.createMany({ data: announcementsToCreate, // @ts-expect-error -- skipDuplicates works with SQLite at runtime (Prisma uses INSERT OR IGNORE)
-          skipDuplicates: true });
-        imported.announcements = r.count;
+        let count = 0;
+        for (const a of cats.announcements) {
+          const annData = {
+            text: a.text as string,
+            priority: (a.priority as number) || 100,
+            enabled: a.enabled !== false,
+            expiresAt: a.expiresAt ? new Date(a.expiresAt as string) : null,
+            createdById: (a.createdById && knownUserIds.has(a.createdById as string)) ? (a.createdById as string) : null,
+          };
+          await tx.announcement.upsert({
+            where: { id: a.id as string },
+            update: annData,
+            create: { id: a.id as string, ...annData },
+          });
+          count++;
+        }
+        imported.announcements = count;
       }
 
       if (cats.displayAnnouncements && Array.isArray(cats.displayAnnouncements)) {
-        const dasToCreate = cats.displayAnnouncements.map((d: Record<string, unknown>) => ({
-          displayId: d.displayId as string,
-          announcementId: d.announcementId as string,
-        }));
-        const r = await tx.displayAnnouncement.createMany({ data: dasToCreate, // @ts-expect-error -- skipDuplicates works with SQLite at runtime (Prisma uses INSERT OR IGNORE)
-          skipDuplicates: true });
-        imported.displayAnnouncements = r.count;
+        let count = 0;
+        for (const d of cats.displayAnnouncements) {
+          const key = { displayId: d.displayId as string, announcementId: d.announcementId as string };
+          await tx.displayAnnouncement.upsert({
+            where: { displayId_announcementId: key },
+            update: {},
+            create: key,
+          });
+          count++;
+        }
+        imported.displayAnnouncements = count;
       }
     });
 
