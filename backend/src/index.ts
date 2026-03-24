@@ -2957,7 +2957,7 @@ app.get('/api/displays/gallery', async (_req: Request, res: Response) => {
 // GET /api/displays/:id/gallery-token - Public preview token for gallery visitors (no auth)
 app.get('/api/displays/:id/gallery-token', async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const display = await prisma.display.findUnique({ where: { id } });
     if (!display) {
       return res.status(404).json({ error: 'Display not found' });
