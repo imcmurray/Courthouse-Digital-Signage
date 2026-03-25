@@ -4539,7 +4539,8 @@ app.delete('/api/clear', authenticateToken, requireAdmin, async (req: Authentica
       }
 
       if (categories.includes('users')) {
-        const r = await tx.user.deleteMany({});
+        // Never delete the currently authenticated user to prevent lockout
+        const r = await tx.user.deleteMany({ where: { id: { not: (req as AuthenticatedRequest).user!.userId } } });
         cleared.users = r.count;
       }
 
