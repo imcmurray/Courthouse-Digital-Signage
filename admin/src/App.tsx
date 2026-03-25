@@ -6,6 +6,7 @@ import { ThemeProvider } from './context/ThemeContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import AdminLayout from './components/AdminLayout';
 import SessionExpiredModal from './components/SessionExpiredModal';
+import ForcePasswordChangeModal from './components/ForcePasswordChangeModal';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Docket from './pages/Docket';
@@ -54,6 +55,7 @@ function RootLayout() {
         }}
       />
       <SessionExpiredModal />
+      <ForcePasswordChangeModal />
     </AuthProvider>
     </ThemeProvider>
   );

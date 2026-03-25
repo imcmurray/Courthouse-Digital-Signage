@@ -450,6 +450,7 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
         email: user.email,
         name: user.name,
         role: user.role,
+        mustChangePassword: user.mustChangePassword,
       },
     });
   } catch (error) {
@@ -513,6 +514,7 @@ app.post('/api/auth/refresh', async (req: Request, res: Response) => {
         email: user.email,
         name: user.name,
         role: user.role,
+        mustChangePassword: user.mustChangePassword,
       },
     });
   } catch (error) {
@@ -532,6 +534,7 @@ app.get('/api/auth/me', authenticateToken, async (req: AuthenticatedRequest, res
         name: true,
         role: true,
         isActive: true,
+        mustChangePassword: true,
         createdAt: true,
       },
     });
@@ -544,6 +547,50 @@ app.get('/api/auth/me', authenticateToken, async (req: AuthenticatedRequest, res
   } catch (error) {
     console.error('Get user error:', error);
     res.status(500).json({ error: 'Failed to get user info' });
+  }
+});
+
+// POST /api/auth/change-password - Change own password
+app.post('/api/auth/change-password', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Current password and new password are required' });
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({ error: 'New password must be at least 8 characters' });
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: req.user!.userId } });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const isValidPassword = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!isValidPassword) {
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+
+    const isSamePassword = await bcrypt.compare(newPassword, user.passwordHash);
+    if (isSamePassword) {
+      return res.status(400).json({ error: 'New password must be different from current password' });
+    }
+
+    const newHash = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash: newHash, mustChangePassword: false },
+    });
+
+    console.log(`[AUTH] Password changed for: ${user.email}`);
+    await createAuditLog('update', 'user', user.id, user.id, { field: 'password', mustChangePassword: false });
+
+    res.json({ message: 'Password changed successfully' });
+  } catch (error) {
+    console.error('Change password error:', error);
+    res.status(500).json({ error: 'Failed to change password' });
   }
 });
 
@@ -4581,6 +4628,7 @@ app.post('/api/import', authenticateToken, requireAdmin, async (req: Authenticat
             name: u.name as string,
             role: (u.role as string) || 'viewer',
             isActive: u.isActive !== false,
+            mustChangePassword: true,
           };
           await tx.user.upsert({
             where: { email: u.email as string },

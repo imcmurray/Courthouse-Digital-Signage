@@ -6,6 +6,7 @@ export interface User {
   name: string;
   role: 'admin' | 'editor' | 'viewer';
   isActive?: boolean;
+  mustChangePassword?: boolean;
   createdAt?: string;
 }
 

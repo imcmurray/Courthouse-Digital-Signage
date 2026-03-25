@@ -18,6 +18,7 @@ async function main() {
       name: 'System Administrator',
       role: 'admin',
       isActive: true,
+      mustChangePassword: true,
     },
   });
   console.log('Created admin user:', admin.email);
@@ -33,6 +34,7 @@ async function main() {
       name: 'Court Clerk',
       role: 'editor',
       isActive: true,
+      mustChangePassword: true,
     },
   });
   console.log('Created editor user:', editor.email);
@@ -48,6 +50,7 @@ async function main() {
       name: 'Court Staff',
       role: 'viewer',
       isActive: true,
+      mustChangePassword: true,
     },
   });
   console.log('Created viewer user:', viewer.email);
