@@ -19,6 +19,7 @@ const updateUserSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   role: z.enum(['admin', 'editor', 'viewer']),
   isActive: z.boolean().optional(),
+  mustChangePassword: z.boolean().optional(),
 });
 
 type CreateFormData = z.infer<typeof createUserSchema>;
@@ -45,7 +46,7 @@ export default function UserForm({ user, onSubmit, onClose, isLoading }: UserFor
       password: '',
       name: user?.name || '',
       role: user?.role || 'viewer',
-      ...(isEditing && { isActive: user?.isActive }),
+      ...(isEditing && { isActive: user?.isActive, mustChangePassword: user?.mustChangePassword ?? false }),
     },
   });
 
@@ -59,6 +60,9 @@ export default function UserForm({ user, onSubmit, onClose, isLoading }: UserFor
         ...(data.password && { password: data.password }),
         ...(typeof (data as UpdateFormData).isActive === 'boolean' && {
           isActive: (data as UpdateFormData).isActive,
+        }),
+        ...(typeof (data as UpdateFormData).mustChangePassword === 'boolean' && {
+          mustChangePassword: (data as UpdateFormData).mustChangePassword,
         }),
       };
       onSubmit(updateData);
@@ -160,16 +164,29 @@ export default function UserForm({ user, onSubmit, onClose, isLoading }: UserFor
 
           {/* Active Status (only for editing) */}
           {isEditing && (
-            <div className="flex items-center">
-              <input
-                id="isActive"
-                type="checkbox"
-                {...register('isActive' as 'isActive')}
-                className="h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600 rounded"
-              />
-              <label htmlFor="isActive" className="ml-2 block text-sm text-gray-700 dark:text-gray-200">
-                Account is active
-              </label>
+            <div className="space-y-3">
+              <div className="flex items-center">
+                <input
+                  id="isActive"
+                  type="checkbox"
+                  {...register('isActive' as 'isActive')}
+                  className="h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600 rounded"
+                />
+                <label htmlFor="isActive" className="ml-2 block text-sm text-gray-700 dark:text-gray-200">
+                  Account is active
+                </label>
+              </div>
+              <div className="flex items-center">
+                <input
+                  id="mustChangePassword"
+                  type="checkbox"
+                  {...register('mustChangePassword' as 'mustChangePassword')}
+                  className="h-4 w-4 text-amber-500 focus:ring-amber-500 border-gray-300 dark:border-gray-600 rounded"
+                />
+                <label htmlFor="mustChangePassword" className="ml-2 block text-sm text-gray-700 dark:text-gray-200">
+                  Require password change on next login
+                </label>
+              </div>
             </div>
           )}
 

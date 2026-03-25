@@ -3500,6 +3500,7 @@ app.get('/api/users', authenticateToken, requireAdmin, async (req: Authenticated
         name: true,
         role: true,
         isActive: true,
+        mustChangePassword: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -3586,6 +3587,7 @@ app.get('/api/users/:id', authenticateToken, requireAdmin, async (req: Authentic
         name: true,
         role: true,
         isActive: true,
+        mustChangePassword: true,
         createdAt: true,
         updatedAt: true,
       }
@@ -3646,6 +3648,7 @@ app.put('/api/users/:id', authenticateToken, requireAdmin, async (req: Authentic
     }
 
     if (isActive !== undefined) updateData.isActive = isActive;
+    if (req.body.mustChangePassword !== undefined) updateData.mustChangePassword = req.body.mustChangePassword;
 
     const user = await prisma.user.update({
       where: { id: req.params.id },
@@ -3656,6 +3659,7 @@ app.put('/api/users/:id', authenticateToken, requireAdmin, async (req: Authentic
         name: true,
         role: true,
         isActive: true,
+        mustChangePassword: true,
         createdAt: true,
         updatedAt: true,
       }

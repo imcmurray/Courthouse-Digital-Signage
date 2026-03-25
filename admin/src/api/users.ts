@@ -6,6 +6,7 @@ export interface User {
   name: string;
   role: 'admin' | 'editor' | 'viewer';
   isActive: boolean;
+  mustChangePassword?: boolean;
   createdAt: string;
   updatedAt?: string;
 }
@@ -23,6 +24,7 @@ export interface UpdateUserInput {
   name?: string;
   role?: 'admin' | 'editor' | 'viewer';
   isActive?: boolean;
+  mustChangePassword?: boolean;
 }
 
 export interface UsersResponse {
