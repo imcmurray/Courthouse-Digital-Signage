@@ -4461,9 +4461,7 @@ app.get('/api/export', authenticateToken, requireAdmin, async (req: Authenticate
     }
 
     if (include.has('displayTemplates')) {
-      categories.displayTemplates = await prisma.displayTypeTemplate.findMany({
-        where: { isBuiltIn: false },
-      });
+      categories.displayTemplates = await prisma.displayTypeTemplate.findMany();
     }
 
     const exportData = {
@@ -4613,23 +4611,22 @@ app.post('/api/import', authenticateToken, requireAdmin, async (req: Authenticat
       }
 
       // Display templates before displays (displays may reference them)
+      // Upsert by slug (unique) since built-in templates may have different UUIDs across instances
       if (cats.displayTemplates && Array.isArray(cats.displayTemplates)) {
         let count = 0;
         for (const t of cats.displayTemplates) {
-          if (t.isBuiltIn) continue; // skip built-ins, they're created at startup
           const tData = {
-            slug: t.slug as string,
             name: t.name as string,
             description: (t.description as string) || null,
-            isBuiltIn: false,
+            isBuiltIn: t.isBuiltIn === true,
             components: t.components as string,
             layout: (t.layout as string) || null,
             createdById: (t.createdById && knownUserIds.has(t.createdById as string)) ? (t.createdById as string) : null,
           };
           await tx.displayTypeTemplate.upsert({
-            where: { id: t.id as string },
+            where: { slug: t.slug as string },
             update: tData,
-            create: { id: t.id as string, ...tData },
+            create: { id: t.id as string, slug: t.slug as string, ...tData },
           });
           count++;
         }
