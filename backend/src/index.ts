@@ -4455,6 +4455,17 @@ app.get('/api/export', authenticateToken, requireAdmin, async (req: Authenticate
       categories.auditLogs = await prisma.auditLog.findMany();
     }
 
+    if (include.has('contentCards')) {
+      categories.contentCards = await prisma.contentCard.findMany();
+      categories.displayContentCards = await prisma.displayContentCard.findMany();
+    }
+
+    if (include.has('displayTemplates')) {
+      categories.displayTemplates = await prisma.displayTypeTemplate.findMany({
+        where: { isBuiltIn: false },
+      });
+    }
+
     const exportData = {
       exportedAt: new Date().toISOString(),
       version: 1,
@@ -4502,6 +4513,12 @@ app.delete('/api/clear', authenticateToken, requireAdmin, async (req: Authentica
         cleared.auditLogs = r.count;
       }
 
+      if (categories.includes('contentCards')) {
+        await tx.displayContentCard.deleteMany({});
+        const r = await tx.contentCard.deleteMany({});
+        cleared.contentCards = r.count;
+      }
+
       if (categories.includes('displays')) {
         // display_docket_entries cascade from displays, but also delete api_keys
         if (!categories.includes('docket')) {
@@ -4510,9 +4527,17 @@ app.delete('/api/clear', authenticateToken, requireAdmin, async (req: Authentica
         if (!categories.includes('announcements')) {
           await tx.displayAnnouncement.deleteMany({});
         }
+        if (!categories.includes('contentCards')) {
+          await tx.displayContentCard.deleteMany({});
+        }
         await tx.apiKey.deleteMany({});
         const r = await tx.display.deleteMany({});
         cleared.displays = r.count;
+      }
+
+      if (categories.includes('displayTemplates')) {
+        const r = await tx.displayTypeTemplate.deleteMany({ where: { isBuiltIn: false } });
+        cleared.displayTemplates = r.count;
       }
 
       if (categories.includes('users')) {
@@ -4587,6 +4612,30 @@ app.post('/api/import', authenticateToken, requireAdmin, async (req: Authenticat
         imported.settings = count;
       }
 
+      // Display templates before displays (displays may reference them)
+      if (cats.displayTemplates && Array.isArray(cats.displayTemplates)) {
+        let count = 0;
+        for (const t of cats.displayTemplates) {
+          if (t.isBuiltIn) continue; // skip built-ins, they're created at startup
+          const tData = {
+            slug: t.slug as string,
+            name: t.name as string,
+            description: (t.description as string) || null,
+            isBuiltIn: false,
+            components: t.components as string,
+            layout: (t.layout as string) || null,
+            createdById: (t.createdById && knownUserIds.has(t.createdById as string)) ? (t.createdById as string) : null,
+          };
+          await tx.displayTypeTemplate.upsert({
+            where: { id: t.id as string },
+            update: tData,
+            create: { id: t.id as string, ...tData },
+          });
+          count++;
+        }
+        imported.displayTemplates = count;
+      }
+
       if (cats.displays && Array.isArray(cats.displays)) {
         const placeholderKeyHash = crypto.createHash('sha256').update('REGENERATE_REQUIRED').digest('hex');
         let count = 0;
@@ -4600,6 +4649,7 @@ app.post('/api/import', authenticateToken, requireAdmin, async (req: Authenticat
             showStricken: d.showStricken === true,
             showZoomInfo: d.showZoomInfo !== false,
             highlightCurrent: d.highlightCurrent !== false,
+            orientation: (d.orientation as string) || 'landscape',
             theme: (d.theme as string) || 'default',
             columns: (d.columns as string) || '["NAME","CH","TIME","CASE","MATTER","ROOM"]',
             showWeather: d.showWeather !== false,
@@ -4608,6 +4658,20 @@ app.post('/api/import', authenticateToken, requireAdmin, async (req: Authenticat
             tickerEnabled: d.tickerEnabled !== false,
             tickerSpeed: (d.tickerSpeed as string) || 'medium',
             status: (d.status as string) || 'unknown',
+            scheduleEnabled: d.scheduleEnabled === true,
+            scheduleConfig: (d.scheduleConfig as string) || '{}',
+            screensaverType: (d.screensaverType as string) || 'black',
+            docketViewMode: (d.docketViewMode as string) || 'all',
+            displayType: (d.displayType as string) || 'courtroom',
+            wayfindingConfig: (d.wayfindingConfig as string) || null,
+            rtspUrl1: (d.rtspUrl1 as string) || null,
+            rtspUrl2: (d.rtspUrl2 as string) || null,
+            cameraLabel1: (d.cameraLabel1 as string) || null,
+            cameraLabel2: (d.cameraLabel2 as string) || null,
+            cameraRotateInterval: (d.cameraRotateInterval as number) || null,
+            cameraConfig: (d.cameraConfig as string) || null,
+            showContentCards: d.showContentCards === true,
+            displayTemplate: (d.displayTemplate as string) || null,
           };
           await tx.display.upsert({
             where: { id: d.id as string },
@@ -4617,6 +4681,35 @@ app.post('/api/import', authenticateToken, requireAdmin, async (req: Authenticat
           count++;
         }
         imported.displays = count;
+      }
+
+      // Content cards after displays and users
+      if (cats.contentCards && Array.isArray(cats.contentCards)) {
+        let count = 0;
+        for (const c of cats.contentCards) {
+          const cardData = {
+            title: c.title as string,
+            body: c.body as string,
+            type: (c.type as string) || 'info',
+            icon: (c.icon as string) || null,
+            sortOrder: (c.sortOrder as number) || 100,
+            enabled: c.enabled !== false,
+            expiresAt: c.expiresAt ? new Date(c.expiresAt as string) : null,
+            isEmergency: c.isEmergency === true,
+            emergencyLevel: (c.emergencyLevel as number) || null,
+            emergencyTarget: (c.emergencyTarget as string) || null,
+            activatedAt: c.activatedAt ? new Date(c.activatedAt as string) : null,
+            activatedById: (c.activatedById && knownUserIds.has(c.activatedById as string)) ? (c.activatedById as string) : null,
+            createdById: (c.createdById && knownUserIds.has(c.createdById as string)) ? (c.createdById as string) : null,
+          };
+          await tx.contentCard.upsert({
+            where: { id: c.id as string },
+            update: cardData,
+            create: { id: c.id as string, ...cardData },
+          });
+          count++;
+        }
+        imported.contentCards = count;
       }
 
       if (cats.docketEntries && Array.isArray(cats.docketEntries)) {
@@ -4643,6 +4736,7 @@ app.post('/api/import', authenticateToken, requireAdmin, async (req: Authenticat
             status: (e.status as string) || 'scheduled',
             statusNote: (e.statusNote as string) || null,
             comment: (e.comment as string) || null,
+            manuallyEdited: e.manuallyEdited === true,
             createdById: (e.createdById && knownUserIds.has(e.createdById as string)) ? (e.createdById as string) : null,
           };
           await tx.docketEntry.upsert({
@@ -4701,6 +4795,42 @@ app.post('/api/import', authenticateToken, requireAdmin, async (req: Authenticat
           count++;
         }
         imported.displayAnnouncements = count;
+      }
+
+      if (cats.displayContentCards && Array.isArray(cats.displayContentCards)) {
+        let count = 0;
+        for (const d of cats.displayContentCards) {
+          const key = { displayId: d.displayId as string, contentCardId: d.contentCardId as string };
+          await tx.displayContentCard.upsert({
+            where: { displayId_contentCardId: key },
+            update: {},
+            create: key,
+          });
+          count++;
+        }
+        imported.displayContentCards = count;
+      }
+
+      if (cats.auditLogs && Array.isArray(cats.auditLogs)) {
+        let count = 0;
+        for (const log of cats.auditLogs) {
+          const logData = {
+            action: log.action as string,
+            entityType: log.entityType as string,
+            entityId: (log.entityId as string) || null,
+            userId: (log.userId && knownUserIds.has(log.userId as string)) ? (log.userId as string) : null,
+            apiKeyId: null as string | null, // ApiKeys are never imported; null out FK
+            changes: (log.changes as string) || null,
+            ipAddress: (log.ipAddress as string) || null,
+          };
+          await tx.auditLog.upsert({
+            where: { id: log.id as string },
+            update: logData,
+            create: { id: log.id as string, ...logData },
+          });
+          count++;
+        }
+        imported.auditLogs = count;
       }
     });
 

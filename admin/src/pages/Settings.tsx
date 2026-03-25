@@ -286,6 +286,8 @@ export default function Settings() {
     { key: 'displays', label: 'Displays' },
     { key: 'docket', label: 'Docket Entries' },
     { key: 'announcements', label: 'Announcements' },
+    { key: 'contentCards', label: 'Content Cards' },
+    { key: 'displayTemplates', label: 'Display Templates' },
     { key: 'users', label: 'Users' },
     { key: 'auditLogs', label: 'Audit Logs' },
   ];
