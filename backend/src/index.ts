@@ -4559,8 +4559,8 @@ app.post('/api/import', authenticateToken, requireAdmin, async (req: Authenticat
             isActive: u.isActive !== false,
           };
           await tx.user.upsert({
-            where: { id: u.id as string },
-            update: userData,
+            where: { email: u.email as string },
+            update: { name: userData.name, role: userData.role, isActive: userData.isActive },
             create: { id: u.id as string, ...userData },
           });
           count++;
