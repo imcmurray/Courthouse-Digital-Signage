@@ -49,6 +49,20 @@
       font-size: 0.95rem;
       margin-top: 0.4rem;
     }
+    .admin-link {
+      display: inline-block;
+      margin-top: 0.75rem;
+      padding: 0.4rem 1rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--primary-yellow);
+      background: rgba(255, 215, 0, 0.1);
+      border: 1px solid rgba(255, 215, 0, 0.25);
+      border-radius: 6px;
+      text-decoration: none;
+      transition: background 0.15s;
+    }
+    .admin-link:hover { background: rgba(255, 215, 0, 0.2); }
 
     /* ── Card grid ── */
     .gallery-grid {
@@ -190,6 +204,7 @@
     <img src="assets/court-seal.svg" alt="Court Seal">
     <h1>Courthouse Display Gallery</h1>
     <p>Select a display to preview</p>
+    <a class="admin-link" href="/" target="_blank" rel="noopener">Admin Portal</a>
   </header>
 
   <div id="gallery-content">
