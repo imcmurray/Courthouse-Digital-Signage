@@ -435,10 +435,12 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
     console.log(`[AUTH] User logged in: ${user.email} (${user.role})`);
 
     // Set refresh token as HttpOnly cookie
+    // Use secure flag only when actually served over HTTPS (check forwarded proto for reverse proxy/tunnel setups)
+    const isSecure = req.headers['x-forwarded-proto'] === 'https' || req.protocol === 'https';
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      secure: isSecure,
+      sameSite: isSecure ? 'strict' : 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       path: '/api/auth',
     });
