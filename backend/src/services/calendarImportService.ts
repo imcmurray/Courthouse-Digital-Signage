@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import https from 'https';
 import http from 'http';
+import type { Server } from 'socket.io';
 import { parseCalendar, extractJudgeCode, getJudgeName, ParsedEntry } from './pdfParser';
 
 const prisma = new PrismaClient();
@@ -49,9 +50,12 @@ let pollingTimer: ReturnType<typeof setInterval> | null = null;
  * Fetch a URL and return the response body as a string or Buffer.
  * Sends cache-busting headers so proxies/CDNs return fresh content.
  */
-function fetchUrl(url: string, binary = false): Promise<Buffer> {
+function fetchUrl(url: string, binary = false, redirectCount = 0): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const parsed = new URL(url);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return reject(new Error(`Unsupported protocol: ${parsed.protocol}`));
+    }
     const client = parsed.protocol === 'https:' ? https : http;
     const options = {
       hostname: parsed.hostname,
@@ -64,12 +68,15 @@ function fetchUrl(url: string, binary = false): Promise<Buffer> {
       },
     };
     const req = client.get(options, (res) => {
-      // Follow redirects
+      // Follow redirects (max 5)
       if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        if (redirectCount >= 5) {
+          return reject(new Error(`Too many redirects (max 5) fetching ${url}`));
+        }
         const redirectUrl = res.headers.location.startsWith('http')
           ? res.headers.location
           : new URL(res.headers.location, url).href;
-        fetchUrl(redirectUrl, binary).then(resolve).catch(reject);
+        fetchUrl(redirectUrl, binary, redirectCount + 1).then(resolve).catch(reject);
         return;
       }
       if (res.statusCode && res.statusCode >= 400) {
@@ -222,7 +229,7 @@ async function upsertEntry(entry: ParsedEntry, judgeName: string): Promise<'crea
 /**
  * Run a full import cycle: scrape, download, parse, upsert.
  */
-export async function runImport(io?: any): Promise<ImportResult[]> {
+export async function runImport(io?: Server): Promise<ImportResult[]> {
   if (isImportRunning) {
     throw new Error('Import is already running');
   }
@@ -596,7 +603,7 @@ export async function getImportLogById(id: string) {
 /**
  * Start the auto-import polling timer.
  */
-export function startPolling(intervalMinutes: number, io?: any) {
+export function startPolling(intervalMinutes: number, io?: Server) {
   stopPolling();
   console.log(`[Calendar Import] Auto-import started (every ${intervalMinutes} minutes)`);
   pollingTimer = setInterval(async () => {
@@ -622,7 +629,7 @@ export function stopPolling() {
 /**
  * Sync the polling timer with current settings.
  */
-export async function syncPollingTimer(io?: any) {
+export async function syncPollingTimer(io?: Server) {
   const config = await getImportConfig();
   if (config.enabled) {
     startPolling(config.intervalMinutes, io);

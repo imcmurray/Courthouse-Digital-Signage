@@ -26,6 +26,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.nginx
+      args:
+        - VITE_API_URL=${VITE_API_URL:-}
     ports:
       - "${HOST_PORT:-80}:80"
     volumes:

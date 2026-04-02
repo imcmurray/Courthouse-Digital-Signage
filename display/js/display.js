@@ -126,6 +126,7 @@
   let announcements = [];
   let displayConfig = {};
   let socket = null;
+  const intervalIds = [];
 
   // Pagination state
   let paginationState = {
@@ -234,13 +235,30 @@
     return params.get('apiKey') || localStorage.getItem('displayApiKey') || '';
   }
 
+  // Named event handlers for proper cleanup
+  function handleOnline() { handleConnectionChange(true); }
+  function handleOffline() { handleConnectionChange(false); }
+
+  // Cleanup function to prevent memory leaks on long-running displays
+  function cleanup() {
+    intervalIds.forEach(function(id) { clearInterval(id); });
+    intervalIds.length = 0;
+    window.removeEventListener('online', handleOnline);
+    window.removeEventListener('offline', handleOffline);
+    if (socket) {
+      socket.disconnect();
+      socket = null;
+    }
+  }
+  window.addEventListener('beforeunload', cleanup);
+
   // Initialize display
   async function init() {
     console.log('Initializing display:', CONFIG.displayId);
 
     // Start clock
     updateClock();
-    setInterval(updateClock, CONFIG.clockInterval);
+    intervalIds.push(setInterval(updateClock, CONFIG.clockInterval));
 
     // Fetch initial data — config must resolve first so displayType is known
     fetchCourtBranding();
@@ -252,21 +270,22 @@
     fetchEmergencyStatus();
 
     // Set up refresh intervals
-    setInterval(fetchDocket, CONFIG.refreshInterval);
-    setInterval(fetchAnnouncements, CONFIG.refreshInterval);
-    setInterval(fetchContentCards, 300000); // Refresh content cards every 5 minutes
-    setInterval(fetchWeather, CONFIG.weatherRefreshInterval);
+    intervalIds.push(setInterval(fetchDocket, CONFIG.refreshInterval));
+    intervalIds.push(setInterval(fetchAnnouncements, CONFIG.refreshInterval));
+    intervalIds.push(setInterval(fetchContentCards, 300000)); // Refresh content cards every 5 minutes
+    intervalIds.push(setInterval(fetchWeather, CONFIG.weatherRefreshInterval));
     emergencyPollTimer = setInterval(fetchEmergencyStatus, 30000); // Poll emergency status every 30 seconds as fallback
+    intervalIds.push(emergencyPollTimer);
 
     // Set up schedule checker (runs every 30 seconds)
-    setInterval(checkSchedule, 30000);
+    intervalIds.push(setInterval(checkSchedule, 30000));
 
     // Set up WebSocket connection
     setupWebSocket();
 
     // Handle online/offline status
-    window.addEventListener('online', () => handleConnectionChange(true));
-    window.addEventListener('offline', () => handleConnectionChange(false));
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
   }
 
   // Update clock

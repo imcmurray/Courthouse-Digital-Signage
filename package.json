@@ -1,0 +1,12 @@
+{
+  "name": "courthouse-digital-signage",
+  "private": true,
+  "scripts": {
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:admin": "npm --prefix admin run dev",
+    "build:backend": "npm --prefix backend run build",
+    "build:admin": "npm --prefix admin run build",
+    "build": "npm run build:backend && npm run build:admin",
+    "typecheck": "npm --prefix backend run typecheck; npm --prefix admin run typecheck"
+  }
+}

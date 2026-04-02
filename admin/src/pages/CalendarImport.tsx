@@ -51,8 +51,9 @@ export default function CalendarImport() {
         }
       }, 2000);
     },
-    onError: (error: any) => {
-      const message = error.response?.data?.error || 'Failed to start import';
+    onError: (error: unknown) => {
+      const axiosError = error as { response?: { data?: { error?: string } } };
+      const message = axiosError?.response?.data?.error || 'Failed to start import';
       toast.error(message);
     },
   });
@@ -71,7 +72,7 @@ export default function CalendarImport() {
     },
   });
 
-  const handleConfigChange = (field: keyof ImportConfig, value: any) => {
+  const handleConfigChange = (field: keyof ImportConfig, value: string | number | boolean) => {
     setConfigForm(prev => ({ ...prev, [field]: value }));
     setConfigDirty(true);
   };

@@ -18,6 +18,17 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(pkg.version),
     __COMMIT_HASH__: JSON.stringify(commitHash),
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-query': ['@tanstack/react-query'],
+          'vendor-ui': ['react-hot-toast', 'react-datepicker', 'react-hook-form'],
+        },
+      },
+    },
+  },
   server: {
     port: 5173,
     proxy: {

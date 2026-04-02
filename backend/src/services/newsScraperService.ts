@@ -1,6 +1,8 @@
 import { PrismaClient } from '@prisma/client';
 import https from 'https';
 import http from 'http';
+import * as cheerio from 'cheerio';
+import type { Server } from 'socket.io';
 
 const prisma = new PrismaClient();
 
@@ -21,9 +23,12 @@ let pollingTimer: ReturnType<typeof setInterval> | null = null;
  * Fetch a URL and return the response body as a string.
  * 15-second timeout, follows redirects, graceful error handling.
  */
-function fetchUrl(url: string): Promise<string> {
+function fetchUrl(url: string, redirectCount = 0): Promise<string> {
   return new Promise((resolve, reject) => {
     const parsed = new URL(url);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return reject(new Error(`Unsupported protocol: ${parsed.protocol}`));
+    }
     const client = parsed.protocol === 'https:' ? https : http;
     const options = {
       hostname: parsed.hostname,
@@ -37,12 +42,15 @@ function fetchUrl(url: string): Promise<string> {
     };
 
     const req = client.get(options, (res) => {
-      // Follow redirects (up to 3)
+      // Follow redirects (max 5)
       if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        if (redirectCount >= 5) {
+          return reject(new Error(`Too many redirects (max 5) fetching ${url}`));
+        }
         const redirectUrl = res.headers.location.startsWith('http')
           ? res.headers.location
           : new URL(res.headers.location, url).href;
-        fetchUrl(redirectUrl).then(resolve).catch(reject);
+        fetchUrl(redirectUrl, redirectCount + 1).then(resolve).catch(reject);
         return;
       }
       if (res.statusCode && res.statusCode >= 400) {
@@ -60,91 +68,81 @@ function fetchUrl(url: string): Promise<string> {
 }
 
 /**
- * Parse news items from the court website HTML.
+ * Parse news items from the court website HTML using cheerio.
  * Looks for common Drupal news patterns used on uscourts.gov sites.
  */
 function parseNewsItems(html: string, baseUrl: string): { title: string; summary: string; url: string; publishedAt: Date | null }[] {
+  const $ = cheerio.load(html);
   const items: { title: string; summary: string; url: string; publishedAt: Date | null }[] = [];
   const seen = new Set<string>();
 
-  // Pattern 1: Drupal views-row items with links and text
-  // Match <div class="views-row">...</div> blocks
-  const viewsRowPattern = /<div[^>]*class="[^"]*views-row[^"]*"[^>]*>([\s\S]*?)<\/div>\s*(?=<div[^>]*class="[^"]*views-row|<\/div>\s*<\/div>)/gi;
-  let match;
-
-  while ((match = viewsRowPattern.exec(html)) !== null) {
-    const block = match[1];
-
-    // Extract link and title
-    const linkMatch = block.match(/<a[^>]+href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/i);
-    if (!linkMatch) continue;
-
-    const href = linkMatch[1];
-    const title = linkMatch[2].replace(/<[^>]+>/g, '').trim();
-    if (!title || title.length < 5) continue;
-
-    const fullUrl = href.startsWith('http') ? href : new URL(href, baseUrl).href;
-    if (seen.has(fullUrl)) continue;
-    seen.add(fullUrl);
-
-    // Extract summary text (look for field-content or plain text after link)
-    let summary = '';
-    const summaryMatch = block.match(/<div[^>]*class="[^"]*field-content[^"]*"[^>]*>([\s\S]*?)<\/div>/i);
-    if (summaryMatch) {
-      summary = summaryMatch[1].replace(/<[^>]+>/g, '').trim();
-    }
-    if (!summary) {
-      // Fallback: grab any text content after the link
-      const textAfterLink = block.substring((linkMatch.index || 0) + linkMatch[0].length);
-      summary = textAfterLink.replace(/<[^>]+>/g, '').trim();
-    }
-    // Truncate summary to ~200 chars
-    if (summary.length > 200) {
-      summary = summary.substring(0, 197) + '...';
-    }
-    if (!summary) summary = title;
-
-    // Extract date if present
-    let publishedAt: Date | null = null;
-    const dateMatch = block.match(/<(?:time|span)[^>]*(?:datetime="([^"]*)"[^>]*|class="[^"]*date[^"]*"[^>]*)>([\s\S]*?)<\/(?:time|span)>/i);
-    if (dateMatch) {
-      const dateStr = dateMatch[1] || dateMatch[2]?.replace(/<[^>]+>/g, '').trim();
-      if (dateStr) {
-        const parsed = new Date(dateStr);
-        if (!isNaN(parsed.getTime())) publishedAt = parsed;
-      }
-    }
-
-    items.push({ title, summary, url: fullUrl, publishedAt });
+  function resolveUrl(href: string): string {
+    return href.startsWith('http') ? href : new URL(href, baseUrl).href;
   }
 
-  // Pattern 2: If no views-rows found, try <article> or <li> with news links
-  if (items.length === 0) {
-    const articlePattern = /<(?:article|li)[^>]*>([\s\S]*?)<\/(?:article|li)>/gi;
-    while ((match = articlePattern.exec(html)) !== null) {
-      const block = match[1];
-      const linkMatch = block.match(/<a[^>]+href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/i);
-      if (!linkMatch) continue;
+  function truncate(text: string, max: number): string {
+    return text.length > max ? text.substring(0, max - 3) + '...' : text;
+  }
 
-      const href = linkMatch[1];
-      const title = linkMatch[2].replace(/<[^>]+>/g, '').trim();
-      if (!title || title.length < 10) continue;
+  function extractDate(el: ReturnType<typeof $>): Date | null {
+    const timeEl = el.find('time, span[class*="date"]').first();
+    const dateStr = timeEl.attr('datetime') || timeEl.text().trim();
+    if (dateStr) {
+      const parsed = new Date(dateStr);
+      if (!isNaN(parsed.getTime())) return parsed;
+    }
+    return null;
+  }
+
+  // Pattern 1: Drupal views-row items
+  $('[class*="views-row"]').each((_i, el) => {
+    if (items.length >= 15) return false;
+    const row = $(el);
+    const link = row.find('a').first();
+    const href = link.attr('href');
+    if (!href) return;
+
+    const title = link.text().trim();
+    if (!title || title.length < 5) return;
+
+    const fullUrl = resolveUrl(href);
+    if (seen.has(fullUrl)) return;
+    seen.add(fullUrl);
+
+    // Extract summary from field-content div or remaining text
+    let summary = row.find('[class*="field-content"]').first().text().trim();
+    if (!summary) {
+      summary = row.text().replace(title, '').trim();
+    }
+    summary = truncate(summary, 200) || title;
+
+    items.push({ title, summary, url: fullUrl, publishedAt: extractDate(row) });
+  });
+
+  // Pattern 2: Fallback to <article> or <li> elements
+  if (items.length === 0) {
+    $('article, li').each((_, el) => {
+      if (items.length >= 15) return false;
+      const block = $(el);
+      const link = block.find('a').first();
+      const href = link.attr('href');
+      if (!href) return;
+
+      const title = link.text().trim();
+      if (!title || title.length < 10) return;
 
       // Skip navigation/footer links
-      if (href.includes('#') && !href.includes('/node/') && !href.includes('/news')) continue;
+      if (href.includes('#') && !href.includes('/node/') && !href.includes('/news')) return;
 
-      const fullUrl = href.startsWith('http') ? href : new URL(href, baseUrl).href;
-      if (seen.has(fullUrl)) continue;
+      const fullUrl = resolveUrl(href);
+      if (seen.has(fullUrl)) return;
       seen.add(fullUrl);
 
-      let summary = block.replace(/<[^>]+>/g, '').trim();
-      if (summary.length > 200) summary = summary.substring(0, 197) + '...';
-      if (!summary) summary = title;
+      let summary = block.text().trim();
+      summary = truncate(summary, 200) || title;
 
       items.push({ title, summary, url: fullUrl, publishedAt: null });
-
-      if (items.length >= 15) break;
-    }
+    });
   }
 
   return items.slice(0, 15);
@@ -153,7 +151,7 @@ function parseNewsItems(html: string, baseUrl: string): { title: string; summary
 /**
  * Run a news scrape: fetch court website, parse news, upsert into DB, prune old articles.
  */
-export async function runNewsScrape(io?: any): Promise<ScrapeResult> {
+export async function runNewsScrape(io?: Server): Promise<ScrapeResult> {
   try {
     // Get court website URL from settings
     const urlSetting = await prisma.setting.findUnique({
@@ -252,7 +250,7 @@ export async function runNewsScrape(io?: any): Promise<ScrapeResult> {
 /**
  * Start the news scraper polling timer.
  */
-export function startNewsPolling(intervalMinutes: number, io?: any) {
+export function startNewsPolling(intervalMinutes: number, io?: Server) {
   stopNewsPolling();
   console.log(`[News Scraper] Auto-scrape started (every ${intervalMinutes} minutes)`);
   pollingTimer = setInterval(async () => {
@@ -278,7 +276,7 @@ export function stopNewsPolling() {
 /**
  * Sync the polling timer with current settings.
  */
-export async function syncNewsPollingTimer(io?: any) {
+export async function syncNewsPollingTimer(io?: Server) {
   const [enabledSetting, intervalSetting] = await Promise.all([
     prisma.setting.findUnique({ where: { key: 'news_scrape_enabled' } }),
     prisma.setting.findUnique({ where: { key: 'news_scrape_interval' } }),

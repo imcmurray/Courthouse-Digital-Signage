@@ -403,6 +403,7 @@ export default function Docket() {
             rowErrors.set(i - 1, errors); // 0-indexed for the entries array
           }
 
+          // Shape validated by validateImportRow above; dynamic CSV keys require assertion
           entries.push(entry as unknown as CreateDocketEntryInput);
         }
 

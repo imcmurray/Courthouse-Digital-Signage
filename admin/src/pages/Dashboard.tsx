@@ -141,8 +141,9 @@ export default function Dashboard() {
       queryClient.invalidateQueries({ queryKey: ['dashboardImportStatus'] });
       queryClient.invalidateQueries({ queryKey: ['dashboardImportHistory'] });
     },
-    onError: (error: any) => {
-      const message = error?.response?.data?.error || 'Failed to start import';
+    onError: (error: unknown) => {
+      const axiosError = error as { response?: { data?: { error?: string } } };
+      const message = axiosError?.response?.data?.error || 'Failed to start import';
       toast.error(message);
     },
   });

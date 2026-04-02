@@ -7,6 +7,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import AdminLayout from './components/AdminLayout';
 import SessionExpiredModal from './components/SessionExpiredModal';
 import ForcePasswordChangeModal from './components/ForcePasswordChangeModal';
+import ErrorBoundary from './components/ErrorBoundary';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Docket from './pages/Docket';
@@ -25,6 +26,7 @@ const queryClient = new QueryClient();
 // Root layout component that provides auth context
 function RootLayout() {
   return (
+    <ErrorBoundary>
     <ThemeProvider>
     <AuthProvider>
       <Outlet />
@@ -58,6 +60,7 @@ function RootLayout() {
       <ForcePasswordChangeModal />
     </AuthProvider>
     </ThemeProvider>
+    </ErrorBoundary>
   );
 }
 

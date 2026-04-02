@@ -38,6 +38,25 @@ interface JwtPayload {
 // Route params type — Express 5 types params as string | string[], narrow to string for our routes
 interface RouteParams { [key: string]: string }
 
+/** Send a standardized error response. */
+function sendError(res: import('express').Response, status: number, error: string, details?: unknown) {
+  const body: { error: string; details?: unknown } = { error };
+  if (details !== undefined) body.details = details;
+  return res.status(status).json(body);
+}
+
+/** Safely parse JSON with fallback, handling double-encoded strings. */
+function safeJsonParse<T>(value: string | null | undefined, fallback: T): T {
+  if (!value) return fallback;
+  try {
+    let parsed = JSON.parse(value);
+    if (typeof parsed === 'string') parsed = JSON.parse(parsed);
+    return parsed;
+  } catch {
+    return fallback;
+  }
+}
+
 // Extend Express Request type
 interface AuthenticatedRequest extends Request<RouteParams> {
   user?: JwtPayload;
@@ -125,7 +144,7 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
   credentials: true
 }));
-app.use(express.json({ limit: '50mb' }));
+app.use(express.json({ limit: '10mb' }));
 app.use(cookieParser());
 
 // =========================================
@@ -371,7 +390,7 @@ const authenticateStandaloneApiKey = async (req: StandaloneApiKeyRequest, res: R
         req.apiKeyInfo = {
           id: key.id,
           name: key.name,
-          permissions: JSON.parse(key.permissions)
+          permissions: safeJsonParse(key.permissions, [])
         };
 
         return next();
@@ -770,7 +789,7 @@ app.get('/api/recent-activity', authenticateToken, async (req: AuthenticatedRequ
       entityId: log.entityId,
       user: log.user ? log.user.name : 'System',
       timestamp: log.createdAt,
-      changes: log.changes ? JSON.parse(log.changes) : null
+      changes: safeJsonParse(log.changes, null)
     }));
 
     res.json(formattedActivity);
@@ -1023,6 +1042,9 @@ app.post('/api/docket/bulk', authenticateToken, requireEditor, async (req: Authe
       const missingFields = requiredFields.filter(field => !entry[field]);
       if (missingFields.length > 0) {
         validationErrors.push(`Entry ${index + 1}: Missing required fields: ${missingFields.join(', ')}`);
+      }
+      if (entry.hearingDate && isNaN(new Date(entry.hearingDate).getTime())) {
+        validationErrors.push(`Entry ${index + 1}: Invalid hearingDate: "${entry.hearingDate}"`);
       }
     });
 
@@ -1429,7 +1451,7 @@ app.get('/api/displays/:id/config', displayLimiter, authenticateApiKey, async (r
 
     const settingsMap: Record<string, string> = {};
     for (const setting of settings) {
-      settingsMap[setting.key] = JSON.parse(setting.value);
+      settingsMap[setting.key] = safeJsonParse(setting.value, setting.value);
     }
 
     console.log(`[API] Display config fetched for: ${req.display?.name || req.params.id}`);
@@ -1448,25 +1470,18 @@ app.get('/api/displays/:id/config', displayLimiter, authenticateApiKey, async (r
       showZoomInfo: display.showZoomInfo,
       highlightCurrent: display.highlightCurrent,
       theme: display.theme,
-      columns: JSON.parse(display.columns),
+      columns: safeJsonParse(display.columns, []),
       scheduleEnabled: display.scheduleEnabled,
-      scheduleConfig: JSON.parse(display.scheduleConfig || '{}'),
+      scheduleConfig: safeJsonParse(display.scheduleConfig, {}),
       screensaverType: display.screensaverType,
       docketViewMode: display.docketViewMode,
       displayType: display.displayType,
       judgeFilter: display.judgeFilter || null,
       courtroomFilter: display.courtroomFilter || null,
-      wayfindingConfig: (() => {
-        if (!display.wayfindingConfig) return null;
-        let parsed = JSON.parse(display.wayfindingConfig);
-        if (typeof parsed === 'string') parsed = JSON.parse(parsed);
-        return parsed;
-      })(),
+      wayfindingConfig: safeJsonParse(display.wayfindingConfig, null),
       cameraConfig: (() => {
         if (display.cameraConfig) {
-          let parsed = JSON.parse(display.cameraConfig);
-          if (typeof parsed === 'string') parsed = JSON.parse(parsed);
-          return parsed;
+          return safeJsonParse(display.cameraConfig, null);
         }
         // Backward compat: construct from old fields
         const cameras: { name: string; url: string }[] = [];
@@ -1481,8 +1496,8 @@ app.get('/api/displays/:id/config', displayLimiter, authenticateApiKey, async (r
       showContentCards: display.showContentCards,
       template: template ? {
         slug: template.slug,
-        components: JSON.parse(template.components),
-        layout: template.layout ? JSON.parse(template.layout) : null,
+        components: safeJsonParse(template.components, []),
+        layout: safeJsonParse(template.layout, null),
       } : null,
       displayTemplate: (() => {
         if (!display.displayTemplate) return null;
@@ -1720,7 +1735,7 @@ app.get('/api/displays/:id/docket', displayLimiter, authenticateApiKey, async (r
       where.courtroom = display.courtroomFilter;
     }
     if (display.chapterFilter) {
-      const chapters = JSON.parse(display.chapterFilter);
+      const chapters: string[] = safeJsonParse(display.chapterFilter, []);
       if (chapters.length > 0) {
         where.caseChapter = { in: chapters };
       }
@@ -3472,13 +3487,13 @@ app.get('/api/displays/:id/schedule', displayLimiter, authenticateApiKey, async 
     });
     const settingsMap: Record<string, string> = {};
     for (const setting of settings) {
-      settingsMap[setting.key] = JSON.parse(setting.value);
+      settingsMap[setting.key] = safeJsonParse(setting.value, setting.value);
     }
 
     res.json({
       displayId: display.id,
       scheduleEnabled: display.scheduleEnabled,
-      scheduleConfig: JSON.parse(display.scheduleConfig || '{}'),
+      scheduleConfig: safeJsonParse(display.scheduleConfig, {}),
       screensaverType: display.screensaverType,
       timezone: settingsMap.timezone || 'America/Denver'
     });
@@ -3767,7 +3782,7 @@ app.get('/api/api-keys', authenticateToken, requireAdmin, async (req: Authentica
       id: key.id,
       name: key.name,
       keyPrefix: key.keyPrefix,
-      permissions: JSON.parse(key.permissions),
+      permissions: safeJsonParse(key.permissions, []),
       displayId: key.displayId,
       display: key.display,
       expiresAt: key.expiresAt,
@@ -3892,7 +3907,7 @@ app.get('/api/api-keys/:id', authenticateToken, requireAdmin, async (req: Authen
       id: apiKey.id,
       name: apiKey.name,
       keyPrefix: apiKey.keyPrefix,
-      permissions: JSON.parse(apiKey.permissions),
+      permissions: safeJsonParse(apiKey.permissions, []),
       displayId: apiKey.displayId,
       display: apiKey.display,
       expiresAt: apiKey.expiresAt,
@@ -3958,7 +3973,7 @@ app.put('/api/api-keys/:id', authenticateToken, requireAdmin, async (req: Authen
       id: updatedKey.id,
       name: updatedKey.name,
       keyPrefix: updatedKey.keyPrefix,
-      permissions: JSON.parse(updatedKey.permissions),
+      permissions: safeJsonParse(updatedKey.permissions, []),
       displayId: updatedKey.displayId,
       display: updatedKey.display,
       expiresAt: updatedKey.expiresAt,
@@ -4118,7 +4133,7 @@ app.get('/api/audit-logs/export', authenticateToken, requireAdmin, async (req: A
         entityId: log.entityId,
         user: log.user?.name || log.user?.email || 'System',
         userId: log.userId,
-        changes: log.changes ? JSON.parse(log.changes) : null,
+        changes: safeJsonParse(log.changes, null),
         ipAddress: log.ipAddress
       })));
     } else {
@@ -4156,7 +4171,7 @@ app.get('/api/settings/public', async (req: Request, res: Response) => {
 
     const settingsMap: Record<string, string> = {};
     for (const setting of settings) {
-      settingsMap[setting.key] = JSON.parse(setting.value);
+      settingsMap[setting.key] = safeJsonParse(setting.value, setting.value);
     }
 
     res.json({
@@ -4189,7 +4204,7 @@ app.get('/api/settings', authenticateToken, async (req: AuthenticatedRequest, re
     const settingsMetadata: Record<string, { updatedAt: Date; updatedBy: { name: string | null } | null }> = {};
 
     for (const setting of settings) {
-      settingsObject[setting.key] = JSON.parse(setting.value);
+      settingsObject[setting.key] = safeJsonParse(setting.value, setting.value);
       settingsMetadata[setting.key] = {
         updatedAt: setting.updatedAt,
         updatedBy: setting.updatedBy
