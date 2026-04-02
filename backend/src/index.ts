@@ -49,8 +49,10 @@ function sendError(res: import('express').Response, status: number, error: strin
 function safeJsonParse<T>(value: string | null | undefined, fallback: T): T {
   if (!value) return fallback;
   try {
-    let parsed = JSON.parse(value);
-    if (typeof parsed === 'string') parsed = JSON.parse(parsed);
+    const parsed = JSON.parse(value);
+    if (typeof parsed === 'string') {
+      try { return JSON.parse(parsed); } catch { return parsed as T; }
+    }
     return parsed;
   } catch {
     return fallback;
