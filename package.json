@@ -7,6 +7,6 @@
     "build:backend": "npm --prefix backend run build",
     "build:admin": "npm --prefix admin run build",
     "build": "npm run build:backend && npm run build:admin",
-    "typecheck": "npm --prefix backend run typecheck; npm --prefix admin run typecheck"
+    "typecheck": "npm --prefix backend run typecheck && npm --prefix admin run typecheck"
   }
 }
