@@ -3,6 +3,7 @@ import https from 'https';
 import http from 'http';
 import type { Server } from 'socket.io';
 import { parseCalendar, extractJudgeCode, getJudgeName, ParsedEntry } from './pdfParser';
+import { assertPublicHttpUrl } from './urlGuard';
 
 const prisma = new PrismaClient();
 
@@ -50,12 +51,10 @@ let pollingTimer: ReturnType<typeof setInterval> | null = null;
  * Fetch a URL and return the response body as a string or Buffer.
  * Sends cache-busting headers so proxies/CDNs return fresh content.
  */
-function fetchUrl(url: string, binary = false, redirectCount = 0): Promise<Buffer> {
+async function fetchUrl(url: string, binary = false, redirectCount = 0): Promise<Buffer> {
+  await assertPublicHttpUrl(url); // SSRF guard (also runs on each redirect)
   return new Promise((resolve, reject) => {
     const parsed = new URL(url);
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      return reject(new Error(`Unsupported protocol: ${parsed.protocol}`));
-    }
     const client = parsed.protocol === 'https:' ? https : http;
     const options = {
       hostname: parsed.hostname,

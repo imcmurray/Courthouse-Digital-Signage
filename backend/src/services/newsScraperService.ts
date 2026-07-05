@@ -3,6 +3,7 @@ import https from 'https';
 import http from 'http';
 import * as cheerio from 'cheerio';
 import type { Server } from 'socket.io';
+import { assertPublicHttpUrl } from './urlGuard';
 
 const prisma = new PrismaClient();
 
@@ -23,12 +24,10 @@ let pollingTimer: ReturnType<typeof setInterval> | null = null;
  * Fetch a URL and return the response body as a string.
  * 15-second timeout, follows redirects, graceful error handling.
  */
-function fetchUrl(url: string, redirectCount = 0): Promise<string> {
+async function fetchUrl(url: string, redirectCount = 0): Promise<string> {
+  await assertPublicHttpUrl(url); // SSRF guard (also runs on each redirect)
   return new Promise((resolve, reject) => {
     const parsed = new URL(url);
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      return reject(new Error(`Unsupported protocol: ${parsed.protocol}`));
-    }
     const client = parsed.protocol === 'https:' ? https : http;
     const options = {
       hostname: parsed.hostname,
