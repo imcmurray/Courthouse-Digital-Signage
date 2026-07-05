@@ -19,12 +19,7 @@ export const getStoredToken = (): string | null => {
   return localStorage.getItem(TOKEN_KEY);
 };
 
-export const setStoredAccessToken = (accessToken: string): void => {
-  localStorage.setItem(TOKEN_KEY, accessToken);
-};
-
-// Keep backward-compatible alias that ignores refreshToken parameter
-export const setStoredTokens = (accessToken: string, _refreshToken?: string): void => {
+export const setStoredTokens = (accessToken: string): void => {
   localStorage.setItem(TOKEN_KEY, accessToken);
 };
 
@@ -34,10 +29,6 @@ export const clearStoredTokens = (): void => {
 
 // Track if we're already showing the session expired modal
 let isSessionExpiredModalShown = false;
-
-export const resetSessionExpiredFlag = (): void => {
-  isSessionExpiredModalShown = false;
-};
 
 // Request interceptor to add auth token
 apiClient.interceptors.request.use(

@@ -45,11 +45,6 @@ export const authApi = {
     const response = await apiClient.get<User>('/api/auth/me');
     return response.data;
   },
-
-  refreshToken: async (): Promise<{ accessToken: string; user: User }> => {
-    const response = await apiClient.post('/api/auth/refresh');
-    return response.data;
-  },
 };
 
 export default authApi;
