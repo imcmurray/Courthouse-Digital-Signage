@@ -10,7 +10,33 @@ env:
   NGINX_IMAGE: ghcr.io/imcmurray/courthouse-digital-signage-nginx
 
 jobs:
+  # Quality gate — must pass before any image is built or pushed.
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Backend — install, generate Prisma client, typecheck
+        working-directory: backend
+        run: |
+          npm ci
+          npx prisma generate
+          npm run typecheck
+
+      - name: Admin — install and typecheck
+        working-directory: admin
+        run: |
+          npm ci
+          npm run typecheck
+
   build-and-push:
+    needs: verify
     runs-on: ubuntu-latest
     permissions:
       contents: read
