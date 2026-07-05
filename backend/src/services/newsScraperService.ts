@@ -4,6 +4,7 @@ import http from 'http';
 import * as cheerio from 'cheerio';
 import type { Server } from 'socket.io';
 import { assertPublicHttpUrl } from './urlGuard';
+import { logger } from '../lib/logger';
 
 const prisma = new PrismaClient();
 
@@ -160,12 +161,12 @@ export async function runNewsScrape(io?: Server): Promise<ScrapeResult> {
       ? JSON.parse(urlSetting.value)
       : DEFAULT_COURT_URL;
 
-    console.log(`[News Scraper] Scraping news from ${courtUrl}`);
+    logger.info(`[News Scraper] Scraping news from ${courtUrl}`);
 
     const html = await fetchUrl(courtUrl);
     const newsItems = parseNewsItems(html, courtUrl);
 
-    console.log(`[News Scraper] Found ${newsItems.length} news items`);
+    logger.info(`[News Scraper] Found ${newsItems.length} news items`);
 
     let created = 0;
     let updated = 0;
@@ -205,7 +206,7 @@ export async function runNewsScrape(io?: Server): Promise<ScrapeResult> {
       } catch (err: any) {
         // P2002 = unique constraint (race condition)
         if (err.code === 'P2002') continue;
-        console.error(`[News Scraper] Error upserting article: ${item.title}`, err.message);
+        logger.error(`[News Scraper] Error upserting article: ${item.title}`, err.message);
       }
     }
 
@@ -224,7 +225,7 @@ export async function runNewsScrape(io?: Server): Promise<ScrapeResult> {
       status: 'success',
     };
 
-    console.log(`[News Scraper] Complete: ${created} created, ${updated} updated, ${pruned.count} pruned`);
+    logger.info(`[News Scraper] Complete: ${created} created, ${updated} updated, ${pruned.count} pruned`);
 
     // Emit WebSocket event
     if (io) {
@@ -234,7 +235,7 @@ export async function runNewsScrape(io?: Server): Promise<ScrapeResult> {
     return result;
   } catch (err: any) {
     const errorMessage = err.message || 'Unknown error';
-    console.error('[News Scraper] Scrape failed:', errorMessage);
+    logger.error('[News Scraper] Scrape failed:', errorMessage);
     return {
       articlesFound: 0,
       articlesCreated: 0,
@@ -251,12 +252,12 @@ export async function runNewsScrape(io?: Server): Promise<ScrapeResult> {
  */
 export function startNewsPolling(intervalMinutes: number, io?: Server) {
   stopNewsPolling();
-  console.log(`[News Scraper] Auto-scrape started (every ${intervalMinutes} minutes)`);
+  logger.info(`[News Scraper] Auto-scrape started (every ${intervalMinutes} minutes)`);
   pollingTimer = setInterval(async () => {
     try {
       await runNewsScrape(io);
     } catch (err) {
-      console.error('[News Scraper] Auto-scrape error:', err);
+      logger.error('[News Scraper] Auto-scrape error:', err);
     }
   }, intervalMinutes * 60 * 1000);
 }
@@ -268,7 +269,7 @@ export function stopNewsPolling() {
   if (pollingTimer) {
     clearInterval(pollingTimer);
     pollingTimer = null;
-    console.log('[News Scraper] Auto-scrape stopped');
+    logger.info('[News Scraper] Auto-scrape stopped');
   }
 }
 

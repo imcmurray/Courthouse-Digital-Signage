@@ -4,6 +4,7 @@ import http from 'http';
 import type { Server } from 'socket.io';
 import { parseCalendar, extractJudgeCode, getJudgeName, ParsedEntry } from './pdfParser';
 import { assertPublicHttpUrl } from './urlGuard';
+import { logger } from '../lib/logger';
 
 const prisma = new PrismaClient();
 
@@ -124,7 +125,7 @@ async function discoverPdfLinks(sourceUrl: string): Promise<{ url: string; filen
 
     return links;
   } catch (err) {
-    console.error(`Failed to scrape ${sourceUrl}:`, err);
+    logger.error(`Failed to scrape ${sourceUrl}:`, err);
     return [];
   }
 }
@@ -191,15 +192,15 @@ async function upsertEntry(entry: ParsedEntry, judgeName: string): Promise<'crea
             where: { id: existing.id },
             data: { status: data.status },
           });
-          console.log(`[Calendar Import] Manually edited ${entry.caseNumber} — status updated: ${existing.status} → ${data.status}`);
+          logger.info(`[Calendar Import] Manually edited ${entry.caseNumber} — status updated: ${existing.status} → ${data.status}`);
           return 'updated';
         }
-        console.log(`[Calendar Import] Skipping manually edited entry: ${entry.caseNumber}`);
+        logger.info(`[Calendar Import] Skipping manually edited entry: ${entry.caseNumber}`);
         return 'skipped_manual';
       }
 
       if (existing.status !== data.status) {
-        console.log(`[Calendar Import] Status change: ${entry.caseNumber} ${entry.hearingDate} ${entry.hearingTime} — ${existing.status} → ${data.status}`);
+        logger.info(`[Calendar Import] Status change: ${entry.caseNumber} ${entry.hearingDate} ${entry.hearingTime} — ${existing.status} → ${data.status}`);
       }
       await prisma.docketEntry.update({
         where: { id: existing.id },
@@ -246,11 +247,11 @@ export async function runImport(io?: Server): Promise<ImportResult[]> {
       ? JSON.parse(sourceUrlSetting.value)
       : DEFAULT_SOURCE_URL;
 
-    console.log(`[Calendar Import] Starting import from ${baseUrl}`);
+    logger.info(`[Calendar Import] Starting import from ${baseUrl}`);
 
     // Discover PDF links
     const pdfLinks = await discoverPdfLinks(baseUrl);
-    console.log(`[Calendar Import] Found ${pdfLinks.length} PDF calendars`);
+    logger.info(`[Calendar Import] Found ${pdfLinks.length} PDF calendars`);
     importProgress.totalCalendars = pdfLinks.length;
 
     if (pdfLinks.length === 0) {
@@ -303,15 +304,15 @@ export async function runImport(io?: Server): Promise<ImportResult[]> {
         importProgress!.currentJudge = judgeName;
         importProgress!.currentStep = `Downloading ${filename}`;
 
-        console.log(`[Calendar Import] Downloading ${filename}...`);
+        logger.info(`[Calendar Import] Downloading ${filename}...`);
         const pdfBuffer = await fetchUrl(url, true);
 
         importProgress!.currentStep = `Parsing calendar for ${judgeName}`;
-        console.log(`[Calendar Import] Parsing ${filename} (${pdfBuffer.length} bytes)...`);
+        logger.info(`[Calendar Import] Parsing ${filename} (${pdfBuffer.length} bytes)...`);
         const calendar = await parseCalendar(pdfBuffer, filename);
 
         importProgress!.currentStep = `Processing ${calendar.entries.length} entries for ${judgeName}`;
-        console.log(`[Calendar Import] Found ${calendar.entries.length} entries for ${judgeName}`);
+        logger.info(`[Calendar Import] Found ${calendar.entries.length} entries for ${judgeName}`);
 
         let created = 0;
         let updated = 0;
@@ -359,7 +360,7 @@ export async function runImport(io?: Server): Promise<ImportResult[]> {
           if (staleIds.length > 0) {
             await prisma.docketEntry.deleteMany({ where: { id: { in: staleIds } } });
             removed = staleIds.length;
-            console.log(`[Calendar Import] ${judgeName}: removed ${removed} stale entries`);
+            logger.info(`[Calendar Import] ${judgeName}: removed ${removed} stale entries`);
           }
         }
 
@@ -393,7 +394,7 @@ export async function runImport(io?: Server): Promise<ImportResult[]> {
         });
 
         importProgress!.completedCalendars++;
-        console.log(`[Calendar Import] ${judgeName}: ${created} created, ${updated} updated, ${skipped} skipped, ${removed} removed, ${skippedManualEdits} protected (${durationMs}ms)`);
+        logger.info(`[Calendar Import] ${judgeName}: ${created} created, ${updated} updated, ${skipped} skipped, ${removed} removed, ${skippedManualEdits} protected (${durationMs}ms)`);
       } catch (err: any) {
         const durationMs = Date.now() - startMs;
         const errorMessage = err.message || 'Unknown error';
@@ -424,7 +425,7 @@ export async function runImport(io?: Server): Promise<ImportResult[]> {
 
         importProgress!.completedCalendars++;
         importProgress!.lastError = `${judgeName}: ${errorMessage}`;
-        console.error(`[Calendar Import] Failed for ${judgeName}:`, errorMessage);
+        logger.error(`[Calendar Import] Failed for ${judgeName}:`, errorMessage);
       }
     }
 
@@ -437,7 +438,7 @@ export async function runImport(io?: Server): Promise<ImportResult[]> {
     lastRunStatus = results.every(r => r.status === 'success') ? 'success' :
                     results.some(r => r.status === 'success') ? 'partial' : 'failed';
 
-    console.log(`[Calendar Import] Import complete: ${results.length} calendars processed`);
+    logger.info(`[Calendar Import] Import complete: ${results.length} calendars processed`);
 
     // Create audit log for this import run
     const totals = {
@@ -457,7 +458,7 @@ export async function runImport(io?: Server): Promise<ImportResult[]> {
       },
     });
   } catch (err: any) {
-    console.error('[Calendar Import] Import failed:', err);
+    logger.error('[Calendar Import] Import failed:', err);
     lastRunAt = new Date().toISOString();
     lastRunStatus = 'failed';
   } finally {
@@ -604,12 +605,12 @@ export async function getImportLogById(id: string) {
  */
 export function startPolling(intervalMinutes: number, io?: Server) {
   stopPolling();
-  console.log(`[Calendar Import] Auto-import started (every ${intervalMinutes} minutes)`);
+  logger.info(`[Calendar Import] Auto-import started (every ${intervalMinutes} minutes)`);
   pollingTimer = setInterval(async () => {
     try {
       await runImport(io);
     } catch (err) {
-      console.error('[Calendar Import] Auto-import error:', err);
+      logger.error('[Calendar Import] Auto-import error:', err);
     }
   }, intervalMinutes * 60 * 1000);
 }
@@ -621,7 +622,7 @@ export function stopPolling() {
   if (pollingTimer) {
     clearInterval(pollingTimer);
     pollingTimer = null;
-    console.log('[Calendar Import] Auto-import stopped');
+    logger.info('[Calendar Import] Auto-import stopped');
   }
 }
 
