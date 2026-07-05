@@ -13,6 +13,7 @@ import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import { AsyncLocalStorage } from 'async_hooks';
+import { logger } from './lib/logger';
 import swaggerUi from 'swagger-ui-express';
 import YAML from 'yaml';
 import * as calendarImportService from './services/calendarImportService';
@@ -32,7 +33,7 @@ const requestContext = new AsyncLocalStorage<{ ip?: string }>();
 
 // JWT configuration
 if (!process.env.JWT_SECRET) {
-  console.error('FATAL: JWT_SECRET environment variable is required. Set it before starting the server.');
+  logger.error('FATAL: JWT_SECRET environment variable is required. Set it before starting the server.');
   process.exit(1);
 }
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -155,7 +156,7 @@ app.use(cors({
     if (CORS_ORIGIN.indexOf(origin) !== -1) {
       return callback(null, true);
     }
-    console.log(`CORS rejected origin: ${origin}, allowed: ${CORS_ORIGIN.join(', ')}`);
+    logger.info(`CORS rejected origin: ${origin}, allowed: ${CORS_ORIGIN.join(', ')}`);
     return callback(null, false);
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
@@ -256,9 +257,9 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(openapiSpec, {
   customSiteTitle: 'Courthouse Signage API',
 }));
 
-// Request logging
+// Request logging (debug level — off in production by default)
 app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} ${req.method} ${req.path}`);
+  logger.debug(`${new Date().toISOString()} ${req.method} ${req.path}`);
   next();
 });
 
@@ -366,7 +367,7 @@ const authenticateApiKey = async (req: ApiKeyRequest, res: Response, next: NextF
 
     next();
   } catch (error) {
-    console.error('API key authentication error:', error);
+    logger.error('API key authentication error:', error);
     return res.status(500).json({ error: 'Authentication failed' });
   }
 };
@@ -445,7 +446,7 @@ const authenticateStandaloneApiKey = async (req: StandaloneApiKeyRequest, res: R
     // No matching key found
     return res.status(401).json({ error: 'Invalid API key' });
   } catch (error) {
-    console.error('API key authentication error:', error);
+    logger.error('API key authentication error:', error);
     return res.status(500).json({ error: 'Authentication failed' });
   }
 };
@@ -496,7 +497,7 @@ app.post('/api/auth/login', authLimiter, async (req: Request, res: Response) => 
       { expiresIn: JWT_REFRESH_EXPIRES_IN }
     );
 
-    console.log(`[AUTH] User logged in: ${user.email} (${user.role})`);
+    logger.info(`[AUTH] User logged in: ${user.email} (${user.role})`);
 
     // Set refresh token as HttpOnly cookie
     // Use secure flag only when actually served over HTTPS (check forwarded proto for reverse proxy/tunnel setups)
@@ -520,14 +521,14 @@ app.post('/api/auth/login', authLimiter, async (req: Request, res: Response) => 
       },
     });
   } catch (error) {
-    console.error('Login error:', error);
+    logger.error('Login error:', error);
     res.status(500).json({ error: 'Login failed' });
   }
 });
 
 // POST /api/auth/logout - Logout
 app.post('/api/auth/logout', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
-  console.log(`[AUTH] User logged out: ${req.user?.email}`);
+  logger.info(`[AUTH] User logged out: ${req.user?.email}`);
   // Clear the refresh token cookie
   res.clearCookie('refreshToken', { path: '/api/auth' });
   res.json({ message: 'Logged out successfully' });
@@ -571,7 +572,7 @@ app.post('/api/auth/refresh', authLimiter, async (req: Request, res: Response) =
       { expiresIn: JWT_EXPIRES_IN }
     );
 
-    console.log(`[AUTH] Token refreshed for: ${user.email}`);
+    logger.info(`[AUTH] Token refreshed for: ${user.email}`);
 
     res.json({
       accessToken,
@@ -584,7 +585,7 @@ app.post('/api/auth/refresh', authLimiter, async (req: Request, res: Response) =
       },
     });
   } catch (error) {
-    console.error('Token refresh error:', error);
+    logger.error('Token refresh error:', error);
     res.status(500).json({ error: 'Token refresh failed' });
   }
 });
@@ -611,7 +612,7 @@ app.get('/api/auth/me', authenticateToken, async (req: AuthenticatedRequest, res
 
     res.json(user);
   } catch (error) {
-    console.error('Get user error:', error);
+    logger.error('Get user error:', error);
     res.status(500).json({ error: 'Failed to get user info' });
   }
 });
@@ -650,12 +651,12 @@ app.post('/api/auth/change-password', authLimiter, authenticateToken, async (req
       data: { passwordHash: newHash, mustChangePassword: false },
     });
 
-    console.log(`[AUTH] Password changed for: ${user.email}`);
+    logger.info(`[AUTH] Password changed for: ${user.email}`);
     await createAuditLog('update', 'user', user.id, user.id, { field: 'password', mustChangePassword: false });
 
     res.json({ message: 'Password changed successfully' });
   } catch (error) {
-    console.error('Change password error:', error);
+    logger.error('Change password error:', error);
     res.status(500).json({ error: 'Failed to change password' });
   }
 });
@@ -673,7 +674,7 @@ app.get('/api/health', async (req, res) => {
       uptime: process.uptime(),
     });
   } catch (error) {
-    console.error('Health check failed:', error);
+    logger.error('Health check failed:', error);
     res.status(503).json({
       status: 'degraded',
       database: 'disconnected',
@@ -736,7 +737,7 @@ app.get('/api/schema-check', authenticateToken, requireAdmin, async (req: Authen
       }
     });
   } catch (error) {
-    console.error('Schema check failed:', error);
+    logger.error('Schema check failed:', error);
     res.status(500).json({
       status: 'error',
       error: 'Schema check failed',
@@ -806,7 +807,7 @@ app.get('/api/stats', authenticateToken, async (req: AuthenticatedRequest, res: 
       activeUsers,
     });
   } catch (error) {
-    console.error('Error fetching stats:', error);
+    logger.error('Error fetching stats:', error);
     res.status(500).json({ error: 'Failed to fetch stats' });
   }
 });
@@ -839,7 +840,7 @@ app.get('/api/recent-activity', authenticateToken, async (req: AuthenticatedRequ
 
     res.json(formattedActivity);
   } catch (error) {
-    console.error('Error fetching recent activity:', error);
+    logger.error('Error fetching recent activity:', error);
     res.status(500).json({ error: 'Failed to fetch recent activity' });
   }
 });
@@ -950,7 +951,7 @@ app.get('/api/docket', authenticateToken, async (req: AuthenticatedRequest, res:
 
     const totalPages = Math.ceil(total / pageSize);
 
-    console.log(`[DB] SELECT from docket_entries - found ${entries.length} of ${total} records (page ${currentPage}/${totalPages})`);
+    logger.debug(`[DB] SELECT from docket_entries - found ${entries.length} of ${total} records (page ${currentPage}/${totalPages})`);
     res.json({
       entries,
       total,
@@ -959,7 +960,7 @@ app.get('/api/docket', authenticateToken, async (req: AuthenticatedRequest, res:
       totalPages
     });
   } catch (error) {
-    console.error('Failed to fetch docket entries:', error);
+    logger.error('Failed to fetch docket entries:', error);
     res.status(500).json({ error: 'Failed to fetch docket entries' });
   }
 });
@@ -1023,7 +1024,7 @@ app.post('/api/docket', authenticateToken, requireEditor, async (req: Authentica
       }
     });
 
-    console.log(`[DB] INSERT into docket_entries - created id: ${entry.id}`);
+    logger.debug(`[DB] INSERT into docket_entries - created id: ${entry.id}`);
 
     // Create display-docket associations if displayIds provided
     if (displayIds && Array.isArray(displayIds) && displayIds.length > 0) {
@@ -1038,10 +1039,10 @@ app.post('/api/docket', authenticateToken, requireEditor, async (req: Authentica
           });
         } catch (err) {
           // Ignore duplicate key errors
-          console.log(`[DB] Skipping duplicate display-docket association: ${displayId} -> ${entry.id}`);
+          logger.debug(`[DB] Skipping duplicate display-docket association: ${displayId} -> ${entry.id}`);
         }
       }
-      console.log(`[DB] Created display-docket associations for entry ${entry.id}`);
+      logger.debug(`[DB] Created display-docket associations for entry ${entry.id}`);
     }
 
     // Create audit log for the action
@@ -1061,7 +1062,7 @@ app.post('/api/docket', authenticateToken, requireEditor, async (req: Authentica
     if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002') {
       return res.status(409).json({ error: 'Duplicate entry: case number, date, time, and matter combination already exists' });
     }
-    console.error('Failed to create docket entry:', error);
+    logger.error('Failed to create docket entry:', error);
     res.status(500).json({ error: 'Failed to create docket entry' });
   }
 });
@@ -1130,7 +1131,7 @@ app.post('/api/docket/bulk', authenticateToken, requireEditor, async (req: Authe
       )
     );
 
-    console.log(`[DB] BULK INSERT into docket_entries - created ${createdEntries.length} records`);
+    logger.debug(`[DB] BULK INSERT into docket_entries - created ${createdEntries.length} records`);
 
     // Emit WebSocket event for real-time updates
     io.emit('docket:update', {});
@@ -1144,7 +1145,7 @@ app.post('/api/docket/bulk', authenticateToken, requireEditor, async (req: Authe
     if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002') {
       return res.status(409).json({ error: 'Duplicate entry found. Check case numbers, dates, times, and matters.' });
     }
-    console.error('Failed to bulk import docket entries:', error);
+    logger.error('Failed to bulk import docket entries:', error);
     res.status(500).json({ error: 'Failed to bulk import docket entries' });
   }
 });
@@ -1158,7 +1159,7 @@ app.get('/api/docket/judges', authenticateToken, async (req: AuthenticatedReques
     const judges = results.map(r => r.hearing_judge);
     res.json({ judges });
   } catch (error) {
-    console.error('Failed to fetch judges:', error);
+    logger.error('Failed to fetch judges:', error);
     res.status(500).json({ error: 'Failed to fetch judges' });
   }
 });
@@ -1172,7 +1173,7 @@ app.get('/api/docket/courtrooms', authenticateToken, async (req: AuthenticatedRe
     const courtrooms = results.map(r => r.courtroom);
     res.json({ courtrooms });
   } catch (error) {
-    console.error('Failed to fetch courtrooms:', error);
+    logger.error('Failed to fetch courtrooms:', error);
     res.status(500).json({ error: 'Failed to fetch courtrooms' });
   }
 });
@@ -1186,7 +1187,7 @@ app.get('/api/docket/trustees', authenticateToken, async (req: AuthenticatedRequ
     const trustees = results.map(r => r.trustee);
     res.json({ trustees });
   } catch (error) {
-    console.error('Failed to fetch trustees:', error);
+    logger.error('Failed to fetch trustees:', error);
     res.status(500).json({ error: 'Failed to fetch trustees' });
   }
 });
@@ -1201,7 +1202,7 @@ app.get('/api/docket/dates', authenticateToken, async (req: AuthenticatedRequest
     const dates = results.map(r => r.hearing_date);
     res.json({ dates });
   } catch (error) {
-    console.error('Failed to fetch hearing dates:', error);
+    logger.error('Failed to fetch hearing dates:', error);
     res.status(500).json({ error: 'Failed to fetch hearing dates' });
   }
 });
@@ -1241,7 +1242,7 @@ app.get('/api/docket/judge-zoom', authenticateToken, async (req: AuthenticatedRe
       },
     });
   } catch (error) {
-    console.error('Failed to fetch judge zoom defaults:', error);
+    logger.error('Failed to fetch judge zoom defaults:', error);
     res.status(500).json({ error: 'Failed to fetch judge zoom defaults' });
   }
 });
@@ -1273,10 +1274,10 @@ app.get('/api/docket/:id', authenticateToken, async (req: AuthenticatedRequest, 
       return res.status(404).json({ error: 'Docket entry not found' });
     }
 
-    console.log(`[DB] SELECT from docket_entries WHERE id = ${req.params.id}`);
+    logger.debug(`[DB] SELECT from docket_entries WHERE id = ${req.params.id}`);
     res.json(entry);
   } catch (error) {
-    console.error('Failed to fetch docket entry:', error);
+    logger.error('Failed to fetch docket entry:', error);
     res.status(500).json({ error: 'Failed to fetch docket entry' });
   }
 });
@@ -1318,8 +1319,8 @@ app.put('/api/docket/:id', authenticateToken, requireEditor, async (req: Authent
       const expectedTimestamp = new Date(expectedUpdatedAt).toISOString();
 
       if (existingTimestamp !== expectedTimestamp) {
-        console.log(`[CONFLICT] Docket entry ${req.params.id} was modified by another user`);
-        console.log(`  Expected: ${expectedTimestamp}, Actual: ${existingTimestamp}`);
+        logger.info(`[CONFLICT] Docket entry ${req.params.id} was modified by another user`);
+        logger.info(`  Expected: ${expectedTimestamp}, Actual: ${existingTimestamp}`);
         return res.status(409).json({
           error: 'Conflict: This entry was modified by another user',
           code: 'CONFLICT',
@@ -1337,7 +1338,7 @@ app.put('/api/docket/:id', authenticateToken, requireEditor, async (req: Authent
       data: updateData
     });
 
-    console.log(`[DB] UPDATE docket_entries WHERE id = ${req.params.id}`);
+    logger.debug(`[DB] UPDATE docket_entries WHERE id = ${req.params.id}`);
 
     // Compute before/after changes for audit log
     const changes: Record<string, { from: unknown; to: unknown }> = {};
@@ -1360,7 +1361,7 @@ app.put('/api/docket/:id', authenticateToken, requireEditor, async (req: Authent
     if (error && typeof error === 'object' && 'code' in error && error.code === 'P2025') {
       return res.status(404).json({ error: 'Docket entry not found' });
     }
-    console.error('Failed to update docket entry:', error);
+    logger.error('Failed to update docket entry:', error);
     res.status(500).json({ error: 'Failed to update docket entry' });
   }
 });
@@ -1409,11 +1410,11 @@ app.delete('/api/docket/clear', authenticateToken, requireAdmin, async (req: Aut
         where,
         data: { status: 'archived' as unknown as string }
       });
-      console.log(`[DB] Archived ${count} docket entries for date ${date}`);
+      logger.debug(`[DB] Archived ${count} docket entries for date ${date}`);
     } else {
       // Delete the entries
       await prisma.docketEntry.deleteMany({ where });
-      console.log(`[DB] Deleted ${count} docket entries for date ${date}`);
+      logger.debug(`[DB] Deleted ${count} docket entries for date ${date}`);
     }
 
     // Emit WebSocket event for real-time updates
@@ -1425,7 +1426,7 @@ app.delete('/api/docket/clear', authenticateToken, requireAdmin, async (req: Aut
       archived: archive || false
     });
   } catch (error) {
-    console.error('Failed to clear docket entries:', error);
+    logger.error('Failed to clear docket entries:', error);
     res.status(500).json({ error: 'Failed to clear docket entries' });
   }
 });
@@ -1446,7 +1447,7 @@ app.delete('/api/docket/:id', authenticateToken, requireEditor, async (req: Auth
       where: { id: req.params.id }
     });
 
-    console.log(`[DB] DELETE from docket_entries WHERE id = ${req.params.id}`);
+    logger.debug(`[DB] DELETE from docket_entries WHERE id = ${req.params.id}`);
 
     // Create audit log for the deletion
     await createAuditLog('delete', 'docket_entry', req.params.id, req.user?.userId || null, {
@@ -1462,7 +1463,7 @@ app.delete('/api/docket/:id', authenticateToken, requireEditor, async (req: Auth
     if (error && typeof error === 'object' && 'code' in error && error.code === 'P2025') {
       return res.status(404).json({ error: 'Docket entry not found' });
     }
-    console.error('Failed to delete docket entry:', error);
+    logger.error('Failed to delete docket entry:', error);
     res.status(500).json({ error: 'Failed to delete docket entry' });
   }
 });
@@ -1499,7 +1500,7 @@ app.get('/api/displays/:id/config', displayLimiter, authenticateApiKey, async (r
       settingsMap[setting.key] = safeJsonParse(setting.value, setting.value);
     }
 
-    console.log(`[API] Display config fetched for: ${req.display?.name || req.params.id}`);
+    logger.info(`[API] Display config fetched for: ${req.display?.name || req.params.id}`);
 
     res.json({
       id: display.id,
@@ -1564,7 +1565,7 @@ app.get('/api/displays/:id/config', displayLimiter, authenticateApiKey, async (r
       courtLogo: settingsMap.court_logo || null
     });
   } catch (error) {
-    console.error('Failed to fetch display config:', error);
+    logger.error('Failed to fetch display config:', error);
     res.status(500).json({ error: 'Failed to fetch display config' });
   }
 });
@@ -1731,7 +1732,7 @@ app.get('/api/displays/:id/content-cards', displayLimiter, authenticateApiKey, a
       };
     }
 
-    console.log(`[API] Content cards fetched for display: ${req.display?.name || req.params.id}`);
+    logger.info(`[API] Content cards fetched for display: ${req.display?.name || req.params.id}`);
 
     res.json({
       enabled: true,
@@ -1740,7 +1741,7 @@ app.get('/api/displays/:id/content-cards', displayLimiter, authenticateApiKey, a
       modules,
     });
   } catch (error) {
-    console.error('Failed to fetch content cards:', error);
+    logger.error('Failed to fetch content cards:', error);
     res.status(500).json({ error: 'Failed to fetch content cards' });
   }
 });
@@ -1756,7 +1757,7 @@ app.get('/api/displays/:id/docket', displayLimiter, authenticateApiKey, async (r
       return res.status(404).json({ error: 'Display not found' });
     }
 
-    console.log(`[API] Display docket fetched for: ${req.display?.name || req.params.id}`);
+    logger.info(`[API] Display docket fetched for: ${req.display?.name || req.params.id}`);
 
     // Build filter based on display configuration
     const where: Record<string, unknown> = {};
@@ -1799,10 +1800,10 @@ app.get('/api/displays/:id/docket', displayLimiter, authenticateApiKey, async (r
       ]
     });
 
-    console.log(`[DB] SELECT from docket_entries for display ${req.params.id} - found ${entries.length} records`);
+    logger.debug(`[DB] SELECT from docket_entries for display ${req.params.id} - found ${entries.length} records`);
     res.json({ entries, total: entries.length });
   } catch (error) {
-    console.error('Failed to fetch display docket:', error);
+    logger.error('Failed to fetch display docket:', error);
     res.status(500).json({ error: 'Failed to fetch display docket' });
   }
 });
@@ -1841,7 +1842,7 @@ app.get('/api/displays/:id/system-status', displayLimiter, authenticateApiKey, a
 
     res.json({ health, displays, calendarSync });
   } catch (error) {
-    console.error('Failed to fetch system status:', error);
+    logger.error('Failed to fetch system status:', error);
     res.status(500).json({ error: 'Failed to fetch system status' });
   }
 });
@@ -1894,10 +1895,10 @@ app.get('/api/announcements', async (req, res) => {
         )
       : announcements;
 
-    console.log(`[DB] SELECT from announcements - found ${announcements.length} records${displayId ? `, filtered to ${filtered.length} for display ${displayId}` : ''}`);
+    logger.debug(`[DB] SELECT from announcements - found ${announcements.length} records${displayId ? `, filtered to ${filtered.length} for display ${displayId}` : ''}`);
     res.json({ announcements: filtered, total: filtered.length });
   } catch (error) {
-    console.error('Failed to fetch announcements:', error);
+    logger.error('Failed to fetch announcements:', error);
     res.status(500).json({ error: 'Failed to fetch announcements' });
   }
 });
@@ -1932,7 +1933,7 @@ app.post('/api/announcements', authenticateToken, requireEditor, async (req: Aut
       },
     });
 
-    console.log(`[DB] INSERT into announcements - created id: ${announcement.id}`);
+    logger.debug(`[DB] INSERT into announcements - created id: ${announcement.id}`);
 
     await createAuditLog('create', 'announcement', announcement.id, req.user?.userId || null, {
       text: text.length > 80 ? text.slice(0, 80) + '…' : text,
@@ -1944,7 +1945,7 @@ app.post('/api/announcements', authenticateToken, requireEditor, async (req: Aut
 
     res.status(201).json(announcement);
   } catch (error) {
-    console.error('Failed to create announcement:', error);
+    logger.error('Failed to create announcement:', error);
     res.status(500).json({ error: 'Failed to create announcement' });
   }
 });
@@ -1968,10 +1969,10 @@ app.get('/api/announcements/:id', authenticateToken, async (req: AuthenticatedRe
       return res.status(404).json({ error: 'Announcement not found' });
     }
 
-    console.log(`[DB] SELECT from announcements WHERE id = ${req.params.id}`);
+    logger.debug(`[DB] SELECT from announcements WHERE id = ${req.params.id}`);
     res.json(announcement);
   } catch (error) {
-    console.error('Failed to fetch announcement:', error);
+    logger.error('Failed to fetch announcement:', error);
     res.status(500).json({ error: 'Failed to fetch announcement' });
   }
 });
@@ -2032,7 +2033,7 @@ app.put('/api/announcements/:id', authenticateToken, requireEditor, async (req: 
       },
     });
 
-    console.log(`[DB] UPDATE announcements WHERE id = ${announcementId}`);
+    logger.debug(`[DB] UPDATE announcements WHERE id = ${announcementId}`);
 
     const annChanges: Record<string, { from: unknown; to: unknown }> = {};
     for (const [key, newValue] of Object.entries(updateData)) {
@@ -2049,7 +2050,7 @@ app.put('/api/announcements/:id', authenticateToken, requireEditor, async (req: 
 
     res.json(announcement);
   } catch (error: unknown) {
-    console.error('Failed to update announcement:', error);
+    logger.error('Failed to update announcement:', error);
     res.status(500).json({ error: 'Failed to update announcement' });
   }
 });
@@ -2066,7 +2067,7 @@ app.delete('/api/announcements/:id', authenticateToken, requireEditor, async (re
       where: { id: req.params.id },
     });
 
-    console.log(`[DB] DELETE from announcements WHERE id = ${req.params.id}`);
+    logger.debug(`[DB] DELETE from announcements WHERE id = ${req.params.id}`);
 
     await createAuditLog('delete', 'announcement', req.params.id, req.user?.userId || null, {
       text: existing.text.length > 80 ? existing.text.slice(0, 80) + '…' : existing.text,
@@ -2077,7 +2078,7 @@ app.delete('/api/announcements/:id', authenticateToken, requireEditor, async (re
 
     res.status(204).send();
   } catch (error: unknown) {
-    console.error('Failed to delete announcement:', error);
+    logger.error('Failed to delete announcement:', error);
     res.status(500).json({ error: 'Failed to delete announcement' });
   }
 });
@@ -2106,14 +2107,14 @@ app.patch('/api/announcements/reorder', authenticateToken, requireEditor, async 
       )
     );
 
-    console.log(`[DB] Reordered ${updates.length} announcements`);
+    logger.debug(`[DB] Reordered ${updates.length} announcements`);
 
     // Emit WebSocket event to refresh display tickers
     io.emit('announcement:new', {});
 
     res.json({ success: true, updated: updates.length });
   } catch (error) {
-    console.error('Failed to reorder announcements:', error);
+    logger.error('Failed to reorder announcements:', error);
     res.status(500).json({ error: 'Failed to reorder announcements' });
   }
 });
@@ -2152,10 +2153,10 @@ app.get('/api/content-cards', authenticateToken, async (req: AuthenticatedReques
       orderBy: { sortOrder: 'asc' },
     });
 
-    console.log(`[DB] SELECT from content_cards - found ${cards.length} records`);
+    logger.debug(`[DB] SELECT from content_cards - found ${cards.length} records`);
     res.json({ cards, total: cards.length });
   } catch (error) {
-    console.error('Failed to fetch content cards:', error);
+    logger.error('Failed to fetch content cards:', error);
     res.status(500).json({ error: 'Failed to fetch content cards' });
   }
 });
@@ -2195,7 +2196,7 @@ app.post('/api/content-cards', authenticateToken, requireEditor, async (req: Aut
       },
     });
 
-    console.log(`[DB] INSERT into content_cards - created id: ${card.id}`);
+    logger.debug(`[DB] INSERT into content_cards - created id: ${card.id}`);
 
     await createAuditLog('create', 'content_card', card.id, req.user?.userId || null, {
       title: title.length > 80 ? title.slice(0, 80) + '…' : title,
@@ -2206,7 +2207,7 @@ app.post('/api/content-cards', authenticateToken, requireEditor, async (req: Aut
 
     res.status(201).json(card);
   } catch (error) {
-    console.error('Failed to create content card:', error);
+    logger.error('Failed to create content card:', error);
     res.status(500).json({ error: 'Failed to create content card' });
   }
 });
@@ -2250,7 +2251,7 @@ app.put('/api/content-cards/:id', authenticateToken, requireEditor, async (req: 
         },
       });
 
-      console.log(`[DB] UPDATE content_cards (system) WHERE id = ${id}`);
+      logger.debug(`[DB] UPDATE content_cards (system) WHERE id = ${id}`);
       await createAuditLog('update', 'content_card', id, req.user?.userId || null, updateData);
       io.emit('content-cards:update', {});
       return res.json(card);
@@ -2307,7 +2308,7 @@ app.put('/api/content-cards/:id', authenticateToken, requireEditor, async (req: 
       },
     });
 
-    console.log(`[DB] UPDATE content_cards WHERE id = ${id}`);
+    logger.debug(`[DB] UPDATE content_cards WHERE id = ${id}`);
 
     const cardChanges: Record<string, { from: unknown; to: unknown }> = {};
     for (const [key, newValue] of Object.entries(updateData)) {
@@ -2323,7 +2324,7 @@ app.put('/api/content-cards/:id', authenticateToken, requireEditor, async (req: 
 
     res.json(card);
   } catch (error) {
-    console.error('Failed to update content card:', error);
+    logger.error('Failed to update content card:', error);
     res.status(500).json({ error: 'Failed to update content card' });
   }
 });
@@ -2342,7 +2343,7 @@ app.delete('/api/content-cards/:id', authenticateToken, requireEditor, async (re
 
     await prisma.contentCard.delete({ where: { id: req.params.id } });
 
-    console.log(`[DB] DELETE from content_cards WHERE id = ${req.params.id}`);
+    logger.debug(`[DB] DELETE from content_cards WHERE id = ${req.params.id}`);
 
     await createAuditLog('delete', 'content_card', req.params.id, req.user?.userId || null, {
       title: existing.title.length > 80 ? existing.title.slice(0, 80) + '…' : existing.title,
@@ -2352,7 +2353,7 @@ app.delete('/api/content-cards/:id', authenticateToken, requireEditor, async (re
 
     res.status(204).send();
   } catch (error) {
-    console.error('Failed to delete content card:', error);
+    logger.error('Failed to delete content card:', error);
     res.status(500).json({ error: 'Failed to delete content card' });
   }
 });
@@ -2381,13 +2382,13 @@ app.patch('/api/content-cards/reorder', authenticateToken, requireEditor, async 
       )
     );
 
-    console.log(`[DB] Reordered ${updates.length} content cards`);
+    logger.debug(`[DB] Reordered ${updates.length} content cards`);
 
     io.emit('content-cards:update', {});
 
     res.json({ success: true, updated: updates.length });
   } catch (error) {
-    console.error('Failed to reorder content cards:', error);
+    logger.error('Failed to reorder content cards:', error);
     res.status(500).json({ error: 'Failed to reorder content cards' });
   }
 });
@@ -2438,7 +2439,7 @@ app.post('/api/content-cards/emergency', authenticateToken, requireEditor, async
       },
     });
 
-    console.log(`[DB] INSERT into content_cards (emergency) - created id: ${card.id}, level: ${emergencyLevel}`);
+    logger.debug(`[DB] INSERT into content_cards (emergency) - created id: ${card.id}, level: ${emergencyLevel}`);
 
     await createAuditLog('create', 'content_card', card.id, req.user?.userId || null, {
       title: title.length > 80 ? title.slice(0, 80) + '…' : title,
@@ -2450,7 +2451,7 @@ app.post('/api/content-cards/emergency', authenticateToken, requireEditor, async
 
     res.status(201).json(card);
   } catch (error) {
-    console.error('Failed to create emergency card:', error);
+    logger.error('Failed to create emergency card:', error);
     res.status(500).json({ error: 'Failed to create emergency card' });
   }
 });
@@ -2503,7 +2504,7 @@ app.post('/api/content-cards/:id/activate', authenticateToken, requireEditor, as
       displayIds,
     });
 
-    console.log(`[EMERGENCY] Activated card ${id}, level ${updated.emergencyLevel}, displays: ${displayIds ? displayIds.join(',') : 'ALL'}`);
+    logger.info(`[EMERGENCY] Activated card ${id}, level ${updated.emergencyLevel}, displays: ${displayIds ? displayIds.join(',') : 'ALL'}`);
 
     // Backup: force a full page reload on displays after a delay.
     // The 2s delay lets the primary emergency:activate handler render first;
@@ -2519,7 +2520,7 @@ app.post('/api/content-cards/:id/activate', authenticateToken, requireEditor, as
 
     res.json(updated);
   } catch (error) {
-    console.error('Failed to activate emergency card:', error);
+    logger.error('Failed to activate emergency card:', error);
     res.status(500).json({ error: 'Failed to activate emergency card' });
   }
 });
@@ -2552,7 +2553,7 @@ app.post('/api/content-cards/:id/deactivate', authenticateToken, requireEditor, 
 
     io.emit('emergency:deactivate', { cardId: id });
 
-    console.log(`[EMERGENCY] Deactivated card ${id}`);
+    logger.info(`[EMERGENCY] Deactivated card ${id}`);
 
     // Backup: force a full page reload so displays clear the emergency state.
     setTimeout(() => {
@@ -2566,7 +2567,7 @@ app.post('/api/content-cards/:id/deactivate', authenticateToken, requireEditor, 
 
     res.json(updated);
   } catch (error) {
-    console.error('Failed to deactivate emergency card:', error);
+    logger.error('Failed to deactivate emergency card:', error);
     res.status(500).json({ error: 'Failed to deactivate emergency card' });
   }
 });
@@ -2613,7 +2614,7 @@ app.get('/api/displays/:id/emergency', displayLimiter, authenticateApiKey, async
       icon: top.icon,
     });
   } catch (error) {
-    console.error('Failed to fetch emergency status:', error);
+    logger.error('Failed to fetch emergency status:', error);
     res.status(500).json({ error: 'Failed to fetch emergency status' });
   }
 });
@@ -2626,13 +2627,13 @@ app.use('/api/idle-content-cards', (req: Request, res: Response, next: NextFunct
   // Rewrite the URL to the new route and pass through
   req.url = req.url; // URL is already stripped of the base path by Express
   const newPath = req.originalUrl.replace('/api/idle-content-cards', '/api/content-cards');
-  console.log(`[compat] Redirecting ${req.originalUrl} -> ${newPath}`);
+  logger.info(`[compat] Redirecting ${req.originalUrl} -> ${newPath}`);
   res.redirect(307, newPath);
 });
 
 app.get('/api/displays/:id/idle-content', displayLimiter, authenticateApiKey, (req: ApiKeyRequest, res: Response) => {
   const newPath = `/api/displays/${req.params.id}/content-cards`;
-  console.log(`[compat] Redirecting ${req.originalUrl} -> ${newPath}`);
+  logger.info(`[compat] Redirecting ${req.originalUrl} -> ${newPath}`);
   res.redirect(307, newPath);
 });
 
@@ -2656,10 +2657,10 @@ app.get('/api/news', authenticateToken, async (req: AuthenticatedRequest, res: R
       prisma.cachedNewsArticle.count(),
     ]);
 
-    console.log(`[DB] SELECT from cached_news_articles - found ${articles.length} records (page ${page})`);
+    logger.debug(`[DB] SELECT from cached_news_articles - found ${articles.length} records (page ${page})`);
     res.json({ articles, total, page, limit, totalPages: Math.ceil(total / limit) });
   } catch (error) {
-    console.error('Failed to fetch news articles:', error);
+    logger.error('Failed to fetch news articles:', error);
     res.status(500).json({ error: 'Failed to fetch news articles' });
   }
 });
@@ -2672,7 +2673,7 @@ app.post('/api/news/scrape', authenticateToken, requireEditor, async (req: Authe
     await createAuditLog('scrape', 'news', null, req.user?.userId || null, result as unknown as Record<string, unknown>);
     res.json(result);
   } catch (error: any) {
-    console.error('Failed to scrape news:', error);
+    logger.error('Failed to scrape news:', error);
     res.status(500).json({ error: error.message || 'Failed to scrape news' });
   }
 });
@@ -2687,7 +2688,7 @@ app.delete('/api/news/:id', authenticateToken, requireEditor, async (req: Authen
 
     await prisma.cachedNewsArticle.delete({ where: { id: req.params.id } });
 
-    console.log(`[DB] DELETE from cached_news_articles WHERE id = ${req.params.id}`);
+    logger.debug(`[DB] DELETE from cached_news_articles WHERE id = ${req.params.id}`);
 
     await createAuditLog('delete', 'news_article', req.params.id, req.user?.userId || null, {
       title: existing.title.length > 80 ? existing.title.slice(0, 80) + '…' : existing.title,
@@ -2695,7 +2696,7 @@ app.delete('/api/news/:id', authenticateToken, requireEditor, async (req: Authen
 
     res.status(204).send();
   } catch (error) {
-    console.error('Failed to delete news article:', error);
+    logger.error('Failed to delete news article:', error);
     res.status(500).json({ error: 'Failed to delete news article' });
   }
 });
@@ -2784,7 +2785,7 @@ async function seedBuiltInTemplates() {
       await prisma.displayTypeTemplate.create({
         data: { ...tmpl, isBuiltIn: true },
       });
-      console.log(`[SEED] Created built-in template: ${tmpl.slug}`);
+      logger.info(`[SEED] Created built-in template: ${tmpl.slug}`);
     }
   }
 }
@@ -2845,7 +2846,7 @@ app.get('/api/display-templates', authenticateToken, requireEditor, async (req: 
 
     res.json({ templates: result, total: result.length });
   } catch (error) {
-    console.error('Failed to list display templates:', error);
+    logger.error('Failed to list display templates:', error);
     res.status(500).json({ error: 'Failed to list display templates' });
   }
 });
@@ -2862,7 +2863,7 @@ app.get('/api/display-templates/:id', authenticateToken, requireEditor, async (r
     const usageCount = await prisma.display.count({ where: { displayType: template.slug } });
     res.json({ ...template, usageCount });
   } catch (error) {
-    console.error('Failed to get display template:', error);
+    logger.error('Failed to get display template:', error);
     res.status(500).json({ error: 'Failed to get display template' });
   }
 });
@@ -2909,7 +2910,7 @@ app.post('/api/display-templates', authenticateToken, requireAdmin, async (req: 
 
     res.status(201).json(template);
   } catch (error) {
-    console.error('Failed to create display template:', error);
+    logger.error('Failed to create display template:', error);
     res.status(500).json({ error: 'Failed to create display template' });
   }
 });
@@ -2964,7 +2965,7 @@ app.put('/api/display-templates/:id', authenticateToken, requireAdmin, async (re
 
     res.json(template);
   } catch (error) {
-    console.error('Failed to update display template:', error);
+    logger.error('Failed to update display template:', error);
     res.status(500).json({ error: 'Failed to update display template' });
   }
 });
@@ -2999,7 +3000,7 @@ app.delete('/api/display-templates/:id', authenticateToken, requireAdmin, async 
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Failed to delete display template:', error);
+    logger.error('Failed to delete display template:', error);
     res.status(500).json({ error: 'Failed to delete display template' });
   }
 });
@@ -3035,7 +3036,7 @@ app.post('/api/display-templates/:id/reset', authenticateToken, requireAdmin, as
 
     res.json(updated);
   } catch (error) {
-    console.error('Failed to reset display template:', error);
+    logger.error('Failed to reset display template:', error);
     res.status(500).json({ error: 'Failed to reset display template' });
   }
 });
@@ -3058,7 +3059,7 @@ app.get('/api/displays/gallery', async (_req: Request, res: Response) => {
     });
     res.json({ displays });
   } catch (error) {
-    console.error('Failed to fetch gallery displays:', error);
+    logger.error('Failed to fetch gallery displays:', error);
     res.status(500).json({ error: 'Failed to fetch gallery displays' });
   }
 });
@@ -3085,7 +3086,7 @@ app.get('/api/displays/:id/gallery-token', async (req: Request, res: Response) =
       expiresIn: 900,
     });
   } catch (error) {
-    console.error('Failed to generate gallery token:', error);
+    logger.error('Failed to generate gallery token:', error);
     res.status(500).json({ error: 'Failed to generate gallery token' });
   }
 });
@@ -3096,7 +3097,7 @@ app.get('/api/displays', authenticateToken, async (req: AuthenticatedRequest, re
     const displays = await prisma.display.findMany({
       orderBy: { name: 'asc' }
     });
-    console.log(`[DB] SELECT from displays - found ${displays.length} records`);
+    logger.debug(`[DB] SELECT from displays - found ${displays.length} records`);
 
     // Compute status based on heartbeat freshness (2 minute threshold)
     const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
@@ -3107,7 +3108,7 @@ app.get('/api/displays', authenticateToken, async (req: AuthenticatedRequest, re
 
     res.json({ displays: displaysWithStatus, total: displays.length });
   } catch (error) {
-    console.error('Failed to fetch displays:', error);
+    logger.error('Failed to fetch displays:', error);
     res.status(500).json({ error: 'Failed to fetch displays' });
   }
 });
@@ -3209,7 +3210,7 @@ app.post('/api/displays', authenticateToken, requireEditor, async (req: Authenti
       }
     });
 
-    console.log(`[DB] INSERT into displays - created id: ${display.id}`);
+    logger.debug(`[DB] INSERT into displays - created id: ${display.id}`);
 
     await createAuditLog('create', 'display', display.id, req.user?.userId || null, {
       name, location, displayType: displayType || 'courtroom',
@@ -3225,7 +3226,7 @@ app.post('/api/displays', authenticateToken, requireEditor, async (req: Authenti
     if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002') {
       return res.status(409).json({ error: 'Display with this ID already exists' });
     }
-    console.error('Failed to create display:', error);
+    logger.error('Failed to create display:', error);
     res.status(500).json({ error: 'Failed to create display' });
   }
 });
@@ -3327,7 +3328,7 @@ app.put('/api/displays/:id', authenticateToken, requireEditor, async (req: Authe
       }
     });
 
-    console.log(`[DB] UPDATE displays SET ... WHERE id = '${id}'`);
+    logger.debug(`[DB] UPDATE displays SET ... WHERE id = '${id}'`);
 
     // Compute before/after diff for audit log
     const changedFields: Record<string, { from: unknown; to: unknown }> = {};
@@ -3345,7 +3346,7 @@ app.put('/api/displays/:id', authenticateToken, requireEditor, async (req: Authe
 
     res.json(display);
   } catch (error) {
-    console.error('Failed to update display:', error);
+    logger.error('Failed to update display:', error);
     res.status(500).json({ error: 'Failed to update display' });
   }
 });
@@ -3371,10 +3372,10 @@ app.get('/api/display-docket-entries', authenticateToken, async (req: Authentica
       }
     });
 
-    console.log(`[DB] SELECT from display_docket_entries - found ${associations.length} records`);
+    logger.debug(`[DB] SELECT from display_docket_entries - found ${associations.length} records`);
     res.json({ associations, total: associations.length });
   } catch (error) {
-    console.error('Failed to fetch display-docket associations:', error);
+    logger.error('Failed to fetch display-docket associations:', error);
     res.status(500).json({ error: 'Failed to fetch display-docket associations' });
   }
 });
@@ -3399,7 +3400,7 @@ app.delete('/api/displays/:id', authenticateToken, requireEditor, async (req: Au
       where: { id }
     });
 
-    console.log(`[DB] DELETE FROM displays WHERE id = '${id}' (cascade delete removed associations)`);
+    logger.debug(`[DB] DELETE FROM displays WHERE id = '${id}' (cascade delete removed associations)`);
 
     await createAuditLog('delete', 'display', id, req.user?.userId || null, {
       name: existingDisplay.name, location: existingDisplay.location,
@@ -3407,7 +3408,7 @@ app.delete('/api/displays/:id', authenticateToken, requireEditor, async (req: Au
 
     res.json({ success: true, message: 'Display deleted successfully' });
   } catch (error) {
-    console.error('Failed to delete display:', error);
+    logger.error('Failed to delete display:', error);
     res.status(500).json({ error: 'Failed to delete display' });
   }
 });
@@ -3438,7 +3439,7 @@ app.post('/api/displays/:id/regenerate-key', authenticateToken, requireAdmin, as
       }
     });
 
-    console.log(`[DB] Regenerated API key for display '${id}'`);
+    logger.debug(`[DB] Regenerated API key for display '${id}'`);
 
     // Return the new API key (only time it will be visible)
     res.json({
@@ -3448,7 +3449,7 @@ app.post('/api/displays/:id/regenerate-key', authenticateToken, requireAdmin, as
       displayId: id
     });
   } catch (error) {
-    console.error('Failed to regenerate API key:', error);
+    logger.error('Failed to regenerate API key:', error);
     res.status(500).json({ error: 'Failed to regenerate API key' });
   }
 });
@@ -3475,7 +3476,7 @@ app.post('/api/displays/:id/preview-token', authenticateToken, requireAdmin, asy
       expiresIn: 300,
     });
   } catch (error) {
-    console.error('Failed to generate preview token:', error);
+    logger.error('Failed to generate preview token:', error);
     res.status(500).json({ error: 'Failed to generate preview token' });
   }
 });
@@ -3486,7 +3487,7 @@ app.post('/api/displays/refresh', authenticateToken, requireAdmin, async (_req: 
     io.emit('display:refresh');
     res.json({ success: true, message: 'Refresh signal sent to all displays' });
   } catch (error) {
-    console.error('Failed to send refresh signal:', error);
+    logger.error('Failed to send refresh signal:', error);
     res.status(500).json({ error: 'Failed to send refresh signal' });
   }
 });
@@ -3507,11 +3508,11 @@ app.post('/api/displays/:id/screensaver', authenticateToken, requireEditor, asyn
     }
 
     io.emit('display:screensaver', { displayId: id, action });
-    console.log(`[WS] Screensaver ${action} sent to display: ${id}`);
+    logger.info(`[WS] Screensaver ${action} sent to display: ${id}`);
 
     res.json({ success: true, message: `Screensaver ${action} signal sent to display ${id}` });
   } catch (error) {
-    console.error('Failed to control screensaver:', error);
+    logger.error('Failed to control screensaver:', error);
     res.status(500).json({ error: 'Failed to control screensaver' });
   }
 });
@@ -3543,7 +3544,7 @@ app.get('/api/displays/:id/schedule', displayLimiter, authenticateApiKey, async 
       timezone: settingsMap.timezone || 'America/Denver'
     });
   } catch (error) {
-    console.error('Failed to fetch display schedule:', error);
+    logger.error('Failed to fetch display schedule:', error);
     res.status(500).json({ error: 'Failed to fetch display schedule' });
   }
 });
@@ -3569,10 +3570,10 @@ app.get('/api/users', authenticateToken, requireAdmin, async (req: Authenticated
       orderBy: { name: 'asc' }
     });
 
-    console.log(`[DB] SELECT from users - found ${users.length} records`);
+    logger.debug(`[DB] SELECT from users - found ${users.length} records`);
     res.json({ users, total: users.length });
   } catch (error) {
-    console.error('Failed to fetch users:', error);
+    logger.error('Failed to fetch users:', error);
     res.status(500).json({ error: 'Failed to fetch users' });
   }
 });
@@ -3627,13 +3628,13 @@ app.post('/api/users', authenticateToken, requireAdmin, async (req: Authenticate
       }
     });
 
-    console.log(`[DB] INSERT into users - created user: ${user.email}`);
+    logger.debug(`[DB] INSERT into users - created user: ${user.email}`);
     res.status(201).json(user);
   } catch (error: unknown) {
     if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002') {
       return res.status(409).json({ error: 'A user with this email already exists' });
     }
-    console.error('Failed to create user:', error);
+    logger.error('Failed to create user:', error);
     res.status(500).json({ error: 'Failed to create user' });
   }
 });
@@ -3659,10 +3660,10 @@ app.get('/api/users/:id', authenticateToken, requireAdmin, async (req: Authentic
       return res.status(404).json({ error: 'User not found' });
     }
 
-    console.log(`[DB] SELECT from users WHERE id = ${req.params.id}`);
+    logger.debug(`[DB] SELECT from users WHERE id = ${req.params.id}`);
     res.json(user);
   } catch (error) {
-    console.error('Failed to fetch user:', error);
+    logger.error('Failed to fetch user:', error);
     res.status(500).json({ error: 'Failed to fetch user' });
   }
 });
@@ -3727,13 +3728,13 @@ app.put('/api/users/:id', authenticateToken, requireAdmin, async (req: Authentic
       }
     });
 
-    console.log(`[DB] UPDATE users WHERE id = ${req.params.id}`);
+    logger.debug(`[DB] UPDATE users WHERE id = ${req.params.id}`);
     res.json(user);
   } catch (error: unknown) {
     if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002') {
       return res.status(409).json({ error: 'A user with this email already exists' });
     }
-    console.error('Failed to update user:', error);
+    logger.error('Failed to update user:', error);
     res.status(500).json({ error: 'Failed to update user' });
   }
 });
@@ -3761,10 +3762,10 @@ app.delete('/api/users/:id', authenticateToken, requireAdmin, async (req: Authen
       data: { isActive: false }
     });
 
-    console.log(`[DB] UPDATE users SET isActive=false WHERE id = ${req.params.id}`);
+    logger.debug(`[DB] UPDATE users SET isActive=false WHERE id = ${req.params.id}`);
     res.status(204).send();
   } catch (error) {
-    console.error('Failed to deactivate user:', error);
+    logger.error('Failed to deactivate user:', error);
     res.status(500).json({ error: 'Failed to deactivate user' });
   }
 });
@@ -3798,10 +3799,10 @@ app.delete('/api/users/:id/permanent', authenticateToken, requireAdmin, async (r
       permanent: true,
     });
 
-    console.log(`[DB] DELETE FROM users WHERE id = ${req.params.id}`);
+    logger.debug(`[DB] DELETE FROM users WHERE id = ${req.params.id}`);
     res.status(204).send();
   } catch (error) {
-    console.error('Failed to permanently delete user:', error);
+    logger.error('Failed to permanently delete user:', error);
     res.status(500).json({ error: 'Failed to permanently delete user' });
   }
 });
@@ -3835,10 +3836,10 @@ app.get('/api/api-keys', authenticateToken, requireAdmin, async (req: Authentica
       createdAt: key.createdAt
     }));
 
-    console.log(`[DB] SELECT from api_keys - found ${apiKeys.length} records`);
+    logger.debug(`[DB] SELECT from api_keys - found ${apiKeys.length} records`);
     res.json({ apiKeys: sanitizedKeys, total: apiKeys.length });
   } catch (error) {
-    console.error('Failed to fetch API keys:', error);
+    logger.error('Failed to fetch API keys:', error);
     res.status(500).json({ error: 'Failed to fetch API keys' });
   }
 });
@@ -3897,7 +3898,7 @@ app.post('/api/api-keys', authenticateToken, requireAdmin, async (req: Authentic
       }
     });
 
-    console.log(`[DB] INSERT into api_keys - created id: ${newApiKey.id}`);
+    logger.debug(`[DB] INSERT into api_keys - created id: ${newApiKey.id}`);
 
     // Return the key details along with the plain API key (only shown once!)
     res.status(201).json({
@@ -3912,7 +3913,7 @@ app.post('/api/api-keys', authenticateToken, requireAdmin, async (req: Authentic
       apiKey: apiKey // Only returned on creation!
     });
   } catch (error) {
-    console.error('Failed to create API key:', error);
+    logger.error('Failed to create API key:', error);
     res.status(500).json({ error: 'Failed to create API key' });
   }
 });
@@ -3947,7 +3948,7 @@ app.get('/api/api-keys/:id', authenticateToken, requireAdmin, async (req: Authen
       return res.status(404).json({ error: 'API key not found' });
     }
 
-    console.log(`[DB] SELECT from api_keys WHERE id = ${req.params.id}`);
+    logger.debug(`[DB] SELECT from api_keys WHERE id = ${req.params.id}`);
     res.json({
       id: apiKey.id,
       name: apiKey.name,
@@ -3960,7 +3961,7 @@ app.get('/api/api-keys/:id', authenticateToken, requireAdmin, async (req: Authen
       createdAt: apiKey.createdAt
     });
   } catch (error) {
-    console.error('Failed to fetch API key:', error);
+    logger.error('Failed to fetch API key:', error);
     res.status(500).json({ error: 'Failed to fetch API key' });
   }
 });
@@ -4013,7 +4014,7 @@ app.put('/api/api-keys/:id', authenticateToken, requireAdmin, async (req: Authen
       }
     });
 
-    console.log(`[DB] UPDATE api_keys WHERE id = ${req.params.id}`);
+    logger.debug(`[DB] UPDATE api_keys WHERE id = ${req.params.id}`);
     res.json({
       id: updatedKey.id,
       name: updatedKey.name,
@@ -4026,7 +4027,7 @@ app.put('/api/api-keys/:id', authenticateToken, requireAdmin, async (req: Authen
       createdAt: updatedKey.createdAt
     });
   } catch (error) {
-    console.error('Failed to update API key:', error);
+    logger.error('Failed to update API key:', error);
     res.status(500).json({ error: 'Failed to update API key' });
   }
 });
@@ -4047,10 +4048,10 @@ app.delete('/api/api-keys/:id', authenticateToken, requireAdmin, async (req: Aut
       where: { id: req.params.id }
     });
 
-    console.log(`[DB] DELETE from api_keys WHERE id = ${req.params.id}`);
+    logger.debug(`[DB] DELETE from api_keys WHERE id = ${req.params.id}`);
     res.json({ success: true, message: 'API key revoked successfully' });
   } catch (error) {
-    console.error('Failed to revoke API key:', error);
+    logger.error('Failed to revoke API key:', error);
     res.status(500).json({ error: 'Failed to revoke API key' });
   }
 });
@@ -4080,9 +4081,9 @@ async function createAuditLog(
         ipAddress: resolvedIp
       }
     });
-    console.log(`[AUDIT] ${action} ${entityType}${entityId ? ` (${entityId})` : ''} by user ${userId || 'unknown'}`);
+    logger.debug(`[AUDIT] ${action} ${entityType}${entityId ? ` (${entityId})` : ''} by user ${userId || 'unknown'}`);
   } catch (error) {
-    console.error('Failed to create audit log:', error);
+    logger.error('Failed to create audit log:', error);
   }
 }
 
@@ -4127,10 +4128,10 @@ app.get('/api/audit-logs', authenticateToken, requireAdmin, async (req: Authenti
       prisma.auditLog.count({ where })
     ]);
 
-    console.log(`[DB] SELECT from audit_logs - found ${logs.length} records`);
+    logger.debug(`[DB] SELECT from audit_logs - found ${logs.length} records`);
     res.json({ logs, total });
   } catch (error) {
-    console.error('Failed to fetch audit logs:', error);
+    logger.error('Failed to fetch audit logs:', error);
     res.status(500).json({ error: 'Failed to fetch audit logs' });
   }
 });
@@ -4167,7 +4168,7 @@ app.get('/api/audit-logs/export', authenticateToken, requireAdmin, async (req: A
       take: 10000
     });
 
-    console.log(`[DB] SELECT from audit_logs for export - found ${logs.length} records`);
+    logger.debug(`[DB] SELECT from audit_logs for export - found ${logs.length} records`);
 
     if (format === 'json') {
       // Export as JSON
@@ -4199,7 +4200,7 @@ app.get('/api/audit-logs/export', authenticateToken, requireAdmin, async (req: A
       res.send(csvContent);
     }
   } catch (error) {
-    console.error('Failed to export audit logs:', error);
+    logger.error('Failed to export audit logs:', error);
     res.status(500).json({ error: 'Failed to export audit logs' });
   }
 });
@@ -4231,7 +4232,7 @@ app.get('/api/settings/public', async (req: Request, res: Response) => {
       courtLogo: settingsMap.court_logo || null
     });
   } catch (error) {
-    console.error('Failed to fetch public settings:', error);
+    logger.error('Failed to fetch public settings:', error);
     res.status(500).json({ error: 'Failed to fetch public settings' });
   }
 });
@@ -4259,10 +4260,10 @@ app.get('/api/settings', authenticateToken, async (req: AuthenticatedRequest, re
       };
     }
 
-    console.log(`[DB] SELECT from settings - found ${settings.length} records`);
+    logger.debug(`[DB] SELECT from settings - found ${settings.length} records`);
     res.json({ settings: settingsObject, metadata: settingsMetadata });
   } catch (error) {
-    console.error('Failed to fetch settings:', error);
+    logger.error('Failed to fetch settings:', error);
     res.status(500).json({ error: 'Failed to fetch settings' });
   }
 });
@@ -4301,7 +4302,7 @@ app.put('/api/settings', authenticateToken, requireAdmin, async (req: Authentica
       updatedSettings[key] = value;
     }
 
-    console.log(`[DB] UPDATE settings - updated ${Object.keys(updatedSettings).length} records`);
+    logger.debug(`[DB] UPDATE settings - updated ${Object.keys(updatedSettings).length} records`);
 
     // Create audit log for settings change
     await createAuditLog('update', 'settings', null, req.user?.userId || null, updatedSettings);
@@ -4320,7 +4321,7 @@ app.put('/api/settings', authenticateToken, requireAdmin, async (req: Authentica
           const newsScraperService = await import('./services/newsScraperService.js');
           await newsScraperService.syncNewsPollingTimer(io);
         } catch (err) {
-          console.error('Failed to sync news polling timer:', err);
+          logger.error('Failed to sync news polling timer:', err);
         }
       }
     }
@@ -4330,7 +4331,7 @@ app.put('/api/settings', authenticateToken, requireAdmin, async (req: Authentica
       settings: updatedSettings
     });
   } catch (error) {
-    console.error('Failed to update settings:', error);
+    logger.error('Failed to update settings:', error);
     res.status(500).json({ error: 'Failed to update settings' });
   }
 });
@@ -4357,7 +4358,7 @@ app.post('/api/settings/logo', authenticateToken, requireAdmin, upload.single('l
           fs.unlinkSync(oldFilePath);
         }
       } catch (e) {
-        console.warn('Could not delete old logo:', e);
+        logger.warn('Could not delete old logo:', e);
       }
     }
 
@@ -4375,7 +4376,7 @@ app.post('/api/settings/logo', authenticateToken, requireAdmin, upload.single('l
       }
     });
 
-    console.log(`[DB] UPSERT setting court_logo = ${logoPath}`);
+    logger.debug(`[DB] UPSERT setting court_logo = ${logoPath}`);
 
     // Create audit log
     await createAuditLog('upload', 'settings', null, req.user?.userId || null, { court_logo: logoPath });
@@ -4389,13 +4390,13 @@ app.post('/api/settings/logo', authenticateToken, requireAdmin, upload.single('l
       filename: req.file.filename
     });
   } catch (error) {
-    console.error('Failed to upload logo:', error);
+    logger.error('Failed to upload logo:', error);
     // Clean up uploaded file on error
     if (req.file) {
       try {
         fs.unlinkSync(req.file.path);
       } catch (e) {
-        console.warn('Could not delete failed upload:', e);
+        logger.warn('Could not delete failed upload:', e);
       }
     }
     res.status(500).json({ error: 'Failed to upload logo' });
@@ -4418,7 +4419,7 @@ app.delete('/api/settings/logo', authenticateToken, requireAdmin, async (req: Au
           fs.unlinkSync(filePath);
         }
       } catch (e) {
-        console.warn('Could not delete logo file:', e);
+        logger.warn('Could not delete logo file:', e);
       }
 
       // Remove from database
@@ -4426,7 +4427,7 @@ app.delete('/api/settings/logo', authenticateToken, requireAdmin, async (req: Au
         where: { key: 'court_logo' }
       });
 
-      console.log('[DB] DELETE setting court_logo');
+      logger.debug('[DB] DELETE setting court_logo');
 
       // Create audit log
       await createAuditLog('delete', 'settings', null, req.user?.userId || null, { court_logo: 'removed' });
@@ -4437,7 +4438,7 @@ app.delete('/api/settings/logo', authenticateToken, requireAdmin, async (req: Au
 
     res.json({ message: 'Logo removed successfully' });
   } catch (error) {
-    console.error('Failed to remove logo:', error);
+    logger.error('Failed to remove logo:', error);
     res.status(500).json({ error: 'Failed to remove logo' });
   }
 });
@@ -4452,7 +4453,7 @@ app.get('/api/calendar-import/status', authenticateToken, requireAdmin, async (r
     const status = await calendarImportService.getImportStatus();
     res.json(status);
   } catch (error) {
-    console.error('Failed to get import status:', error);
+    logger.error('Failed to get import status:', error);
     res.status(500).json({ error: 'Failed to get import status' });
   }
 });
@@ -4467,12 +4468,12 @@ app.post('/api/calendar-import/run', authenticateToken, requireAdmin, async (req
 
     // Start import in background
     calendarImportService.runImport(io).catch(err => {
-      console.error('Background import failed:', err);
+      logger.error('Background import failed:', err);
     });
 
     res.json({ message: 'Import started' });
   } catch (error) {
-    console.error('Failed to start import:', error);
+    logger.error('Failed to start import:', error);
     res.status(500).json({ error: 'Failed to start import' });
   }
 });
@@ -4485,7 +4486,7 @@ app.get('/api/calendar-import/history', authenticateToken, requireAdmin, async (
     const history = await calendarImportService.getImportHistory(page, limit);
     res.json(history);
   } catch (error) {
-    console.error('Failed to get import history:', error);
+    logger.error('Failed to get import history:', error);
     res.status(500).json({ error: 'Failed to get import history' });
   }
 });
@@ -4499,7 +4500,7 @@ app.get('/api/calendar-import/history/:id', authenticateToken, requireAdmin, asy
     }
     res.json(log);
   } catch (error) {
-    console.error('Failed to get import log:', error);
+    logger.error('Failed to get import log:', error);
     res.status(500).json({ error: 'Failed to get import log' });
   }
 });
@@ -4510,7 +4511,7 @@ app.get('/api/calendar-import/config', authenticateToken, requireAdmin, async (r
     const config = await calendarImportService.getImportConfig();
     res.json(config);
   } catch (error) {
-    console.error('Failed to get import config:', error);
+    logger.error('Failed to get import config:', error);
     res.status(500).json({ error: 'Failed to get import config' });
   }
 });
@@ -4526,7 +4527,7 @@ app.put('/api/calendar-import/config', authenticateToken, requireAdmin, async (r
     const config = await calendarImportService.getImportConfig();
     res.json(config);
   } catch (error) {
-    console.error('Failed to update import config:', error);
+    logger.error('Failed to update import config:', error);
     res.status(500).json({ error: 'Failed to update import config' });
   }
 });
@@ -4591,7 +4592,7 @@ app.get('/api/export', authenticateToken, requireAdmin, async (req: Authenticate
     res.setHeader('Content-Type', 'application/json');
     res.json(exportData);
   } catch (error) {
-    console.error('Export failed:', error);
+    logger.error('Export failed:', error);
     res.status(500).json({ error: 'Export failed' });
   }
 });
@@ -4669,7 +4670,7 @@ app.delete('/api/clear', authenticateToken, requireAdmin, async (req: Authentica
     await createAuditLog('clear', 'system', null, req.user?.userId || null, { cleared });
     res.json({ cleared });
   } catch (error) {
-    console.error('Clear failed:', error);
+    logger.error('Clear failed:', error);
     res.status(500).json({ error: 'Clear failed' });
   }
 });
@@ -4952,7 +4953,7 @@ app.post('/api/import', authenticateToken, requireAdmin, async (req: Authenticat
     await createAuditLog('import', 'system', null, req.user?.userId || null, { imported });
     res.json({ imported });
   } catch (error) {
-    console.error('Import failed:', error);
+    logger.error('Import failed:', error);
     res.status(500).json({ error: 'Import failed' });
   }
 });
@@ -4992,7 +4993,7 @@ io.use(async (socket, next) => {
     (socket as any).displayId = displayId;
     next();
   } catch (err) {
-    console.error('Socket.IO auth error:', err);
+    logger.error('Socket.IO auth error:', err);
     return next(new Error('Authentication failed'));
   }
 });
@@ -5000,14 +5001,14 @@ io.use(async (socket, next) => {
 // Socket.io connection handling
 io.on('connection', (socket) => {
   const displayId = (socket as any).displayId;
-  console.log(`Client connected: ${socket.id} (display: ${displayId})`);
+  logger.info(`Client connected: ${socket.id} (display: ${displayId})`);
 
   // Update heartbeat on connection (already authenticated)
   if (displayId) {
     prisma.display.update({
       where: { id: displayId },
       data: { lastHeartbeat: new Date(), status: 'online' }
-    }).catch(err => console.error(`Failed to update display on connect: ${displayId}`, err));
+    }).catch(err => logger.error(`Failed to update display on connect: ${displayId}`, err));
   }
 
   // Track display registration (re-register on reconnect)
@@ -5019,14 +5020,14 @@ io.on('connection', (socket) => {
           data: { lastHeartbeat: new Date(), status: 'online' }
         });
       } catch (err) {
-        console.error(`Failed to update display on register: ${data.displayId}`, err);
+        logger.error(`Failed to update display on register: ${data.displayId}`, err);
       }
     }
   });
 
   socket.on('disconnect', () => {
     const displayId = (socket as any).displayId;
-    console.log(`Client disconnected: ${socket.id}${displayId ? ` (display: ${displayId})` : ''}`);
+    logger.info(`Client disconnected: ${socket.id}${displayId ? ` (display: ${displayId})` : ''}`);
   });
 
   // Display heartbeat - update DB. Use the authenticated socket's displayId, not
@@ -5039,7 +5040,7 @@ io.on('connection', (socket) => {
           data: { lastHeartbeat: new Date(), status: 'online' }
         });
       } catch (err) {
-        console.error(`Failed to update heartbeat for display: ${displayId}`, err);
+        logger.error(`Failed to update heartbeat for display: ${displayId}`, err);
       }
     }
   });
@@ -5047,7 +5048,7 @@ io.on('connection', (socket) => {
 
 // Error handling middleware
 app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error('Error:', err.message);
+  logger.error('Error:', err.message);
   res.status(500).json({ error: 'Internal server error' });
 });
 
@@ -5061,7 +5062,7 @@ let shuttingDown = false;
 async function shutdown(signal: string) {
   if (shuttingDown) return;
   shuttingDown = true;
-  console.log(`${signal} received, shutting down gracefully`);
+  logger.info(`${signal} received, shutting down gracefully`);
   clearInterval(previewTokenCleanupInterval);
   previewTokens.clear();
   // Force-exit if a clean close hangs (e.g. a stuck socket).
@@ -5080,27 +5081,27 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 // A rejected promise or thrown error outside a request handler (socket handlers,
 // polling timers) must not silently wedge the process.
 process.on('unhandledRejection', (reason) => {
-  console.error('Unhandled promise rejection:', reason);
+  logger.error('Unhandled promise rejection:', reason);
 });
 process.on('uncaughtException', (err) => {
-  console.error('Uncaught exception:', err);
+  logger.error('Uncaught exception:', err);
   shutdown('uncaughtException');
 });
 
 // Start server
 httpServer.listen(PORT, async () => {
-  console.log('============================================');
-  console.log('  Courthouse Digital Signage - Backend API');
-  console.log('============================================');
-  console.log(`Server running on http://localhost:${PORT}`);
-  console.log(`Health check: http://localhost:${PORT}/api/health`);
-  console.log('============================================');
+  logger.info('============================================');
+  logger.info('  Courthouse Digital Signage - Backend API');
+  logger.info('============================================');
+  logger.info(`Server running on http://localhost:${PORT}`);
+  logger.info(`Health check: http://localhost:${PORT}/api/health`);
+  logger.info('============================================');
 
   // Seed built-in display type templates
   try {
     await seedBuiltInTemplates();
   } catch (err) {
-    console.error('Failed to seed built-in templates:', err);
+    logger.error('Failed to seed built-in templates:', err);
   }
 
   // Seed system content cards (upcoming hearings, statistics)
@@ -5113,18 +5114,18 @@ httpServer.listen(PORT, async () => {
       const existing = await prisma.contentCard.findFirst({ where: { type: sys.type } });
       if (!existing) {
         await prisma.contentCard.create({ data: sys });
-        console.log(`[seed] Created system content card: ${sys.type}`);
+        logger.info(`[seed] Created system content card: ${sys.type}`);
       }
     }
   } catch (err) {
-    console.error('Failed to seed system content cards:', err);
+    logger.error('Failed to seed system content cards:', err);
   }
 
   // Start auto-import polling if enabled in settings
   try {
     await calendarImportService.syncPollingTimer(io);
   } catch (err) {
-    console.error('Failed to initialize calendar import polling:', err);
+    logger.error('Failed to initialize calendar import polling:', err);
   }
 
   // Start news scraper polling if enabled in settings
@@ -5132,7 +5133,7 @@ httpServer.listen(PORT, async () => {
     const newsScraperService = await import('./services/newsScraperService.js');
     await newsScraperService.syncNewsPollingTimer(io);
   } catch (err) {
-    console.error('Failed to initialize news scraper polling:', err);
+    logger.error('Failed to initialize news scraper polling:', err);
   }
 });
 
