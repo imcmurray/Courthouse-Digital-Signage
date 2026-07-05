@@ -67,11 +67,6 @@ export const calendarImportApi = {
     return response.data;
   },
 
-  getHistoryById: async (id: string): Promise<ImportLog> => {
-    const response = await apiClient.get<ImportLog>(`/api/calendar-import/history/${id}`);
-    return response.data;
-  },
-
   getConfig: async (): Promise<ImportConfig> => {
     const response = await apiClient.get<ImportConfig>('/api/calendar-import/config');
     return response.data;
