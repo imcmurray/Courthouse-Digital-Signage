@@ -69,3 +69,6 @@ features.db
 # Development screenshots
 dev_screenshots/
 /*.png
+
+# Uploaded runtime files (persisted via Docker volume, not source)
+uploads/
