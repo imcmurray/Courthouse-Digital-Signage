@@ -11,6 +11,7 @@ import jwt from 'jsonwebtoken';
 import multer from 'multer';
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
+import helmet from 'helmet';
 import swaggerUi from 'swagger-ui-express';
 import YAML from 'yaml';
 import * as calendarImportService from './services/calendarImportService';
@@ -18,6 +19,11 @@ import * as calendarImportService from './services/calendarImportService';
 const app = express();
 const httpServer = createServer(app);
 const prisma = new PrismaClient();
+
+// Runs behind a reverse proxy / Cloudflare tunnel in production — trust the first
+// hop so req.ip reflects the real client (required for correct rate limiting and
+// audit IPs, and to satisfy express-rate-limit's X-Forwarded-For validation).
+app.set('trust proxy', 1);
 
 // JWT configuration
 if (!process.env.JWT_SECRET) {
@@ -132,6 +138,11 @@ const io = new Server(httpServer, {
 });
 
 // Middleware
+// Security headers. CSP is intentionally disabled here: the display client (served
+// at /display) loads vendored/CDN scripts and Swagger UI needs inline styles/scripts,
+// so a Content-Security-Policy must be configured deliberately at the nginx edge for
+// the HTML frontends rather than blanket-applied to the API process.
+app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({
   origin: function(origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
@@ -199,6 +210,27 @@ const apiKeyLimiter = rateLimit({
   keyGenerator: (req) => {
     const apiKey = req.headers['x-api-key'] as string;
     return apiKey || req.ip || req.socket.remoteAddress || 'unknown';
+  }
+});
+
+// Strict limiter for authentication endpoints to blunt brute-force / credential
+// stuffing. Only failed attempts count (skipSuccessfulRequests), so a legitimate
+// user is never locked out by their own successful logins. Keyed on IP + email so
+// one account's attempts don't exhaust the budget for other users behind the same IP.
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // 10 failed attempts per window
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  message: {
+    error: 'Too many authentication attempts, please try again in 15 minutes.',
+    retryAfter: 900
+  },
+  keyGenerator: (req) => {
+    const ip = req.ip || req.socket.remoteAddress || 'unknown';
+    const email = typeof req.body?.email === 'string' ? req.body.email.toLowerCase() : '';
+    return email ? `${ip}:${email}` : ip;
   }
 });
 
@@ -412,7 +444,7 @@ const authenticateStandaloneApiKey = async (req: StandaloneApiKeyRequest, res: R
 // =========================================
 
 // POST /api/auth/login - User login with JWT response
-app.post('/api/auth/login', async (req: Request, res: Response) => {
+app.post('/api/auth/login', authLimiter, async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
 
@@ -491,7 +523,7 @@ app.post('/api/auth/logout', authenticateToken, async (req: AuthenticatedRequest
 });
 
 // POST /api/auth/refresh - Refresh JWT token
-app.post('/api/auth/refresh', async (req: Request, res: Response) => {
+app.post('/api/auth/refresh', authLimiter, async (req: Request, res: Response) => {
   try {
     // Read refresh token from HttpOnly cookie (fallback to body for backward compat)
     const refreshToken = req.cookies?.refreshToken || req.body.refreshToken;
@@ -574,7 +606,7 @@ app.get('/api/auth/me', authenticateToken, async (req: AuthenticatedRequest, res
 });
 
 // POST /api/auth/change-password - Change own password
-app.post('/api/auth/change-password', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+app.post('/api/auth/change-password', authLimiter, authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { currentPassword, newPassword } = req.body;
 
