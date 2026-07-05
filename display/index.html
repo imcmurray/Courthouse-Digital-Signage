@@ -73,11 +73,13 @@
     <div id="screensaver-content" class="screensaver-content"></div>
   </div>
 
-  <!-- HLS.js for camera feeds (IT Status display type) -->
-  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
+  <!-- HLS.js for camera feeds (IT Status display type). Self-hosted (not CDN) so
+       displays boot on a restricted/offline courthouse network. Update: hls.js@1.5.17 -->
+  <script src="js/vendor/hls.min.js"></script>
 
-  <!-- Socket.io client for real-time updates -->
-  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js" integrity="sha384-mZLF4UVrpi/QTWPA7BjNPEnkIfRFn4ZEO3Qt/HFklTJBj/gBOV8G3HcKn4NfQblz" crossorigin="anonymous"></script>
+  <!-- Socket.io client for real-time updates. Self-hosted, v4.8.1 to match the
+       server's socket.io version. Update: socket.io-client@4.8.1 -->
+  <script src="js/vendor/socket.io.min.js"></script>
   <script src="js/display.js"></script>
 </body>
 </html>

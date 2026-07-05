@@ -159,6 +159,10 @@
   let emergencyLevel = 0;
   let emergencyPollTimer = null;
 
+  // Nightly self-reload timer (setTimeout id) — cheap insurance against slow
+  // renderer/memory growth over weeks of continuous unattended operation.
+  let nightlyReloadTimer = null;
+
   // Template engine state
   var activeTemplate = null;
   var cameraGridInitialized = false;
@@ -235,6 +239,20 @@
     return params.get('apiKey') || localStorage.getItem('displayApiKey') || '';
   }
 
+  // Fetch with an abort timeout. A backend that accepts the connection but hangs
+  // would otherwise leave promises pending forever, and the 30s pollers would stack
+  // requests indefinitely on a flaky LAN. Bounding each request well under the poll
+  // interval keeps at most one request per fetcher in flight.
+  const FETCH_TIMEOUT_MS = 10000;
+  function fetchWithTimeout(url, options, timeoutMs) {
+    options = options || {};
+    timeoutMs = timeoutMs || FETCH_TIMEOUT_MS;
+    const controller = new AbortController();
+    const timer = setTimeout(function() { controller.abort(); }, timeoutMs);
+    const opts = Object.assign({}, options, { signal: controller.signal });
+    return window.fetch(url, opts).finally(function() { clearTimeout(timer); });
+  }
+
   // Named event handlers for proper cleanup
   function handleOnline() { handleConnectionChange(true); }
   function handleOffline() { handleConnectionChange(false); }
@@ -243,6 +261,9 @@
   function cleanup() {
     intervalIds.forEach(function(id) { clearInterval(id); });
     intervalIds.length = 0;
+    // Timers held in their own vars (not intervalIds) must be cleared explicitly.
+    if (systemStatusTimer) { clearInterval(systemStatusTimer); systemStatusTimer = null; }
+    if (nightlyReloadTimer) { clearTimeout(nightlyReloadTimer); nightlyReloadTimer = null; }
     window.removeEventListener('online', handleOnline);
     window.removeEventListener('offline', handleOffline);
     if (socket) {
@@ -279,6 +300,13 @@
 
     // Set up schedule checker (runs every 30 seconds)
     intervalIds.push(setInterval(checkSchedule, 30000));
+
+    // Heartbeat to the server so it knows this display is alive (tracked so it's
+    // cleared on teardown, and started here rather than at module load).
+    intervalIds.push(setInterval(sendHeartbeat, 60000));
+
+    // Schedule a nightly self-reload during off-hours.
+    scheduleNightlyReload();
 
     // Set up WebSocket connection
     setupWebSocket();
@@ -335,7 +363,7 @@
   // Fetch public court branding (no API key needed)
   async function fetchCourtBranding() {
     try {
-      const response = await fetch(`${CONFIG.apiBaseUrl}/api/settings/public`);
+      const response = await fetchWithTimeout(`${CONFIG.apiBaseUrl}/api/settings/public`);
       if (response.ok) {
         const data = await response.json();
 
@@ -374,7 +402,7 @@
   // Fetch display configuration
   async function fetchDisplayConfig() {
     try {
-      const response = await fetch(
+      const response = await fetchWithTimeout(
         `${CONFIG.apiBaseUrl}/api/displays/${CONFIG.displayId}/config`,
         {
           headers: {
@@ -485,7 +513,7 @@
   async function fetchDocket() {
     if (screensaverActive) return;
     try {
-      const response = await fetch(
+      const response = await fetchWithTimeout(
         `${CONFIG.apiBaseUrl}/api/displays/${CONFIG.displayId}/docket`,
         {
           headers: {
@@ -1275,7 +1303,7 @@
   async function fetchAnnouncements() {
     if (screensaverActive) return;
     try {
-      const response = await fetch(
+      const response = await fetchWithTimeout(
         `${CONFIG.apiBaseUrl}/api/announcements?active=true&displayId=${encodeURIComponent(CONFIG.displayId)}`,
         {
           headers: {
@@ -1427,7 +1455,7 @@
       // Fetch /points metadata once, cache the URLs
       if (!nwsForecastUrls) {
         const pointsUrl = 'https://api.weather.gov/points/40.7608,-111.8910';
-        const pointsResponse = await fetch(pointsUrl, { headers: nwsHeaders });
+        const pointsResponse = await fetchWithTimeout(pointsUrl, { headers: nwsHeaders });
         if (!pointsResponse.ok) throw new Error('Points request failed');
         const pointsData = await pointsResponse.json();
         nwsForecastUrls = {
@@ -1438,8 +1466,8 @@
 
       // Fetch both forecasts in parallel
       const [forecastRes, hourlyRes] = await Promise.all([
-        fetch(nwsForecastUrls.forecast, { headers: nwsHeaders }),
-        fetch(nwsForecastUrls.forecastHourly, { headers: nwsHeaders }),
+        fetchWithTimeout(nwsForecastUrls.forecast, { headers: nwsHeaders }),
+        fetchWithTimeout(nwsForecastUrls.forecastHourly, { headers: nwsHeaders }),
       ]);
 
       if (!forecastRes.ok || !hourlyRes.ok) throw new Error('Forecast request failed');
@@ -1534,10 +1562,16 @@
         socket.on('connect', () => {
           console.log('WebSocket connected');
           socket.emit('display:register', { displayId: CONFIG.displayId });
+          handleConnectionChange(true);
+          // Re-sync on (re)connect: the socket may have been down and the REST data
+          // can be up to a full poll interval stale.
+          fetchDocket();
+          fetchAnnouncements();
         });
 
         socket.on('disconnect', () => {
           console.log('WebSocket disconnected');
+          handleConnectionChange(false);
         });
 
         socket.on('docket:update', () => {
@@ -2053,7 +2087,7 @@
     if (screensaverActive) { console.log('[content-cards] fetchContentCards skipped: screensaver active'); return; }
     console.log('[content-cards] fetchContentCards: fetching from /api/displays/' + CONFIG.displayId + '/content-cards');
     try {
-      var response = await fetch(
+      var response = await fetchWithTimeout(
         CONFIG.apiBaseUrl + '/api/displays/' + encodeURIComponent(CONFIG.displayId) + '/content-cards',
         { headers: { 'X-API-Key': getApiKey() } }
       );
@@ -2652,7 +2686,7 @@
   async function fetchSystemStatus() {
     if (screensaverActive) return;
     try {
-      var response = await fetch(
+      var response = await fetchWithTimeout(
         CONFIG.apiBaseUrl + '/api/displays/' + CONFIG.displayId + '/system-status',
         { headers: { 'X-API-Key': getApiKey() } }
       );
@@ -2911,7 +2945,7 @@
 
   async function fetchEmergencyStatus() {
     try {
-      var response = await fetch(
+      var response = await fetchWithTimeout(
         CONFIG.apiBaseUrl + '/api/displays/' + encodeURIComponent(CONFIG.displayId) + '/emergency',
         { headers: { 'x-api-key': CONFIG.apiKey } }
       );
@@ -3088,8 +3122,27 @@
     }
   }
 
-  // Start heartbeat
-  setInterval(sendHeartbeat, 60000); // Every minute
+  // Schedule a full page reload for the next off-hours window (3 AM courthouse
+  // time). Kiosks run for weeks; a nightly reload bounds renderer/memory growth
+  // and clears any accumulated DOM state. Skipped during an active emergency
+  // (retried shortly after). Reschedules itself for the following night after
+  // each reload, so a page that (re)loads inside the window won't loop.
+  const NIGHTLY_RELOAD_HOUR = 3;
+  function scheduleNightlyReload() {
+    if (nightlyReloadTimer) { clearTimeout(nightlyReloadTimer); }
+    const t = getCourthouseHour(); // { hour, minute } in courthouse timezone
+    let minutesUntil = (NIGHTLY_RELOAD_HOUR - t.hour) * 60 - t.minute;
+    if (minutesUntil <= 0) minutesUntil += 24 * 60; // already past today -> tomorrow
+    nightlyReloadTimer = setTimeout(function() {
+      if (emergencyActive) {
+        console.log('Nightly reload deferred — emergency active');
+        nightlyReloadTimer = setTimeout(scheduleNightlyReload, 10 * 60 * 1000);
+        return;
+      }
+      console.log('Nightly scheduled reload');
+      window.location.reload();
+    }, minutesUntil * 60 * 1000);
+  }
 
   // Initialize when DOM is ready
   if (document.readyState === 'loading') {
