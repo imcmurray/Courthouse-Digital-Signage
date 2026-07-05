@@ -411,8 +411,11 @@ const authenticateStandaloneApiKey = async (req: StandaloneApiKeyRequest, res: R
   }
 
   try {
-    // Find all API keys and compare with bcrypt
-    const apiKeys = await prisma.apiKey.findMany();
+    // Narrow to keys sharing this key's prefix (stored at creation), then bcrypt-
+    // verify only those — instead of a bcrypt.compare against every key in the table.
+    const apiKeys = await prisma.apiKey.findMany({
+      where: { keyPrefix: apiKey.substring(0, 8) }
+    });
 
     for (const key of apiKeys) {
       // Check if key is expired
