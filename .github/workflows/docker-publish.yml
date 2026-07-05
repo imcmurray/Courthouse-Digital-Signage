@@ -3,6 +3,8 @@ name: Build and Push Docker Images
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
 
 env:
   REGISTRY: ghcr.io
@@ -37,6 +39,9 @@ jobs:
 
   build-and-push:
     needs: verify
+    # Only build/push images on pushes to main; on pull_request the verify job
+    # runs as the merge gate but no image is published.
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: read
