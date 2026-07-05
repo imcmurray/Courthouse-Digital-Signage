@@ -12,6 +12,7 @@ import multer from 'multer';
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
+import { AsyncLocalStorage } from 'async_hooks';
 import swaggerUi from 'swagger-ui-express';
 import YAML from 'yaml';
 import * as calendarImportService from './services/calendarImportService';
@@ -24,6 +25,10 @@ const prisma = new PrismaClient();
 // hop so req.ip reflects the real client (required for correct rate limiting and
 // audit IPs, and to satisfy express-rate-limit's X-Forwarded-For validation).
 app.set('trust proxy', 1);
+
+// Per-request context so audit logging can capture the actor's IP without
+// threading req through every createAuditLog call site.
+const requestContext = new AsyncLocalStorage<{ ip?: string }>();
 
 // JWT configuration
 if (!process.env.JWT_SECRET) {
@@ -159,6 +164,9 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(cookieParser());
+
+// Bind the client IP into the async context for the lifetime of each request.
+app.use((req, res, next) => requestContext.run({ ip: req.ip }, next));
 
 // =========================================
 // Rate Limiting Configuration
@@ -4055,6 +4063,9 @@ async function createAuditLog(
   changes: Record<string, unknown> | null = null,
   ipAddress: string | null = null
 ) {
+  // Fall back to the current request's IP (captured in async context) when a
+  // caller doesn't pass one explicitly — which is every call site today.
+  const resolvedIp = ipAddress ?? requestContext.getStore()?.ip ?? null;
   try {
     await prisma.auditLog.create({
       data: {
@@ -4063,7 +4074,7 @@ async function createAuditLog(
         entityId,
         userId,
         changes: changes ? JSON.stringify(changes) : null,
-        ipAddress
+        ipAddress: resolvedIp
       }
     });
     console.log(`[AUDIT] ${action} ${entityType}${entityId ? ` (${entityId})` : ''} by user ${userId || 'unknown'}`);
