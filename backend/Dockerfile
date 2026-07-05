@@ -26,8 +26,11 @@ RUN apk add --no-cache openssl
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
-# Copy Prisma schema and generate client for production
-COPY prisma/schema.prisma prisma/
+# Copy Prisma schema + migration history and generate client for production.
+# The migrations directory must be present in the runtime image so the
+# entrypoint can run `prisma migrate deploy`.
+COPY prisma/schema.prisma ./prisma/schema.prisma
+COPY prisma/migrations ./prisma/migrations
 RUN npx prisma generate
 
 # Copy built application
