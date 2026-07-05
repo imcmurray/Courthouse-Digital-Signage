@@ -5015,16 +5015,17 @@ io.on('connection', (socket) => {
     console.log(`Client disconnected: ${socket.id}${displayId ? ` (display: ${displayId})` : ''}`);
   });
 
-  // Display heartbeat - update DB
-  socket.on('display:heartbeat', async (data) => {
-    if (data?.displayId) {
+  // Display heartbeat - update DB. Use the authenticated socket's displayId, not
+  // the client-supplied value, so a display can't mark another display online.
+  socket.on('display:heartbeat', async () => {
+    if (displayId) {
       try {
         await prisma.display.update({
-          where: { id: data.displayId },
+          where: { id: displayId },
           data: { lastHeartbeat: new Date(), status: 'online' }
         });
       } catch (err) {
-        console.error(`Failed to update heartbeat for display: ${data.displayId}`, err);
+        console.error(`Failed to update heartbeat for display: ${displayId}`, err);
       }
     }
   });
@@ -5041,13 +5042,35 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
 
-// Graceful shutdown
-process.on('SIGTERM', async () => {
-  console.log('SIGTERM received, shutting down gracefully');
+// Graceful shutdown — stop accepting connections, close sockets, disconnect DB.
+let shuttingDown = false;
+async function shutdown(signal: string) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`${signal} received, shutting down gracefully`);
   clearInterval(previewTokenCleanupInterval);
   previewTokens.clear();
-  await prisma.$disconnect();
-  process.exit(0);
+  // Force-exit if a clean close hangs (e.g. a stuck socket).
+  const forceExit = setTimeout(() => process.exit(1), 10000);
+  forceExit.unref();
+  // io.close() also closes the underlying HTTP server and disconnects clients.
+  io.close(async () => {
+    try { await prisma.$disconnect(); } catch { /* already shutting down */ }
+    clearTimeout(forceExit);
+    process.exit(0);
+  });
+}
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
+
+// A rejected promise or thrown error outside a request handler (socket handlers,
+// polling timers) must not silently wedge the process.
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled promise rejection:', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught exception:', err);
+  shutdown('uncaughtException');
 });
 
 // Start server
