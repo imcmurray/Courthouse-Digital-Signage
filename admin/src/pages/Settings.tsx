@@ -183,6 +183,14 @@ export default function Settings() {
     setHasChanges(true);
   };
 
+  // Numeric fields (typed as number in SettingsData) — coerce so they aren't
+  // persisted as strings.
+  const handleNumberChange = (field: keyof SettingsData, value: string) => {
+    const num = Number(value);
+    setFormData((prev) => ({ ...prev, [field]: value === '' || Number.isNaN(num) ? undefined : num }));
+    setHasChanges(true);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const { court_logo, ...settingsToSave } = formData;
@@ -648,7 +656,7 @@ export default function Settings() {
                 min="3"
                 max="120"
                 value={formData.content_card_rotation_interval || 10}
-                onChange={(e) => handleInputChange('content_card_rotation_interval', e.target.value)}
+                onChange={(e) => handleNumberChange('content_card_rotation_interval', e.target.value)}
                 className="mt-1 w-32 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
               />
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -713,7 +721,7 @@ export default function Settings() {
                       min="15"
                       max="1440"
                       value={formData.news_scrape_interval || 60}
-                      onChange={(e) => handleInputChange('news_scrape_interval', e.target.value)}
+                      onChange={(e) => handleNumberChange('news_scrape_interval', e.target.value)}
                       className="mt-1 w-32 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
                     />
                   </div>
