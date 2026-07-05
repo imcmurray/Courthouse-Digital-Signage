@@ -1,6 +1,7 @@
 import { createBrowserRouter, RouterProvider, Navigate, Outlet } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Toaster } from 'react-hot-toast';
+import { QueryClient, QueryClientProvider, QueryCache } from '@tanstack/react-query';
+import { Toaster, toast } from 'react-hot-toast';
+import { getErrorMessage } from './utils/errorHandling';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -21,7 +22,27 @@ import Settings from './pages/Settings';
 import CalendarImport from './pages/CalendarImport';
 import DisplayTemplates from './pages/DisplayTemplates';
 
-const queryClient = new QueryClient();
+// Surface query failures globally so a backend outage reads as an error, not as
+// empty data (an empty docket and a failed fetch previously looked identical).
+// A fixed toast id dedupes when several polling widgets fail at once. 401/403 are
+// left to the axios interceptor (token refresh / session-expired modal).
+const queryClient = new QueryClient({
+  queryCache: new QueryCache({
+    onError: (error) => {
+      const status = (error as { response?: { status?: number } })?.response?.status;
+      if (status === 401 || status === 403) return;
+      toast.error(getErrorMessage(error, 'Failed to load data. Please try again.'), {
+        id: 'query-error',
+      });
+    },
+  }),
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      staleTime: 5000,
+    },
+  },
+});
 
 // Root layout component that provides auth context
 function RootLayout() {
