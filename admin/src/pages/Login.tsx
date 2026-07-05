@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
-import { API_BASE_URL } from '../api/client';
+import apiClient, { API_BASE_URL } from '../api/client';
 
 // Validation schema
 const loginSchema = z.object({
@@ -30,9 +30,9 @@ export default function Login() {
   const [branding, setBranding] = useState<PublicBranding | null>(null);
 
   useEffect(() => {
-    fetch(`${API_BASE_URL}/api/settings/public`)
-      .then(res => res.json())
-      .then(data => setBranding(data))
+    // Optional branding for the login screen — fail silently if unavailable.
+    apiClient.get<PublicBranding>('/api/settings/public')
+      .then(res => setBranding(res.data))
       .catch(() => {});
   }, []);
 

@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import ModalPortal from '../components/ModalPortal';
 import apiClient, { getStoredToken } from '../api/client';
+import { getErrorMessage } from '../utils/errorHandling';
 
 interface SettingsData {
   court_name: string;
@@ -81,16 +82,8 @@ export default function Settings() {
   const { data, isLoading, error } = useQuery<SettingsResponse>({
     queryKey: ['settings'],
     queryFn: async () => {
-      const token = getStoredToken();
-      const response = await fetch(`${API_URL}/api/settings`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (!response.ok) {
-        throw new Error('Failed to fetch settings');
-      }
-      return response.json();
+      const response = await apiClient.get<SettingsResponse>('/api/settings');
+      return response.data;
     },
   });
 
@@ -124,34 +117,24 @@ export default function Settings() {
   // Save settings mutation
   const saveMutation = useMutation({
     mutationFn: async (settings: Omit<SettingsData, 'court_logo'>) => {
-      const token = getStoredToken();
-      const response = await fetch(`${API_URL}/api/settings`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ settings }),
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to save settings');
-      }
-      return response.json();
+      const response = await apiClient.put('/api/settings', { settings });
+      return response.data;
     },
     onSuccess: () => {
       toast.success('Settings saved successfully');
       queryClient.invalidateQueries({ queryKey: ['settings'] });
       setHasChanges(false);
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to save settings');
+    onError: (error) => {
+      toast.error(getErrorMessage(error, 'Failed to save settings'));
     },
   });
 
   // Logo upload mutation
   const uploadLogoMutation = useMutation({
     mutationFn: async (file: File) => {
+      // Kept on raw fetch: multipart/FormData is awkward through the shared axios
+      // instance's JSON default. Attaches the token manually.
       const token = getStoredToken();
       const formData = new FormData();
       formData.append('logo', file);
@@ -182,26 +165,16 @@ export default function Settings() {
   // Remove logo mutation
   const removeLogoMutation = useMutation({
     mutationFn: async () => {
-      const token = getStoredToken();
-      const response = await fetch(`${API_URL}/api/settings/logo`, {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to remove logo');
-      }
-      return response.json();
+      const response = await apiClient.delete('/api/settings/logo');
+      return response.data;
     },
     onSuccess: () => {
       toast.success('Logo removed successfully');
       setLogoPreview(null);
       queryClient.invalidateQueries({ queryKey: ['settings'] });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to remove logo');
+    onError: (error) => {
+      toast.error(getErrorMessage(error, 'Failed to remove logo'));
     },
   });
 
