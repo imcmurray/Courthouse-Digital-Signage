@@ -103,11 +103,15 @@ function generateId() {
   return crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
 }
 
-function parseComponents(json: string): TemplateComponent[] {
+// Parse stored template content. `failed` is true when a non-empty value could
+// not be parsed — in that case the editor falls back to empty/default, and saving
+// would silently overwrite the real stored data, so callers must guard on it.
+function parseComponents(json: string): { components: TemplateComponent[]; failed: boolean } {
+  if (!json || json.trim() === '') return { components: [], failed: false };
   try {
     const arr = JSON.parse(json);
-    if (!Array.isArray(arr)) return [];
-    return arr.map((c: { type: string; config?: Record<string, unknown>; gridArea?: { landscape?: string; portrait?: string } | string }) => ({
+    if (!Array.isArray(arr)) return { components: [], failed: true };
+    const components = arr.map((c: { type: string; config?: Record<string, unknown>; gridArea?: { landscape?: string; portrait?: string } | string }) => ({
       id: generateId(),
       type: c.type as ComponentType,
       config: c.config || {},
@@ -117,18 +121,19 @@ function parseComponents(json: string): TemplateComponent[] {
           : c.gridArea,
       }),
     }));
-  } catch { return []; }
+    return { components, failed: false };
+  } catch { return { components: [], failed: true }; }
 }
 
-function parseLayout(json: string | null): LayoutConfig {
-  if (!json) return DEFAULT_LAYOUT;
+function parseLayout(json: string | null): { layout: LayoutConfig; failed: boolean } {
+  if (!json) return { layout: DEFAULT_LAYOUT, failed: false };
   try {
     const parsed = JSON.parse(json);
     // New format: has landscape key
-    if (parsed.landscape) return parsed as LayoutConfig;
-    // Old format: { type, columns?, rows? } — normalize
-    return DEFAULT_LAYOUT;
-  } catch { return DEFAULT_LAYOUT; }
+    if (parsed.landscape) return { layout: parsed as LayoutConfig, failed: false };
+    // Old format: { type, columns?, rows? } — normalized to default (not a failure)
+    return { layout: DEFAULT_LAYOUT, failed: false };
+  } catch { return { layout: DEFAULT_LAYOUT, failed: true }; }
 }
 
 function slugify(text: string): string {
@@ -815,12 +820,13 @@ export default function TemplateEditModal({ template, onClose }: TemplateEditMod
   const [name, setName] = useState(template?.name || '');
   const [slug, setSlug] = useState(template?.slug || '');
   const [description, setDescription] = useState(template?.description || '');
-  const [components, setComponents] = useState<TemplateComponent[]>(
-    template ? parseComponents(template.components) : []
-  );
-  const [layout, setLayout] = useState<LayoutConfig>(
-    template ? parseLayout(template.layout) : DEFAULT_LAYOUT
-  );
+  const initialComponents = template ? parseComponents(template.components) : { components: [], failed: false };
+  const initialLayout = template ? parseLayout(template.layout) : { layout: DEFAULT_LAYOUT, failed: false };
+  const [components, setComponents] = useState<TemplateComponent[]>(initialComponents.components);
+  const [layout, setLayout] = useState<LayoutConfig>(initialLayout.layout);
+  // True when the template's stored content couldn't be parsed — saving would
+  // overwrite the (unreadable) original, so we block it and steer to Reset.
+  const [contentParseFailed, setContentParseFailed] = useState(initialComponents.failed || initialLayout.failed);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [autoSlug, setAutoSlug] = useState(!isEditing);
   const [activeTab, setActiveTab] = useState<Orientation>('landscape');
@@ -835,6 +841,17 @@ export default function TemplateEditModal({ template, onClose }: TemplateEditMod
       setSlug(slugify(name));
     }
   }, [name, autoSlug, isEditing]);
+
+  // Warn once on open if the stored content couldn't be read.
+  useEffect(() => {
+    if (contentParseFailed) {
+      toast.error(
+        "This template's saved layout could not be read. Use “Reset to defaults” before editing — saving now would overwrite it.",
+        { duration: 8000 }
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const createMutation = useMutation({
     mutationFn: displayTemplatesApi.create,
@@ -868,8 +885,11 @@ export default function TemplateEditModal({ template, onClose }: TemplateEditMod
       toast.success('Template reset to defaults');
       setName(data.name);
       setDescription(data.description || '');
-      setComponents(parseComponents(data.components));
-      setLayout(parseLayout(data.layout));
+      const resetComponents = parseComponents(data.components);
+      const resetLayout = parseLayout(data.layout);
+      setComponents(resetComponents.components);
+      setLayout(resetLayout.layout);
+      setContentParseFailed(resetComponents.failed || resetLayout.failed);
     },
     onError: (error: { response?: { data?: { error?: string } } }) => {
       toast.error(error.response?.data?.error || 'Failed to reset template');
@@ -878,6 +898,11 @@ export default function TemplateEditModal({ template, onClose }: TemplateEditMod
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    // Never let an editor session that loaded from unreadable content overwrite it.
+    if (contentParseFailed) {
+      toast.error('Cannot save: the original layout could not be read. Use “Reset to defaults” first, then re-edit.');
+      return;
+    }
     const componentData = components.map(c => ({
       type: c.type,
       config: c.config,
