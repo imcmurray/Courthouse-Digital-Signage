@@ -286,8 +286,8 @@ export async function runImport(io?: Server): Promise<ImportResult[]> {
     // Process each PDF
     for (const { url, filename } of pdfLinks) {
       const startMs = Date.now();
-      const judgeCode = extractJudgeCode(filename);
-      const judgeName = getJudgeName(judgeCode);
+      let judgeCode = extractJudgeCode(filename);
+      let judgeName = getJudgeName(judgeCode);
 
       const logEntry = await prisma.importLog.create({
         data: {
@@ -310,6 +310,12 @@ export async function runImport(io?: Server): Promise<ImportResult[]> {
         importProgress!.currentStep = `Parsing calendar for ${judgeName}`;
         logger.info(`[Calendar Import] Parsing ${filename} (${pdfBuffer.length} bytes)...`);
         const calendar = await parseCalendar(pdfBuffer, filename);
+        // The parser resolves the authoritative judge name (canonical map, else
+        // the PDF's "Honorable" header) — adopt it for the docket rows, stale
+        // cleanup, and the import-history log so unmapped judges show their real
+        // name rather than a raw filename code.
+        judgeName = calendar.judgeName;
+        judgeCode = calendar.judgeCode;
 
         importProgress!.currentStep = `Processing ${calendar.entries.length} entries for ${judgeName}`;
         logger.info(`[Calendar Import] Found ${calendar.entries.length} entries for ${judgeName}`);
@@ -369,6 +375,8 @@ export async function runImport(io?: Server): Promise<ImportResult[]> {
         await prisma.importLog.update({
           where: { id: logEntry.id },
           data: {
+            judgeName,
+            judgeCode,
             entriesFound: calendar.entries.length,
             entriesCreated: created,
             entriesUpdated: updated,

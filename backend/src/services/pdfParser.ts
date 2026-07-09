@@ -35,21 +35,28 @@ const JUDGE_CODE_MAP: Record<string, string> = {
   'CDP': 'Judge Cathleen D Parker',
   'MFT': 'Judge Michael F Thomson',
   'JTM': 'Judge Joel T. Marker',
+  'DHL': 'Judge David H. Leigh',
 };
 
 /**
  * Extract judge code from PDF filename.
  * Pattern: {CODE}-{ID}-{START}-{END}-{TIMESTAMP}.pdf
  * Example: PH-906136-20260205-20260320-175839497.pdf
+ *
+ * The code is the alphabetic prefix; the ID is the first purely-numeric
+ * segment. Note the ID length varies between judges (e.g. Thurman's calendars
+ * use a short "WTT-204-..." id), so we must split on the first all-numeric
+ * segment rather than assuming a minimum digit count — otherwise a short id
+ * gets swallowed into the code (yielding e.g. "WTT-204").
  */
 export function extractJudgeCode(filename: string): string {
   const basename = filename.replace(/^.*\//, '').replace(/\.pdf$/i, '');
   const parts = basename.split('-');
-  // The code may contain multiple parts before the numeric ID
-  // Find the first part that looks like a numeric ID (6+ digits)
+  // Find the first part that is purely numeric — that's the ID; everything
+  // before it is the judge code.
   let codeEndIdx = 0;
   for (let i = 0; i < parts.length; i++) {
-    if (/^\d{4,}$/.test(parts[i])) {
+    if (/^\d+$/.test(parts[i])) {
       codeEndIdx = i;
       break;
     }
@@ -62,6 +69,23 @@ export function extractJudgeCode(filename: string): string {
  */
 export function getJudgeName(code: string): string {
   return JUDGE_CODE_MAP[code] || code;
+}
+
+/**
+ * Extract the judge's name from the PDF's "Honorable <Name>" header line,
+ * normalized to the "Judge <Name>" convention used elsewhere. Returns null if
+ * no such header is present. Used as the source of truth for judges whose code
+ * isn't in JUDGE_CODE_MAP, so a newly-appointed judge shows their real name
+ * instead of a raw filename code.
+ */
+export function extractHonorableName(text: string): string | null {
+  const line = text
+    .split('\n')
+    .map(l => l.trim())
+    .find(l => /^Honorable\s+/i.test(l));
+  if (!line) return null;
+  const name = line.replace(/^Honorable\s+/i, '').trim();
+  return name ? `Judge ${name}` : null;
 }
 
 /**
@@ -102,7 +126,9 @@ export async function parseCalendar(buffer: Buffer, filename: string): Promise<P
   const text = result.text;
   await parser.destroy();
   const judgeCode = extractJudgeCode(filename);
-  const judgeName = getJudgeName(judgeCode);
+  // Prefer the canonical mapped name (stable spelling for known judges), then
+  // fall back to the PDF's "Honorable ..." header, then the raw code.
+  const judgeName = JUDGE_CODE_MAP[judgeCode] || extractHonorableName(text) || judgeCode;
 
   const entries = parseText(text, judgeName);
 
