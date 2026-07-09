@@ -37,22 +37,34 @@ jobs:
           npm ci
           npm run typecheck
 
-  build-and-push:
+  # Build each architecture on its own NATIVE runner (no QEMU emulation) and
+  # push by digest. Emulated arm64 builds of the admin SPA (npm ci + Vite) were
+  # taking 60+ min and could hang for hours; native arm64 runners (free for
+  # public repos) build in minutes. The merge job assembles the multi-arch
+  # manifest from the per-arch digests.
+  build:
     needs: verify
     # Only build/push images on pushes to main; on pull_request the verify job
     # runs as the merge gate but no image is published.
     if: github.event_name == 'push'
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
       packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            arch: amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            arch: arm64
+            runner: ubuntu-24.04-arm
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -66,32 +78,96 @@ jobs:
 
       - name: Extract short SHA
         id: meta
-        run: echo "sha_short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+        run: echo "sha_short=$(echo "${GITHUB_SHA}" | cut -c1-7)" >> "$GITHUB_OUTPUT"
 
-      - name: Build and push backend image
+      - name: Build and push backend image (by digest)
+        id: backend
         uses: docker/build-push-action@v6
         with:
           context: ./backend
           file: ./backend/Dockerfile
-          push: true
-          platforms: linux/amd64,linux/arm64
-          tags: |
-            ${{ env.BACKEND_IMAGE }}:latest
-            ${{ env.BACKEND_IMAGE }}:${{ steps.meta.outputs.sha_short }}
-          cache-from: type=gha,scope=backend
-          cache-to: type=gha,mode=max,scope=backend
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,name=${{ env.BACKEND_IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=backend-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=backend-${{ matrix.arch }}
 
-      - name: Build and push nginx image
+      - name: Build and push nginx image (by digest)
+        id: nginx
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile.nginx
-          push: true
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.platform }}
           build-args: |
             COMMIT_HASH=${{ steps.meta.outputs.sha_short }}
-          tags: |
-            ${{ env.NGINX_IMAGE }}:latest
-            ${{ env.NGINX_IMAGE }}:${{ steps.meta.outputs.sha_short }}
-          cache-from: type=gha,scope=nginx
-          cache-to: type=gha,mode=max,scope=nginx
+          outputs: type=image,name=${{ env.NGINX_IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=nginx-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=nginx-${{ matrix.arch }}
+
+      - name: Export digests
+        run: |
+          mkdir -p /tmp/digests/backend /tmp/digests/nginx
+          backend_digest="${{ steps.backend.outputs.digest }}"
+          nginx_digest="${{ steps.nginx.outputs.digest }}"
+          touch "/tmp/digests/backend/${backend_digest#sha256:}"
+          touch "/tmp/digests/nginx/${nginx_digest#sha256:}"
+
+      - name: Upload digests
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ matrix.arch }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # Assemble the multi-arch manifest lists (:latest and :<sha>) from the
+  # per-arch digests pushed by the build job.
+  merge:
+    needs: build
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract short SHA
+        id: meta
+        run: echo "sha_short=$(echo "${GITHUB_SHA}" | cut -c1-7)" >> "$GITHUB_OUTPUT"
+
+      - name: Create backend manifest list
+        working-directory: /tmp/digests/backend
+        run: |
+          docker buildx imagetools create \
+            -t ${{ env.BACKEND_IMAGE }}:latest \
+            -t ${{ env.BACKEND_IMAGE }}:${{ steps.meta.outputs.sha_short }} \
+            $(printf '${{ env.BACKEND_IMAGE }}@sha256:%s ' *)
+
+      - name: Create nginx manifest list
+        working-directory: /tmp/digests/nginx
+        run: |
+          docker buildx imagetools create \
+            -t ${{ env.NGINX_IMAGE }}:latest \
+            -t ${{ env.NGINX_IMAGE }}:${{ steps.meta.outputs.sha_short }} \
+            $(printf '${{ env.NGINX_IMAGE }}@sha256:%s ' *)
+
+      - name: Inspect published images
+        run: |
+          docker buildx imagetools inspect ${{ env.BACKEND_IMAGE }}:latest
+          docker buildx imagetools inspect ${{ env.NGINX_IMAGE }}:latest
