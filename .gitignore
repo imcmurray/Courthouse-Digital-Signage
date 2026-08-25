@@ -72,3 +72,6 @@ dev_screenshots/
 
 # Uploaded runtime files (persisted via Docker volume, not source)
 uploads/
+
+# Machine-local Claude Code settings
+.claude/settings.local.json
