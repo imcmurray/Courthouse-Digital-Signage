@@ -2,25 +2,25 @@
 
 Quick reference for the deployed **`mossdigsig2026-demo`** stack. Two ways in:
 
-- **LAN** (`192.168.1.215`) — direct, no login, on the courthouse network.
+- **LAN** (`192.168.1.70`) — direct, no login, on the courthouse network.
 - **Public** (`dsdemo.themcmurrays.us`) — via the Cloudflare tunnel; **Cloudflare Access sign-in required** (a raw `curl` returns `302` → the Access login page; that's expected).
 
 ## Gallery
 
 The public, no-param browser of every display:
 
-- LAN: <http://192.168.1.215/display/gallery.html>
+- LAN: <http://192.168.1.70/display/gallery.html>
 - Public: <https://dsdemo.themcmurrays.us/display/gallery.html>
 
 ## All endpoints
 
 | What | LAN | Public (Cloudflare Access) |
 |------|-----|----------------------------|
-| **Public gallery** | http://192.168.1.215/display/gallery.html | https://dsdemo.themcmurrays.us/display/gallery.html |
-| Kiosk display | http://192.168.1.215/display/ | https://dsdemo.themcmurrays.us/display/ |
-| Admin portal | http://192.168.1.215/admin | https://dsdemo.themcmurrays.us/admin |
-| API docs (Swagger) | http://192.168.1.215/api-docs | https://dsdemo.themcmurrays.us/api-docs |
-| Health check | http://192.168.1.215/api/health | — |
+| **Public gallery** | http://192.168.1.70/display/gallery.html | https://dsdemo.themcmurrays.us/display/gallery.html |
+| Kiosk display | http://192.168.1.70/display/ | https://dsdemo.themcmurrays.us/display/ |
+| Admin portal | http://192.168.1.70/admin | https://dsdemo.themcmurrays.us/admin |
+| API docs (Swagger) | http://192.168.1.70/api-docs | https://dsdemo.themcmurrays.us/api-docs |
+| Health check | http://192.168.1.70/api/health | — |
 
 > The **kiosk display** takes a per-screen `?displayId=<id>` param (e.g. `/display/?displayId=display-321-main`). The **gallery** takes no params — it lists/browses all displays.
 
@@ -28,13 +28,13 @@ The public, no-param browser of every display:
 
 | What | Link |
 |------|------|
-| **Dockge** (manage/redeploy the stack) | http://192.168.1.215:5001/compose/mossdigsig2026-demo |
+| **Dockge** (manage/redeploy the stack) | http://192.168.1.70:5001/compose/mossdigsig2026-demo |
 | GitHub repo | https://github.com/imcmurray/Courthouse-Digital-Signage |
 | GitLab mirror | http://192.168.1.228/ianm/moss-dig-sig-2026 |
 
 ## Ops quick reference
 
-Host: `dockge1` (`192.168.1.215`), SSH alias **`dockge215`** (user `ianm`).
+Host: `dockge1` (`192.168.1.70`), SSH alias **`dockge215`** (user `ianm`).
 
 ```bash
 # Backend logs
